@@ -464,3 +464,54 @@ class TestStackFromFiles:
     def test_empty_file_list_returns_empty(self):
         results = stack_from_files([])
         assert results == []
+
+
+# ---------------------------------------------------------------------------
+# Intent scoring integration
+# ---------------------------------------------------------------------------
+
+
+class TestIntentScoringIntegration:
+    def test_intent_scoring_disabled_by_default(self):
+        stacker = SignalStacker()
+        assert stacker.use_intent_scoring is False
+
+    def test_intent_scoring_opt_in(self):
+        stacker = SignalStacker(use_intent_scoring=True)
+        assert stacker.use_intent_scoring is True
+
+    def test_intent_scoring_produces_different_scores(self):
+        """Intent-weighted scores differ from legacy."""
+        signals = [
+            make_signal(company_name="IntentCo", signal_type=SignalType.ARXIV_PAPER),
+            make_signal(company_name="IntentCo", signal_type=SignalType.GITHUB_RL_REPO),
+        ]
+        scan_result = ScanResult(
+            scan_type=SignalType.ARXIV_PAPER,
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
+            signals_found=signals,
+            total_raw_results=2,
+            total_after_dedup=2,
+        )
+        intent_stacker = SignalStacker(use_intent_scoring=True)
+        legacy_stacker = SignalStacker(use_intent_scoring=False)
+        intent_profiles = intent_stacker.stack_signals([scan_result])
+        legacy_profiles = legacy_stacker.stack_signals([scan_result])
+        assert intent_profiles[0].composite_signal_score != legacy_profiles[0].composite_signal_score
+
+    def test_legacy_mode_matches_original_behavior(self):
+        """Legacy mode = same scores as before."""
+        stacker = SignalStacker(use_intent_scoring=False)
+        signals = [make_signal(company_name="LegacyCo", signal_type=SignalType.GITHUB_RL_REPO)]
+        scan_result = ScanResult(
+            scan_type=SignalType.GITHUB_RL_REPO,
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
+            signals_found=signals,
+            total_raw_results=1,
+            total_after_dedup=1,
+        )
+        profiles = stacker.stack_signals([scan_result])
+        # Legacy: sum(strength=2) × multiplier(1 type=1.0) = 2.0
+        assert profiles[0].composite_signal_score == pytest.approx(2.0)

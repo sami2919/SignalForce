@@ -23,6 +23,7 @@ import re
 import sys
 from pathlib import Path
 
+from scripts.intent_scorer import IntentScorer
 from scripts.models import (
     CompanyProfile,
     ICPScore,
@@ -57,10 +58,18 @@ class SignalStacker:
         known_domains: Optional mapping of normalized company name → domain.
             Improves matching when signals lack a ``company_domain`` field.
             E.g. ``{"deepmind": "deepmind.com", "google deepmind": "deepmind.com"}``
+        use_intent_scoring: When True, use IntentScorer (intent-weighted, recency-decayed)
+            to calculate composite scores. When False (default), use the legacy formula
+            (sum of strengths × breadth multiplier) for backward compatibility.
     """
 
-    def __init__(self, known_domains: dict[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        known_domains: dict[str, str] | None = None,
+        use_intent_scoring: bool = False,
+    ) -> None:
         self._known_domains: dict[str, str] = known_domains or {}
+        self.use_intent_scoring: bool = use_intent_scoring
 
     # ------------------------------------------------------------------
     # Public API
@@ -86,8 +95,13 @@ class SignalStacker:
 
         profiles: list[CompanyProfile] = []
         for group_key, signals in groups.items():
-            composite = self._calculate_composite_score(signals)
-            icp = self._determine_icp_score(composite)
+            if self.use_intent_scoring:
+                scoring_result = IntentScorer().score_signals(signals, icp_fit=0.0)
+                composite = scoring_result.combined_score
+                icp = scoring_result.icp_score
+            else:
+                composite = self._calculate_composite_score(signals)
+                icp = self._determine_icp_score(composite)
 
             # Prefer the first domain found among the group's signals; fall back
             # to the group key (which is either a domain or a normalized name).
@@ -249,11 +263,16 @@ class SignalStacker:
 # ---------------------------------------------------------------------------
 
 
-def stack_from_files(file_paths: list[str]) -> list[CompanyProfile]:
+def stack_from_files(
+    file_paths: list[str],
+    use_intent_scoring: bool = False,
+) -> list[CompanyProfile]:
     """Load ScanResult JSON files, deserialize, and run the stacking pipeline.
 
     Args:
         file_paths: Paths to JSON files each containing a serialized ScanResult.
+        use_intent_scoring: When True, use intent-weighted scoring. Defaults to False
+            for backward compatibility.
 
     Returns:
         Ranked list of CompanyProfile objects.
@@ -270,7 +289,7 @@ def stack_from_files(file_paths: list[str]) -> list[CompanyProfile]:
             logger.exception("Failed to load ScanResult from %s", path)
             raise
 
-    return SignalStacker().stack_signals(scan_results)
+    return SignalStacker(use_intent_scoring=use_intent_scoring).stack_signals(scan_results)
 
 
 # ---------------------------------------------------------------------------
