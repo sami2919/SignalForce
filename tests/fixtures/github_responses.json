@@ -1,0 +1,95 @@
+{
+  "search_result_org": {
+    "total_count": 3,
+    "incomplete_results": false,
+    "items": [
+      {
+        "id": 100001,
+        "name": "rl-agent",
+        "full_name": "deepmind/rl-agent",
+        "html_url": "https://github.com/deepmind/rl-agent",
+        "description": "Reinforcement learning agent framework",
+        "stargazers_count": 1200,
+        "forks_count": 230,
+        "topics": ["reinforcement-learning", "rl", "python"],
+        "pushed_at": "2024-01-15T10:30:00Z",
+        "owner": {
+          "login": "deepmind",
+          "type": "Organization",
+          "html_url": "https://github.com/deepmind"
+        }
+      },
+      {
+        "id": 100002,
+        "name": "mujoco-rl",
+        "full_name": "deepmind/mujoco-rl",
+        "html_url": "https://github.com/deepmind/mujoco-rl",
+        "description": "MuJoCo-based RL environments",
+        "stargazers_count": 890,
+        "forks_count": 120,
+        "topics": ["mujoco", "reinforcement-learning", "simulation"],
+        "pushed_at": "2024-01-14T08:00:00Z",
+        "owner": {
+          "login": "deepmind",
+          "type": "Organization",
+          "html_url": "https://github.com/deepmind"
+        }
+      },
+      {
+        "id": 100003,
+        "name": "grpo-trainer",
+        "full_name": "deepmind/grpo-trainer",
+        "html_url": "https://github.com/deepmind/grpo-trainer",
+        "description": "GRPO policy optimization trainer",
+        "stargazers_count": 450,
+        "forks_count": 60,
+        "topics": ["grpo", "rlhf", "llm"],
+        "pushed_at": "2024-01-13T14:00:00Z",
+        "owner": {
+          "login": "deepmind",
+          "type": "Organization",
+          "html_url": "https://github.com/deepmind"
+        }
+      }
+    ]
+  },
+  "search_result_personal": {
+    "total_count": 1,
+    "incomplete_results": false,
+    "items": [
+      {
+        "id": 200001,
+        "name": "my-rl-experiments",
+        "full_name": "johndoe/my-rl-experiments",
+        "html_url": "https://github.com/johndoe/my-rl-experiments",
+        "description": "Personal RL experiments and notebooks",
+        "stargazers_count": 12,
+        "forks_count": 2,
+        "topics": ["reinforcement-learning", "experiments"],
+        "pushed_at": "2024-01-10T09:00:00Z",
+        "owner": {
+          "login": "johndoe",
+          "type": "User",
+          "html_url": "https://github.com/johndoe"
+        }
+      }
+    ]
+  },
+  "org_info": {
+    "login": "deepmind",
+    "id": 7556027,
+    "url": "https://api.github.com/orgs/deepmind",
+    "html_url": "https://github.com/deepmind",
+    "name": "DeepMind",
+    "description": "DeepMind is a world-leader in AI research",
+    "company": null,
+    "blog": "https://deepmind.com",
+    "location": "London, UK",
+    "email": null,
+    "public_repos": 85,
+    "followers": 15000,
+    "following": 0,
+    "created_at": "2014-04-01T12:00:00Z",
+    "type": "Organization"
+  }
+}
