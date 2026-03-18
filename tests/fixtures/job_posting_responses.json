@@ -1,0 +1,70 @@
+{
+  "search_rl_engineer": {
+    "query": "reinforcement learning engineer site:linkedin.com OR site:lever.co OR site:greenhouse.io",
+    "results": [
+      {
+        "title": "Reinforcement Learning Engineer at DeepMind",
+        "url": "https://jobs.lever.co/deepmind/abc123",
+        "snippet": "DeepMind is looking for an RL Engineer to join our team. Experience with gymnasium, pytorch, and reward design required.",
+        "company": "DeepMind"
+      },
+      {
+        "title": "Senior RL Researcher at DeepMind",
+        "url": "https://boards.greenhouse.io/deepmind/jobs/def456",
+        "snippet": "Join DeepMind's research team. Work on policy optimization, simulation environments, and RLHF.",
+        "company": "DeepMind"
+      },
+      {
+        "title": "RL Engineer - Simulation at DeepMind",
+        "url": "https://jobs.lever.co/deepmind/ghi789",
+        "snippet": "Build simulation environments using pytorch and tensorflow. Work on reward modeling.",
+        "company": "DeepMind"
+      }
+    ]
+  },
+  "search_simulation_engineer": {
+    "query": "simulation engineer reinforcement learning site:linkedin.com OR site:lever.co OR site:greenhouse.io",
+    "results": [
+      {
+        "title": "Simulation Engineer at Startup-XYZ",
+        "url": "https://jobs.lever.co/startup-xyz/jkl012",
+        "snippet": "Build physics simulation environments for RL training. Experience with gymnasium and pytorch preferred.",
+        "company": "startup-xyz"
+      }
+    ]
+  },
+  "search_personal_blog": {
+    "query": "RLHF engineer site:linkedin.com OR site:lever.co OR site:greenhouse.io",
+    "results": [
+      {
+        "title": "How I became an RLHF engineer - Personal Blog",
+        "url": "https://medium.com/@user/how-i-became-rlhf-engineer",
+        "snippet": "Personal blog post about career journey into RL.",
+        "company": null
+      }
+    ]
+  },
+  "search_mixed_results": {
+    "query": "reward modeling engineer site:lever.co OR site:greenhouse.io OR site:ashbyhq.com",
+    "results": [
+      {
+        "title": "Reward Modeling Engineer at DeepMind",
+        "url": "https://boards.greenhouse.io/deepmind/jobs/mno345",
+        "snippet": "Work on reward modeling and RLHF pipelines. Strong pytorch skills required.",
+        "company": "DeepMind"
+      },
+      {
+        "title": "ML Engineer - Reinforcement Learning at NewCo",
+        "url": "https://app.ashbyhq.com/jobs/newco/pqr678",
+        "snippet": "Join our ML team to build RL training pipelines. Experience with gymnasium and stable-baselines3.",
+        "company": "NewCo"
+      },
+      {
+        "title": "My blog about reward modeling",
+        "url": "https://personalsite.com/blog/reward-modeling",
+        "snippet": "A personal blog post about reward modeling techniques.",
+        "company": null
+      }
+    ]
+  }
+}
