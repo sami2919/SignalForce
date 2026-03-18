@@ -1,0 +1,3 @@
+company:
+  name: "Missing required fields"
+# Missing: product, category, icp, scanners, scoring

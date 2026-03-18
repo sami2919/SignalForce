@@ -1,0 +1,41 @@
+company:
+  name: "Test Corp"
+  product: "Test product"
+  category: "Testing"
+  website: "https://test.com"
+
+icp:
+  tiers:
+    - name: "Tier 1"
+      description: "Primary buyers"
+      signals: ["signal-1"]
+  maturity_stages: ["EXPLORING", "BUILDING", "SCALING"]
+  target_titles: ["Engineer", "Manager"]
+  disqualifiers: ["No activity"]
+
+scanners:
+  github:
+    enabled: true
+    module: scripts.scanners.github_scanner
+    topics: ["test-topic"]
+    libraries: ["test-lib"]
+    keywords: ["test-keyword"]
+    lookback_days: 7
+  arxiv:
+    enabled: false
+    module: scripts.scanners.arxiv_scanner
+    queries: ["test query"]
+
+scoring:
+  intent_weights:
+    github: 2.5
+    arxiv: 3.0
+  half_lives_days:
+    github: 5
+    arxiv: 10
+  icp_weight: 0.4
+  intent_weight: 0.6
+  grade_thresholds:
+    A: 8.0
+    B: 5.0
+    C: 2.0
