@@ -1,0 +1,126 @@
+{
+  "paper_search_result": {
+    "total": 5,
+    "offset": 0,
+    "next": 5,
+    "data": [
+      {
+        "paperId": "abc123",
+        "title": "Deep Reinforcement Learning for Robotics Control",
+        "year": 2024,
+        "abstract": "We propose a novel RL approach for robotic control tasks.",
+        "externalIds": {
+          "ArXiv": "2401.00001"
+        },
+        "authors": [
+          {
+            "authorId": "author1",
+            "name": "Alice Smith",
+            "affiliations": ["Google DeepMind"]
+          },
+          {
+            "authorId": "author2",
+            "name": "Bob Jones",
+            "affiliations": ["Google DeepMind"]
+          }
+        ]
+      },
+      {
+        "paperId": "def456",
+        "title": "Offline Reinforcement Learning at Scale",
+        "year": 2024,
+        "abstract": "Scaling offline RL to large datasets.",
+        "externalIds": {
+          "ArXiv": "2401.00002"
+        },
+        "authors": [
+          {
+            "authorId": "author3",
+            "name": "Carol White",
+            "affiliations": ["Massachusetts Institute of Technology"]
+          },
+          {
+            "authorId": "author4",
+            "name": "Dave Brown",
+            "affiliations": ["MIT CSAIL"]
+          }
+        ]
+      },
+      {
+        "paperId": "ghi789",
+        "title": "RLHF for Large Language Models",
+        "year": 2024,
+        "abstract": "Reinforcement learning from human feedback applied to LLMs.",
+        "externalIds": {
+          "ArXiv": "2401.00003"
+        },
+        "authors": [
+          {
+            "authorId": "author5",
+            "name": "Eve Davis",
+            "affiliations": ["Meta AI"]
+          }
+        ]
+      },
+      {
+        "paperId": "jkl012",
+        "title": "Multi-Agent RL in Cooperative Environments",
+        "year": 2024,
+        "abstract": "Novel approaches to multi-agent cooperation using RL.",
+        "externalIds": {
+          "ArXiv": "2401.00004"
+        },
+        "authors": [
+          {
+            "authorId": "author6",
+            "name": "Frank Green",
+            "affiliations": ["Acme Robotics Inc"]
+          }
+        ]
+      },
+      {
+        "paperId": "mno345",
+        "title": "Sim-to-Real Transfer via Domain Randomization",
+        "year": 2024,
+        "abstract": "Bridging simulation and real-world RL.",
+        "externalIds": {
+          "ArXiv": "2401.00005"
+        },
+        "authors": [
+          {
+            "authorId": "author7",
+            "name": "Grace Lee",
+            "affiliations": []
+          }
+        ]
+      }
+    ]
+  },
+  "paper_no_affiliations": {
+    "total": 1,
+    "offset": 0,
+    "data": [
+      {
+        "paperId": "xyz999",
+        "title": "RL with No Affiliations",
+        "year": 2024,
+        "abstract": "A paper from unknown authors.",
+        "externalIds": {
+          "ArXiv": "2401.00099"
+        },
+        "authors": [
+          {
+            "authorId": "author99",
+            "name": "Unknown Author",
+            "affiliations": []
+          }
+        ]
+      }
+    ]
+  },
+  "empty_result": {
+    "total": 0,
+    "offset": 0,
+    "data": []
+  }
+}
