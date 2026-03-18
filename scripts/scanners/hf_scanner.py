@@ -1,8 +1,8 @@
-"""Hugging Face Model Upload Monitor.
+"""Hugging Face Model Upload Scanner.
 
-Detects organizations uploading RL-trained models to the Hugging Face Hub.
-Scans for models tagged with RL training methods (PPO, DPO, RLHF, GRPO, etc.),
-groups by organization, scores by upload volume, and returns Signal objects.
+Detects organizations uploading trained models to the Hugging Face Hub.
+Scans for models tagged with training methods, groups by organization,
+scores by upload volume, and returns Signal objects.
 """
 
 from __future__ import annotations
@@ -16,8 +16,7 @@ from datetime import datetime, timedelta, UTC
 from typing import Any
 
 from scripts.api_client import BaseAPIClient
-from scripts.config import AppConfig, get_config
-from scripts.models import Signal, ScanResult, SignalType, SignalStrength
+from scripts.scanners.base import ScannerConfig, ScanResult, Signal, SignalStrength
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +32,6 @@ class HuggingFaceClient(BaseAPIClient):
     BASE_URL = "https://huggingface.co/api"
 
     def __init__(self, timeout: int = 30) -> None:
-        # No auth headers — HF Hub public API does not require a key.
         super().__init__(base_url=self.BASE_URL, auth_headers=None, timeout=timeout)
 
     def list_models(
@@ -67,12 +65,8 @@ class HuggingFaceClient(BaseAPIClient):
             params["tags"] = filter_tag
 
         result = self.get("/models", params=params)
-        # HF /models endpoint returns a JSON array, but BaseAPIClient.get() expects dict.
-        # When the API returns a list, it is wrapped by requests and parsed directly.
-        # We handle both the list and dict cases here.
         if isinstance(result, list):
             return result
-        # Defensive: if somehow wrapped in a dict with "items" key
         return result.get("items", [])
 
     def get_model_info(self, model_id: str) -> dict:
@@ -88,14 +82,18 @@ class HuggingFaceClient(BaseAPIClient):
 
 
 # ---------------------------------------------------------------------------
-# RL monitor
+# Monitor class (internal implementation)
 # ---------------------------------------------------------------------------
 
 
 class HuggingFaceRLMonitor:
-    """Monitor that detects organizations uploading RL-trained models to HF Hub."""
+    """Monitor that detects organizations uploading trained models to HF Hub.
 
-    RL_TRAINING_TAGS = [
+    Tags and card keywords are driven by ScannerConfig rather than hardcoded constants.
+    """
+
+    # Class-level defaults — kept for test compatibility (tests use RL_TRAINING_TAGS directly)
+    RL_TRAINING_TAGS: list[str] = [
         "ppo",
         "dpo",
         "grpo",
@@ -105,28 +103,21 @@ class HuggingFaceRLMonitor:
         "orpo",
         "kto",
     ]
-    RL_KEYWORDS_IN_CARD = [
-        "reinforcement learning",
-        "RLHF",
-        "reward model",
-        "PPO training",
-        "DPO training",
-        "GRPO",
-    ]
 
-    def __init__(self, config: AppConfig | None = None) -> None:
-        self._config = config or get_config()
+    def __init__(self, training_tags: list[str] | None = None) -> None:
         self._client = HuggingFaceClient()
+        if training_tags is not None:
+            self.RL_TRAINING_TAGS = training_tags
 
     # ------------------------------------------------------------------
     # Public interface
     # ------------------------------------------------------------------
 
     def scan(self, lookback_days: int = 7) -> ScanResult:
-        """Run a full Hugging Face RL model scan.
+        """Run a full Hugging Face model scan.
 
         Steps:
-        1. For each RL training tag, search HF Hub for models with that tag.
+        1. For each training tag, search HF Hub for models with that tag.
         2. Filter results to models modified within lookback_days.
         3. Filter to models that have a namespace (org or user prefix).
         4. Group by organization namespace.
@@ -142,9 +133,7 @@ class HuggingFaceRLMonitor:
         """
         started_at = datetime.now(UTC)
 
-        # org_namespace → set of unique model_ids
         org_models: dict[str, set[str]] = defaultdict(set)
-        # org_namespace → list of model dicts (for metadata)
         org_model_details: dict[str, list[dict]] = defaultdict(list)
         total_raw = 0
         errors: list[str] = []
@@ -167,13 +156,11 @@ class HuggingFaceRLMonitor:
 
                 org = model_id.split("/")[0]
 
-                # Deduplicate: skip models already seen for this org
                 if model_id not in org_models[org]:
                     org_models[org].add(model_id)
                     org_model_details[org].append(model)
                     total_raw += 1
 
-        # Build signals
         signals: list[Signal] = []
         for org, model_list in org_model_details.items():
             model_count = len(model_list)
@@ -184,7 +171,7 @@ class HuggingFaceRLMonitor:
         completed_at = datetime.now(UTC)
 
         return ScanResult(
-            scan_type=SignalType.HUGGINGFACE_MODEL,
+            scan_type="huggingface_model",
             started_at=started_at,
             completed_at=completed_at,
             signals_found=signals,
@@ -198,29 +185,11 @@ class HuggingFaceRLMonitor:
     # ------------------------------------------------------------------
 
     def _is_org_model(self, model_id: str) -> bool:
-        """Return True if the model_id has an org/user namespace prefix.
-
-        Simple heuristic: the model_id must contain a "/" separator.
-        Personal users also have "/" prefixes — we accept that false-positive
-        rate as the task spec explicitly permits it.
-
-        Args:
-            model_id: The full model identifier (e.g. "meta-llama/Llama-3-RL-8B").
-
-        Returns:
-            True if the model has a namespace prefix.
-        """
+        """Return True if the model_id has an org/user namespace prefix."""
         return "/" in model_id
 
     def _extract_training_method(self, model_info: dict) -> str | None:
-        """Extract the first RL training method tag from a model's tag list.
-
-        Args:
-            model_info: Model dict with a "tags" key.
-
-        Returns:
-            First matching RL training tag, or None if none found.
-        """
+        """Extract the first matching training method tag from a model's tag list."""
         tags: list[str] = model_info.get("tags", []) or []
         for tag in tags:
             if tag in self.RL_TRAINING_TAGS:
@@ -228,21 +197,12 @@ class HuggingFaceRLMonitor:
         return None
 
     def _is_recent(self, model_info: dict, lookback_days: int) -> bool:
-        """Return True if the model was last modified within lookback_days.
-
-        Args:
-            model_info: Model dict with a "lastModified" ISO 8601 timestamp.
-            lookback_days: Number of days defining the recency window.
-
-        Returns:
-            True if the model's lastModified timestamp is within the window.
-        """
+        """Return True if the model was last modified within lookback_days."""
         last_modified_raw: str | None = model_info.get("lastModified")
         if not last_modified_raw:
             return False
 
         try:
-            # HF timestamps are like "2026-03-15T12:00:00.000Z"
             last_modified = datetime.fromisoformat(last_modified_raw.replace("Z", "+00:00"))
         except (ValueError, TypeError) as exc:
             logger.warning("Could not parse lastModified '%s': %s", last_modified_raw, exc)
@@ -252,19 +212,7 @@ class HuggingFaceRLMonitor:
         return last_modified > cutoff
 
     def _score_org(self, model_count: int) -> SignalStrength:
-        """Score an organization's RL training activity by model upload volume.
-
-        Scoring rules:
-        - STRONG:   4+ models
-        - MODERATE: 2-3 models
-        - WEAK:     1 model
-
-        Args:
-            model_count: Total number of recent RL-tagged models uploaded by the org.
-
-        Returns:
-            SignalStrength enum value.
-        """
+        """Score an organization's activity by model upload volume."""
         if model_count >= 4:
             return SignalStrength.STRONG
         if model_count >= 2:
@@ -277,21 +225,11 @@ class HuggingFaceRLMonitor:
         model_list: list[dict],
         score: SignalStrength,
     ) -> Signal:
-        """Build a Signal object for a detected RL-active organization.
-
-        Args:
-            org: The HF namespace (organization or user prefix).
-            model_list: List of model dicts collected for this org.
-            score: Pre-computed SignalStrength for this org.
-
-        Returns:
-            Signal with HUGGINGFACE_MODEL type and model-specific metadata.
-        """
+        """Build a Signal object for a detected active organization."""
         model_ids = [m.get("modelId") or m.get("id", "") for m in model_list]
         training_methods: list[str] = list(
             filter(None, [self._extract_training_method(m) for m in model_list])
         )
-        # Deduplicate while preserving order
         seen: set[str] = set()
         unique_methods: list[str] = []
         for method in training_methods:
@@ -299,18 +237,16 @@ class HuggingFaceRLMonitor:
                 seen.add(method)
                 unique_methods.append(method)
 
-        # Use the most recently modified model as the canonical source
         sorted_models = sorted(
             model_list,
             key=lambda m: m.get("lastModified", ""),
             reverse=True,
         )
         primary_model_id = sorted_models[0].get("modelId") or sorted_models[0].get("id", "")
-
         source_url = f"https://huggingface.co/{primary_model_id}"
 
         return Signal(
-            signal_type=SignalType.HUGGINGFACE_MODEL,
+            signal_type="huggingface_model",
             company_name=org,
             signal_strength=score,
             source_url=source_url,
@@ -325,13 +261,31 @@ class HuggingFaceRLMonitor:
 
 
 # ---------------------------------------------------------------------------
+# Module-level entry point
+# ---------------------------------------------------------------------------
+
+
+def scan(config: ScannerConfig) -> ScanResult:
+    """Run a full Hugging Face Hub scan using configuration.
+
+    Args:
+        config: ScannerConfig with training_tags list and lookback_days.
+
+    Returns:
+        ScanResult with Signal objects for each qualifying organization.
+    """
+    monitor = HuggingFaceRLMonitor(training_tags=config.training_tags or config.keywords)
+    return monitor.scan(config.lookback_days)
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Scan Hugging Face Hub for organisations uploading RL-trained models.",
+        description="Scan Hugging Face Hub for organisations uploading trained models.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
@@ -357,16 +311,24 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> None:
-    """CLI entry point for the Hugging Face RL model monitor."""
+    """CLI entry point for the Hugging Face model scanner."""
+    from scripts.config_loader import load_config
+
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 
-    monitor = HuggingFaceRLMonitor()
-    result = monitor.scan(lookback_days=args.lookback_days)
+    sf_config = load_config()
+    scanner_cfg = sf_config.scanners.get("huggingface")
+    if scanner_cfg is None:
+        raise SystemExit("No 'huggingface' scanner configured in config.yaml")
 
-    # Filter by minimum strength
+    if args.lookback_days != 7:
+        scanner_cfg = scanner_cfg.model_copy(update={"lookback_days": args.lookback_days})
+
+    result = scan(scanner_cfg)
+
     filtered_signals = [s for s in result.signals_found if s.signal_strength >= args.min_strength]
 
     print(f"Scan complete — {len(filtered_signals)} signals (min strength: {args.min_strength})")

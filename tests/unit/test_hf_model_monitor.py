@@ -1,4 +1,4 @@
-"""Unit tests for HuggingFaceRLMonitor — written FIRST (TDD RED phase).
+"""Unit tests for hf_scanner — written FIRST (TDD RED phase).
 
 All HTTP calls are mocked at the HuggingFaceClient.list_models level.
 No real API calls are made.
@@ -12,8 +12,8 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 
-from scripts.models import SignalType, SignalStrength, ScanResult, Signal
-from scripts.hf_model_monitor import HuggingFaceClient, HuggingFaceRLMonitor
+from scripts.models import SignalStrength, ScanResult, Signal
+from scripts.scanners.hf_scanner import HuggingFaceClient, HuggingFaceRLMonitor
 
 # ---------------------------------------------------------------------------
 # Fixture helpers
@@ -110,7 +110,7 @@ class TestScanReturnsScanResult:
         result = monitor.scan(lookback_days=7)
 
         assert isinstance(result, ScanResult)
-        assert result.scan_type == SignalType.HUGGINGFACE_MODEL
+        assert result.scan_type == "huggingface_model"
 
     def test_scan_has_started_and_completed_at(self):
         monitor = HuggingFaceRLMonitor.__new__(HuggingFaceRLMonitor)
@@ -158,8 +158,6 @@ class TestFiltersByRecency:
 
         result = monitor.scan(lookback_days=7)
 
-        # Boundary check: strictly less than 7 days should be included;
-        # the test just verifies the method doesn't crash
         assert isinstance(result, ScanResult)
 
 
@@ -253,7 +251,6 @@ class TestExtractsTrainingMethod:
 
     def test_returns_first_matching_tag(self):
         monitor = HuggingFaceRLMonitor.__new__(HuggingFaceRLMonitor)
-        # Both ppo and dpo present; should return first RL match found
         model_info = {"tags": ["transformers", "ppo", "dpo"]}
         method = monitor._extract_training_method(model_info)
         assert method in ("ppo", "dpo")
@@ -292,12 +289,9 @@ class TestDeduplicatesSameOrgAcrossTags:
         monitor = HuggingFaceRLMonitor.__new__(HuggingFaceRLMonitor)
         monitor._client = MagicMock()
 
-        # Simulate the same org appearing when searching "ppo" and "rlhf" tags
         ppo_model = make_model("google", "ppo-model", tags=["ppo"])
         rlhf_model = make_model("google", "rlhf-model", tags=["rlhf"])
 
-        # list_models is called once per RL_TRAINING_TAG; simulate two tag searches
-        # returning models from the same org
         monitor._client.list_models.side_effect = [
             [ppo_model],  # first tag search (ppo)
             [rlhf_model],  # second tag search (rlhf)
@@ -311,7 +305,6 @@ class TestDeduplicatesSameOrgAcrossTags:
 
         result = monitor.scan(lookback_days=7)
 
-        # google should appear only once
         google_signals = [s for s in result.signals_found if s.company_name == "google"]
         assert len(google_signals) == 1
 
@@ -320,7 +313,6 @@ class TestDeduplicatesSameOrgAcrossTags:
         monitor = HuggingFaceRLMonitor.__new__(HuggingFaceRLMonitor)
         monitor._client = MagicMock()
 
-        # 4 models total across two tag searches → should be STRONG
         ppo_models = [make_model("google", f"ppo-{i}", tags=["ppo"]) for i in range(2)]
         dpo_models = [make_model("google", f"dpo-{i}", tags=["dpo"]) for i in range(2)]
 
@@ -389,7 +381,7 @@ class TestMetadataIncludesModelNames:
 
         result = monitor.scan(lookback_days=7)
 
-        assert result.signals_found[0].signal_type == SignalType.HUGGINGFACE_MODEL
+        assert result.signals_found[0].signal_type == "huggingface_model"
 
     def test_source_url_points_to_huggingface(self):
         monitor = HuggingFaceRLMonitor.__new__(HuggingFaceRLMonitor)
@@ -495,13 +487,11 @@ class TestScanErrorHandling:
         good_model = make_model("google", "ppo-model", tags=["ppo"])
         n_tags = len(HuggingFaceRLMonitor.RL_TRAINING_TAGS)
 
-        # First tag throws, remaining return one good model then empty
         side_effects = [Exception("network error"), [good_model]] + [[] for _ in range(n_tags - 2)]
         monitor._client.list_models.side_effect = side_effects
 
         result = monitor.scan(lookback_days=7)
 
-        # Should still find the signal from the successful tag search
         assert len(result.signals_found) == 1
         assert len(result.errors) == 1
 
@@ -513,10 +503,10 @@ class TestScanErrorHandling:
 
 class TestCLIOutput:
     def test_cli_prints_summary(self, capsys):
-        from scripts.hf_model_monitor import main
+        from scripts.scanners.hf_scanner import main
 
         mock_result = ScanResult(
-            scan_type=SignalType.HUGGINGFACE_MODEL,
+            scan_type="huggingface_model",
             started_at=datetime.now(UTC),
             completed_at=datetime.now(UTC),
             signals_found=[],
@@ -524,19 +514,24 @@ class TestCLIOutput:
             total_after_dedup=0,
         )
 
-        with patch("scripts.hf_model_monitor.HuggingFaceRLMonitor") as MockMonitor:
-            mock_instance = MockMonitor.return_value
-            mock_instance.scan.return_value = mock_result
-            main(["--lookback-days", "7"])
+        with patch("scripts.scanners.hf_scanner.scan") as mock_scan:
+            mock_scan.return_value = mock_result
+            with patch("scripts.config_loader.load_config") as mock_load:
+                mock_sf_config = MagicMock()
+                mock_sf_config.scanners.get.return_value = MagicMock(
+                    lookback_days=7, training_tags=[], keywords=[]
+                )
+                mock_load.return_value = mock_sf_config
+                main(["--lookback-days", "7"])
 
         captured = capsys.readouterr()
         assert "Scan complete" in captured.out
 
     def test_cli_filters_by_min_strength(self, capsys):
-        from scripts.hf_model_monitor import main
+        from scripts.scanners.hf_scanner import main
 
         weak_signal = Signal(
-            signal_type=SignalType.HUGGINGFACE_MODEL,
+            signal_type="huggingface_model",
             company_name="small-lab",
             signal_strength=SignalStrength.WEAK,
             source_url="https://huggingface.co/small-lab/rl-model",
@@ -549,7 +544,7 @@ class TestCLIOutput:
         )
 
         mock_result = ScanResult(
-            scan_type=SignalType.HUGGINGFACE_MODEL,
+            scan_type="huggingface_model",
             started_at=datetime.now(UTC),
             completed_at=datetime.now(UTC),
             signals_found=[weak_signal],
@@ -557,20 +552,24 @@ class TestCLIOutput:
             total_after_dedup=1,
         )
 
-        with patch("scripts.hf_model_monitor.HuggingFaceRLMonitor") as MockMonitor:
-            mock_instance = MockMonitor.return_value
-            mock_instance.scan.return_value = mock_result
-            main(["--min-strength", "2"])
+        with patch("scripts.scanners.hf_scanner.scan") as mock_scan:
+            mock_scan.return_value = mock_result
+            with patch("scripts.config_loader.load_config") as mock_load:
+                mock_sf_config = MagicMock()
+                mock_sf_config.scanners.get.return_value = MagicMock(
+                    lookback_days=7, training_tags=[], keywords=[]
+                )
+                mock_load.return_value = mock_sf_config
+                main(["--min-strength", "2"])
 
         captured = capsys.readouterr()
-        # min-strength=2 filters out WEAK signals → 0 after filter
         assert "After filter: 0" in captured.out
 
     def test_cli_writes_json_output(self, tmp_path, capsys):
-        from scripts.hf_model_monitor import main
+        from scripts.scanners.hf_scanner import main
 
         mock_result = ScanResult(
-            scan_type=SignalType.HUGGINGFACE_MODEL,
+            scan_type="huggingface_model",
             started_at=datetime.now(UTC),
             completed_at=datetime.now(UTC),
             signals_found=[],
@@ -580,10 +579,15 @@ class TestCLIOutput:
 
         output_file = tmp_path / "output.json"
 
-        with patch("scripts.hf_model_monitor.HuggingFaceRLMonitor") as MockMonitor:
-            mock_instance = MockMonitor.return_value
-            mock_instance.scan.return_value = mock_result
-            main(["--output", str(output_file)])
+        with patch("scripts.scanners.hf_scanner.scan") as mock_scan:
+            mock_scan.return_value = mock_result
+            with patch("scripts.config_loader.load_config") as mock_load:
+                mock_sf_config = MagicMock()
+                mock_sf_config.scanners.get.return_value = MagicMock(
+                    lookback_days=7, training_tags=[], keywords=[]
+                )
+                mock_load.return_value = mock_sf_config
+                main(["--output", str(output_file)])
 
         assert output_file.exists()
         with open(output_file) as f:
