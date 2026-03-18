@@ -5,7 +5,7 @@ Tests written TDD-first before implementation (RED → GREEN → REFACTOR).
 
 import pytest
 
-from scripts.models import OutreachChannel, SignalType
+from scripts.models import OutreachChannel
 from scripts.multi_channel_sequencer import build_sequence, select_primary_channel
 
 
@@ -43,24 +43,24 @@ def test_select_neither_empty():
 
 def test_dual_channel_has_6_steps():
     channels = [OutreachChannel.EMAIL, OutreachChannel.LINKEDIN]
-    steps = build_sequence(channels, SignalType.GITHUB_RL_REPO)
+    steps = build_sequence(channels, "github")
     assert len(steps) == 6
 
 
 def test_email_only_has_3_steps():
     channels = [OutreachChannel.EMAIL]
-    steps = build_sequence(channels, SignalType.GITHUB_RL_REPO)
+    steps = build_sequence(channels, "github")
     assert len(steps) == 3
 
 
 def test_linkedin_only_has_3_steps():
     channels = [OutreachChannel.LINKEDIN]
-    steps = build_sequence(channels, SignalType.GITHUB_RL_REPO)
+    steps = build_sequence(channels, "github")
     assert len(steps) == 3
 
 
 def test_empty_channels_returns_empty():
-    steps = build_sequence([], SignalType.GITHUB_RL_REPO)
+    steps = build_sequence([], "github")
     assert steps == []
 
 
@@ -71,21 +71,21 @@ def test_empty_channels_returns_empty():
 
 def test_steps_chronologically_ordered():
     channels = [OutreachChannel.EMAIL, OutreachChannel.LINKEDIN]
-    steps = build_sequence(channels, SignalType.GITHUB_RL_REPO)
+    steps = build_sequence(channels, "github")
     days = [s.day for s in steps]
     assert days == sorted(days)
 
 
 def test_email_only_steps_chronologically_ordered():
     channels = [OutreachChannel.EMAIL]
-    steps = build_sequence(channels, SignalType.ARXIV_PAPER)
+    steps = build_sequence(channels, "arxiv")
     days = [s.day for s in steps]
     assert days == sorted(days)
 
 
 def test_linkedin_only_steps_chronologically_ordered():
     channels = [OutreachChannel.LINKEDIN]
-    steps = build_sequence(channels, SignalType.JOB_POSTING)
+    steps = build_sequence(channels, "jobs")
     days = [s.day for s in steps]
     assert days == sorted(days)
 
@@ -97,49 +97,49 @@ def test_linkedin_only_steps_chronologically_ordered():
 
 def test_linkedin_template_matches_signal_github():
     channels = [OutreachChannel.LINKEDIN]
-    steps = build_sequence(channels, SignalType.GITHUB_RL_REPO)
-    assert all(s.template_name == "github-rl-signal" for s in steps)
+    steps = build_sequence(channels, "github")
+    assert all(s.template_name == "github-signal" for s in steps)
 
 
 def test_linkedin_template_matches_signal_arxiv():
     channels = [OutreachChannel.LINKEDIN]
-    steps = build_sequence(channels, SignalType.ARXIV_PAPER)
+    steps = build_sequence(channels, "arxiv")
     assert all(s.template_name == "arxiv-paper-signal" for s in steps)
 
 
 def test_linkedin_template_matches_signal_hiring():
     channels = [OutreachChannel.LINKEDIN]
-    steps = build_sequence(channels, SignalType.JOB_POSTING)
+    steps = build_sequence(channels, "jobs")
     assert all(s.template_name == "hiring-signal" for s in steps)
 
 
 def test_linkedin_template_falls_back_to_general_for_huggingface():
     channels = [OutreachChannel.LINKEDIN]
-    steps = build_sequence(channels, SignalType.HUGGINGFACE_MODEL)
+    steps = build_sequence(channels, "huggingface")
     assert all(s.template_name == "general-signal" for s in steps)
 
 
 def test_linkedin_template_falls_back_to_general_for_funding():
     channels = [OutreachChannel.LINKEDIN]
-    steps = build_sequence(channels, SignalType.FUNDING_EVENT)
+    steps = build_sequence(channels, "funding")
     assert all(s.template_name == "general-signal" for s in steps)
 
 
 def test_email_template_matches_signal_github():
     channels = [OutreachChannel.EMAIL]
-    steps = build_sequence(channels, SignalType.GITHUB_RL_REPO)
-    assert all(s.template_name == "github-rl-signal" for s in steps)
+    steps = build_sequence(channels, "github")
+    assert all(s.template_name == "github-signal" for s in steps)
 
 
 def test_email_template_matches_signal_arxiv():
     channels = [OutreachChannel.EMAIL]
-    steps = build_sequence(channels, SignalType.ARXIV_PAPER)
+    steps = build_sequence(channels, "arxiv")
     assert all(s.template_name == "arxiv-paper-signal" for s in steps)
 
 
 def test_email_template_matches_signal_hiring():
     channels = [OutreachChannel.EMAIL]
-    steps = build_sequence(channels, SignalType.JOB_POSTING)
+    steps = build_sequence(channels, "jobs")
     assert all(s.template_name == "hiring-signal" for s in steps)
 
 
@@ -151,7 +151,7 @@ def test_email_template_matches_signal_hiring():
 def test_dual_channel_alternates():
     """Dual channel sequence should alternate between EMAIL and LINKEDIN."""
     channels = [OutreachChannel.EMAIL, OutreachChannel.LINKEDIN]
-    steps = build_sequence(channels, SignalType.GITHUB_RL_REPO)
+    steps = build_sequence(channels, "github")
     step_channels = [s.channel for s in steps]
     # Sequence must contain both channels
     assert OutreachChannel.EMAIL in step_channels
@@ -170,34 +170,34 @@ def test_dual_channel_alternates():
 
 def test_dual_channel_first_step_is_email():
     channels = [OutreachChannel.EMAIL, OutreachChannel.LINKEDIN]
-    steps = build_sequence(channels, SignalType.GITHUB_RL_REPO)
+    steps = build_sequence(channels, "github")
     assert steps[0].channel == OutreachChannel.EMAIL
     assert steps[0].action == "send_email"
 
 
 def test_dual_channel_second_step_is_linkedin_connection():
     channels = [OutreachChannel.EMAIL, OutreachChannel.LINKEDIN]
-    steps = build_sequence(channels, SignalType.GITHUB_RL_REPO)
+    steps = build_sequence(channels, "github")
     assert steps[1].channel == OutreachChannel.LINKEDIN
     assert steps[1].action == "connection_request"
 
 
 def test_linkedin_only_first_step_is_connection_request():
     channels = [OutreachChannel.LINKEDIN]
-    steps = build_sequence(channels, SignalType.GITHUB_RL_REPO)
+    steps = build_sequence(channels, "github")
     assert steps[0].action == "connection_request"
 
 
 def test_dual_channel_day_0_is_email():
     channels = [OutreachChannel.EMAIL, OutreachChannel.LINKEDIN]
-    steps = build_sequence(channels, SignalType.GITHUB_RL_REPO)
+    steps = build_sequence(channels, "github")
     assert steps[0].day == 0
     assert steps[0].channel == OutreachChannel.EMAIL
 
 
 def test_dual_channel_linkedin_connection_on_day_1():
     channels = [OutreachChannel.EMAIL, OutreachChannel.LINKEDIN]
-    steps = build_sequence(channels, SignalType.GITHUB_RL_REPO)
+    steps = build_sequence(channels, "github")
     linkedin_connection = next(s for s in steps if s.action == "connection_request")
     assert linkedin_connection.day == 1
 
@@ -209,7 +209,7 @@ def test_dual_channel_linkedin_connection_on_day_1():
 
 def test_sequence_steps_are_frozen():
     channels = [OutreachChannel.EMAIL]
-    steps = build_sequence(channels, SignalType.GITHUB_RL_REPO)
+    steps = build_sequence(channels, "github")
     from pydantic import ValidationError
 
     with pytest.raises((TypeError, ValidationError)):

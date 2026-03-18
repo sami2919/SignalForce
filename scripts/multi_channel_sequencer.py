@@ -13,7 +13,7 @@ Timing (dual channel):
 
 from __future__ import annotations
 
-from scripts.models import OutreachChannel, SequenceStep, SignalType
+from scripts.models import OutreachChannel, SequenceStep
 
 
 def select_primary_channel(has_email: bool, has_linkedin: bool) -> list[OutreachChannel]:
@@ -27,25 +27,29 @@ def select_primary_channel(has_email: bool, has_linkedin: bool) -> list[Outreach
 
 
 # Template mapping: signal_type → {channel → template_name}
-_TEMPLATE_MAP: dict[SignalType, dict[OutreachChannel, str]] = {
-    SignalType.GITHUB_RL_REPO: {
-        OutreachChannel.EMAIL: "github-rl-signal",
-        OutreachChannel.LINKEDIN: "github-rl-signal",
+_TEMPLATE_MAP: dict[str, dict[OutreachChannel, str]] = {
+    "github": {
+        OutreachChannel.EMAIL: "github-signal",
+        OutreachChannel.LINKEDIN: "github-signal",
     },
-    SignalType.ARXIV_PAPER: {
+    "arxiv": {
         OutreachChannel.EMAIL: "arxiv-paper-signal",
         OutreachChannel.LINKEDIN: "arxiv-paper-signal",
     },
-    SignalType.JOB_POSTING: {
+    "jobs": {
         OutreachChannel.EMAIL: "hiring-signal",
         OutreachChannel.LINKEDIN: "hiring-signal",
     },
-    SignalType.HUGGINGFACE_MODEL: {
+    "huggingface": {
         OutreachChannel.EMAIL: "huggingface-model-signal",
         OutreachChannel.LINKEDIN: "general-signal",
     },
-    SignalType.FUNDING_EVENT: {
+    "funding": {
         OutreachChannel.EMAIL: "funding-signal",
+        OutreachChannel.LINKEDIN: "general-signal",
+    },
+    "linkedin": {
+        OutreachChannel.EMAIL: "general-signal",
         OutreachChannel.LINKEDIN: "general-signal",
     },
 }
@@ -53,7 +57,7 @@ _TEMPLATE_MAP: dict[SignalType, dict[OutreachChannel, str]] = {
 
 def build_sequence(
     channels: list[OutreachChannel],
-    signal_type: SignalType,
+    signal_type: str,
 ) -> list[SequenceStep]:
     """Build a staggered multi-channel outreach sequence."""
     if not channels:
