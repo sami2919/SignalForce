@@ -1,0 +1,429 @@
+{
+  "name": "Enrichment Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "enrichment-pipeline",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "11223344-5566-7788-9900-aabbccddeeff",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 400],
+      "webhookId": "enrichment-pipeline-webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"status\": \"accepted\", \"message\": \"Enrichment pipeline started\"}",
+        "options": {}
+      },
+      "id": "22334455-6677-8899-0011-bbccddeeff00",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [500, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse incoming signal data from daily scan or manual trigger\nconst body = $input.first().json.body || $input.first().json;\n\nlet signals;\nif (typeof body.signals === 'string') {\n  signals = JSON.parse(body.signals);\n} else if (Array.isArray(body.signals)) {\n  signals = body.signals;\n} else if (Array.isArray(body)) {\n  signals = body;\n} else {\n  signals = [];\n}\n\n// Normalize signal shape\nconst normalized = signals.map(s => ({\n  id: s.id || s.signal_id || crypto.randomUUID(),\n  company_name: s.company_name || s.org || s.organization || 'Unknown',\n  company_domain: s.company_domain || s.domain || '',\n  signal_type: s.signal_type || s.type || 'UNKNOWN',\n  icp_score: s.icp_score || s.tier || 'C',\n  signal_strength: s.signal_strength || s.strength || 1,\n  github_url: s.github_url || s.url || '',\n  description: s.description || s.summary || '',\n  raw: s\n}));\n\nreturn normalized.map(s => ({ json: s }));"
+      },
+      "id": "33445566-7788-9900-1122-ccddeeff0011",
+      "name": "Parse Signal Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.clay.com/v1/enrich/company",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Clay-Api-Key",
+              "value": "={{ $vars.CLAY_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "domain",
+              "value": "={{ $json.company_domain }}"
+            },
+            {
+              "name": "company_name",
+              "value": "={{ $json.company_name }}"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": false,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "44556677-8899-0011-2233-ddeeff001122",
+      "name": "Clay Company Enrichment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge Clay enrichment data back into the signal\nconst signal = $('Parse Signal Data').first().json;\nconst clayResponse = $input.first().json;\n\nconst clayData = clayResponse.statusCode === 200 ? (clayResponse.body || {}) : {};\n\nreturn [{\n  json: {\n    ...signal,\n    clay_enriched: !!clayData.company_name,\n    employee_count: clayData.employee_count || signal.employee_count || null,\n    industry: clayData.industry || signal.industry || null,\n    linkedin_url: clayData.linkedin_url || signal.linkedin_url || null,\n    tech_stack: clayData.tech_stack || [],\n    funding_stage: clayData.funding_stage || signal.funding_stage || null\n  }\n}];"
+      },
+      "id": "55667788-9900-1122-3344-eeff00112233",
+      "name": "Merge Clay Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 400]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.apollo.io/v1/organizations/enrich",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "={{ $vars.APOLLO_API_KEY }}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "domain",
+              "value": "={{ $json.company_domain }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "66778899-0011-2233-4455-ff0011223344",
+      "name": "Apollo Contact Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.hunter.io/v2/domain-search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "domain",
+              "value": "={{ $('Merge Clay Data').first().json.company_domain }}"
+            },
+            {
+              "name": "api_key",
+              "value": "={{ $vars.HUNTER_API_KEY }}"
+            },
+            {
+              "name": "limit",
+              "value": "5"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "778899aa-1122-3344-5566-001122334455",
+      "name": "Hunter Email Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 450]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.prospeo.io/linkedin-email-finder",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-KEY",
+              "value": "={{ $vars.PROSPEO_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "={{ $('Merge Clay Data').first().json.linkedin_url }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "8899aabb-2233-4455-6677-112233445566",
+      "name": "Prospeo LinkedIn Emails",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Waterfall: merge contacts from Apollo, Hunter, Prospeo — deduplicate by email\nconst signal = $('Merge Clay Data').first().json;\nconst apolloResp = $('Apollo Contact Lookup').first().json;\nconst hunterResp = $('Hunter Email Lookup').first().json;\nconst prospeoResp = $('Prospeo LinkedIn Emails').first().json;\n\nconst contacts = [];\nconst seenEmails = new Set();\n\n// Apollo people\nconst apolloPeople = apolloResp?.organization?.people || [];\nfor (const p of apolloPeople.slice(0, 3)) {\n  const email = p.email;\n  if (email && !seenEmails.has(email)) {\n    seenEmails.add(email);\n    contacts.push({\n      source: 'apollo',\n      first_name: p.first_name || '',\n      last_name: p.last_name || '',\n      email,\n      title: p.title || '',\n      linkedin_url: p.linkedin_url || ''\n    });\n  }\n}\n\n// Hunter emails\nconst hunterEmails = hunterResp?.data?.emails || [];\nfor (const e of hunterEmails.slice(0, 3)) {\n  if (e.value && !seenEmails.has(e.value)) {\n    seenEmails.add(e.value);\n    contacts.push({\n      source: 'hunter',\n      first_name: e.first_name || '',\n      last_name: e.last_name || '',\n      email: e.value,\n      title: e.position || '',\n      linkedin_url: e.linkedin || ''\n    });\n  }\n}\n\n// Prospeo\nconst prospeoEmail = prospeoResp?.email;\nif (prospeoEmail && !seenEmails.has(prospeoEmail)) {\n  seenEmails.add(prospeoEmail);\n  contacts.push({\n    source: 'prospeo',\n    first_name: prospeoResp.first_name || '',\n    last_name: prospeoResp.last_name || '',\n    email: prospeoEmail,\n    title: prospeoResp.job_title || '',\n    linkedin_url: prospeoResp.linkedin_url || ''\n  });\n}\n\nreturn [{\n  json: {\n    ...signal,\n    contacts,\n    contact_count: contacts.length,\n    enrichment_sources: ['apollo', 'hunter', 'prospeo'].filter(\n      s => (s === 'apollo' && apolloPeople.length > 0) ||\n           (s === 'hunter' && hunterEmails.length > 0) ||\n           (s === 'prospeo' && !!prospeoEmail)\n    )\n  }\n}];"
+      },
+      "id": "99aabbcc-3344-5566-7788-223344556677",
+      "name": "Merge Waterfall Contacts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 450]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.zerobounce.net/v2/validatebatch",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "api_key",
+              "value": "={{ $vars.ZEROBOUNCE_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ email_batch: $json.contacts.map(c => ({ email_address: c.email, ip_address: '' })) }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "aabbccdd-4455-6677-8899-334455667788",
+      "name": "ZeroBounce Validation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1750, 450]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ICP scoring based on signal strength, company attributes, and contact quality\nconst signal = $('Merge Waterfall Contacts').first().json;\nconst zbResponse = $input.first().json;\n\n// Filter to valid emails only\nconst validStatuses = ['valid', 'catch-all'];\nconst zbResults = zbResponse?.email_batch || [];\nconst validEmails = new Set(\n  zbResults.filter(r => validStatuses.includes(r.status)).map(r => r.address)\n);\n\nconst verifiedContacts = signal.contacts.map(c => ({\n  ...c,\n  email_valid: validEmails.has(c.email),\n  email_status: zbResults.find(r => r.address === c.email)?.status || 'unknown'\n})).filter(c => c.email_valid);\n\n// Score calculation\nlet score = 0;\n\n// Signal type weights\nconst typeWeights = {\n  GITHUB_RL_REPO: 20,\n  ARXIV_PAPER: 15,\n  JOB_POSTING: 25,\n  HUGGINGFACE_MODEL: 18,\n  FUNDING_EVENT: 30\n};\nscore += typeWeights[signal.signal_type] || 10;\n\n// Signal strength multiplier\nscore *= (signal.signal_strength || 1);\n\n// Company size bonus\nif (signal.employee_count > 500) score += 20;\nelse if (signal.employee_count > 100) score += 15;\nelse if (signal.employee_count > 20) score += 10;\n\n// Contact quality bonus\nif (verifiedContacts.length >= 2) score += 15;\nelse if (verifiedContacts.length === 1) score += 8;\n\n// Determine ICP score tier\nlet icp_score;\nif (score >= 80) icp_score = 'A';\nelse if (score >= 55) icp_score = 'B';\nelse if (score >= 30) icp_score = 'C';\nelse icp_score = 'D';\n\nreturn [{\n  json: {\n    ...signal,\n    contacts: verifiedContacts,\n    verified_contact_count: verifiedContacts.length,\n    icp_score,\n    icp_score_raw: score,\n    scored_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "bbccddee-5566-7788-9900-445566778899",
+      "name": "ICP Scoring",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 450]
+    },
+    {
+      "parameters": {
+        "resource": "deal",
+        "operation": "upsert",
+        "additionalFields": {
+          "dealName": "={{ $json.company_name + ' — RL Signal (' + $json.signal_type + ')' }}",
+          "amount": "",
+          "dealStage": "appointmentscheduled",
+          "hubspotDefined": {
+            "values": [
+              {
+                "name": "pipeline",
+                "value": "default"
+              },
+              {
+                "name": "dealstage",
+                "value": "qualifiedtobuy"
+              },
+              {
+                "name": "hs_priority",
+                "value": "={{ $json.icp_score === 'A' ? 'high' : $json.icp_score === 'B' ? 'medium' : 'low' }}"
+              }
+            ]
+          },
+          "customPropertiesUi": {
+            "customPropertiesValues": [
+              {
+                "property": "signal_type",
+                "value": "={{ $json.signal_type }}"
+              },
+              {
+                "property": "icp_score",
+                "value": "={{ $json.icp_score }}"
+              },
+              {
+                "property": "signal_score",
+                "value": "={{ $json.icp_score_raw }}"
+              },
+              {
+                "property": "company_domain",
+                "value": "={{ $json.company_domain }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "ccddeeff-6677-8899-0011-556677889900",
+      "name": "HubSpot Upsert Deal",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [2250, 450],
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "hubspot-creds",
+          "name": "HubSpot OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "a-tier-check",
+              "leftValue": "={{ $('ICP Scoring').first().json.icp_score }}",
+              "rightValue": "A",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "ddeeff00-7788-9900-1122-667788990011",
+      "name": "A-Tier or B-Tier?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2500, 450]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.N8N_WEBHOOK_BASE_URL }}/webhook/sequence-launcher",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ signal: $('ICP Scoring').first().json, deal_id: $('HubSpot Upsert Deal').first().json.id, trigger: 'enrichment-auto' }) }}",
+        "options": {}
+      },
+      "id": "eeff0011-8899-0011-2233-778899001122",
+      "name": "Trigger Sequence Launcher",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2750, 350]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Add B/C-tier signals to review queue (write to a Google Sheet or just log)\nconst signal = $('ICP Scoring').first().json;\nconst dealId = $('HubSpot Upsert Deal').first().json?.id;\n\nreturn [{\n  json: {\n    queued_at: new Date().toISOString(),\n    company_name: signal.company_name,\n    company_domain: signal.company_domain,\n    icp_score: signal.icp_score,\n    signal_type: signal.signal_type,\n    deal_id: dealId,\n    contact_count: signal.verified_contact_count,\n    action: 'review_queue',\n    reason: 'Score below A-tier threshold — manual review required'\n  }\n}];"
+      },
+      "id": "ff001122-9900-1122-3344-889900112233",
+      "name": "Add to Review Queue",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2750, 550]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {"node": "Respond to Webhook", "type": "main", "index": 0},
+          {"node": "Parse Signal Data", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Parse Signal Data": {
+      "main": [[{"node": "Clay Company Enrichment", "type": "main", "index": 0}]]
+    },
+    "Clay Company Enrichment": {
+      "main": [[{"node": "Merge Clay Data", "type": "main", "index": 0}]]
+    },
+    "Merge Clay Data": {
+      "main": [
+        [
+          {"node": "Apollo Contact Lookup", "type": "main", "index": 0},
+          {"node": "Hunter Email Lookup", "type": "main", "index": 0},
+          {"node": "Prospeo LinkedIn Emails", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Apollo Contact Lookup": {
+      "main": [[{"node": "Merge Waterfall Contacts", "type": "main", "index": 0}]]
+    },
+    "Hunter Email Lookup": {
+      "main": [[{"node": "Merge Waterfall Contacts", "type": "main", "index": 0}]]
+    },
+    "Prospeo LinkedIn Emails": {
+      "main": [[{"node": "Merge Waterfall Contacts", "type": "main", "index": 0}]]
+    },
+    "Merge Waterfall Contacts": {
+      "main": [[{"node": "ZeroBounce Validation", "type": "main", "index": 0}]]
+    },
+    "ZeroBounce Validation": {
+      "main": [[{"node": "ICP Scoring", "type": "main", "index": 0}]]
+    },
+    "ICP Scoring": {
+      "main": [[{"node": "HubSpot Upsert Deal", "type": "main", "index": 0}]]
+    },
+    "HubSpot Upsert Deal": {
+      "main": [[{"node": "A-Tier or B-Tier?", "type": "main", "index": 0}]]
+    },
+    "A-Tier or B-Tier?": {
+      "main": [
+        [{"node": "Trigger Sequence Launcher", "type": "main", "index": 0}],
+        [{"node": "Add to Review Queue", "type": "main", "index": 0}]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": ["gtm", "enrichment", "contacts"],
+  "triggerCount": 1,
+  "updatedAt": "2026-03-17T00:00:00.000Z",
+  "versionId": "1"
+}

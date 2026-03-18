@@ -1,0 +1,371 @@
+{
+  "name": "CRM Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "instantly-events",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "11112222-3333-4444-5555-666677778888",
+      "name": "Instantly Events Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 250],
+      "webhookId": "instantly-events-webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"status\": \"ok\"}",
+        "options": {}
+      },
+      "id": "22223333-4444-5555-6666-777788889999",
+      "name": "Ack Instantly Event",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [500, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Classify Instantly.ai engagement event\nconst body = $input.first().json.body || $input.first().json;\n\nconst eventType = body.event_type || body.type || 'unknown';\nconst leadEmail = body.lead_email || body.email || '';\nconst campaignId = body.campaign_id || '';\nconst timestamp = body.timestamp || new Date().toISOString();\nconst replyText = body.reply_text || body.body || '';\n\n// Classify reply sentiment\nlet classification = 'neutral';\nlet hubspotStage = 'SEQUENCED';\n\nif (eventType === 'replied') {\n  const positiveKeywords = ['interested', 'yes', 'sounds good', 'let\\'s', 'tell me more', 'schedule', 'available', 'love to', 'would like', 'can we', 'free'];\n  const negativeKeywords = ['unsubscribe', 'not interested', 'remove me', 'stop', 'no thanks', 'opt out', 'don\\'t contact', 'wrong person'];\n  const neutralKeywords = ['out of office', 'ooo', 'on vacation', 'away until'];\n\n  const lowerReply = replyText.toLowerCase();\n  if (positiveKeywords.some(k => lowerReply.includes(k))) {\n    classification = 'positive';\n    hubspotStage = 'MEETING_REQUESTED';\n  } else if (negativeKeywords.some(k => lowerReply.includes(k))) {\n    classification = 'negative';\n    hubspotStage = 'UNSUBSCRIBED';\n  } else if (neutralKeywords.some(k => lowerReply.includes(k))) {\n    classification = 'neutral_ooo';\n    hubspotStage = 'SEQUENCED';\n  } else {\n    classification = 'neutral';\n    hubspotStage = 'REPLIED_NEUTRAL';\n  }\n} else if (eventType === 'opened') {\n  classification = 'opened';\n  hubspotStage = 'OPENED';\n} else if (eventType === 'bounced') {\n  classification = 'bounced';\n  hubspotStage = 'BOUNCED';\n} else if (eventType === 'clicked') {\n  classification = 'clicked';\n  hubspotStage = 'CLICKED';\n}\n\nreturn [{\n  json: {\n    event_type: eventType,\n    lead_email: leadEmail,\n    campaign_id: campaignId,\n    timestamp,\n    reply_text: replyText,\n    classification,\n    hubspot_stage: hubspotStage,\n    is_positive: classification === 'positive',\n    is_negative: classification === 'negative',\n    should_suppress: classification === 'negative' || classification === 'bounced',\n    raw_event: body\n  }\n}];"
+      },
+      "id": "33334444-5555-6666-7777-888899990000",
+      "name": "Classify Engagement Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 250]
+    },
+    {
+      "parameters": {
+        "resource": "contact",
+        "operation": "update",
+        "contactId": "={{ $json.lead_email }}",
+        "updateFields": {
+          "customPropertiesUi": {
+            "customPropertiesValues": [
+              {
+                "property": "instantly_event_type",
+                "value": "={{ $json.event_type }}"
+              },
+              {
+                "property": "instantly_classification",
+                "value": "={{ $json.classification }}"
+              },
+              {
+                "property": "deal_stage",
+                "value": "={{ $json.hubspot_stage }}"
+              },
+              {
+                "property": "last_engagement_at",
+                "value": "={{ $json.timestamp }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "44445555-6666-7777-8888-99990000aaaa",
+      "name": "HubSpot Update Contact Stage",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [750, 250],
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "hubspot-creds",
+          "name": "HubSpot OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "positive-reply-check",
+              "leftValue": "={{ $json.is_positive }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "55556666-7777-8888-9999-0000aaaabbbb",
+      "name": "Positive Reply?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1000, 250]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "message",
+        "operation": "post",
+        "channel": "={{ $vars.SLACK_HOT_LEADS_CHANNEL || '#hot-leads' }}",
+        "text": "={{ '🔥 Positive reply from ' + $json.lead_email }}",
+        "otherOptions": {
+          "mrkdwn": true
+        },
+        "blocksUi": {
+          "blocksValues": [
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "={{ '*Positive Reply Received!*\\n\\n• Lead: *' + $json.lead_email + '*\\n• Campaign: ' + $json.campaign_id + '\\n• Classification: ' + $json.classification + '\\n\\n_Reply preview:_\\n>' + ($json.reply_text || '').slice(0, 200) }}"
+              }
+            }
+          ]
+        }
+      },
+      "id": "66667777-8888-9999-0000-aaaabbbbcccc",
+      "name": "Slack Hot Lead Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [1250, 150],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-creds",
+          "name": "Slack OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Add to suppression list for negative replies and bounces\nconst event = $input.first().json;\n\nif (!event.should_suppress) {\n  return [{ json: { skipped: true, reason: 'not a suppression event' } }];\n}\n\n// Store suppressed emails in workflow static data\nconst staticData = $getWorkflowStaticData('global');\nconst suppressionList = staticData.suppressionList || [];\n\nconst entry = {\n  email: event.lead_email,\n  reason: event.classification,\n  suppressed_at: new Date().toISOString(),\n  campaign_id: event.campaign_id\n};\n\n// Deduplicate\nconst alreadySuppressed = suppressionList.some(e => e.email === event.lead_email);\nif (!alreadySuppressed) {\n  suppressionList.push(entry);\n  staticData.suppressionList = suppressionList.slice(-10000); // cap at 10k\n}\n\nreturn [{\n  json: {\n    suppressed: !alreadySuppressed,\n    email: event.lead_email,\n    reason: event.classification,\n    total_suppressed: suppressionList.length\n  }\n}];"
+      },
+      "id": "77778888-9999-0000-aaaa-bbbbccccdddd",
+      "name": "Add to Suppression List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 350]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 2 * * *"
+            }
+          ]
+        }
+      },
+      "id": "88889999-0000-aaaa-bbbb-ccccddddeeee",
+      "name": "Daily Analytics Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 650]
+    },
+    {
+      "parameters": {
+        "resource": "deal",
+        "operation": "getAll",
+        "returnAll": true,
+        "filters": {
+          "dateRange": {
+            "key": "createdate",
+            "value": {
+              "mode": "range",
+              "rangeType": "last",
+              "rangeValue": "7d"
+            }
+          }
+        },
+        "options": {
+          "properties": ["dealname", "dealstage", "icp_score", "signal_type", "createdate", "closedate", "hs_priority"]
+        }
+      },
+      "id": "9999aaaa-bbbb-cccc-dddd-eeeeffff0000",
+      "name": "HubSpot Pull All Deals",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [500, 650],
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "hubspot-creds",
+          "name": "HubSpot OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate pipeline metrics from HubSpot deals\nconst deals = $input.all().map(item => item.json);\n\nconst now = new Date();\nconst todayStr = now.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles' });\n\n// Stage counts\nconst stageCounts = {};\nconst tierCounts = { A: 0, B: 0, C: 0, D: 0 };\nconst signalTypeCounts = {};\n\nfor (const deal of deals) {\n  const stage = deal.properties?.dealstage || deal.dealstage || 'unknown';\n  const tier = deal.properties?.icp_score || deal.icp_score || 'unknown';\n  const signalType = deal.properties?.signal_type || deal.signal_type || 'unknown';\n\n  stageCounts[stage] = (stageCounts[stage] || 0) + 1;\n  if (tier in tierCounts) tierCounts[tier]++;\n  signalTypeCounts[signalType] = (signalTypeCounts[signalType] || 0) + 1;\n}\n\n// Funnel metrics\nconst totalSignals = deals.length;\nconst qualified = (stageCounts['qualifiedtobuy'] || 0) + (stageCounts['SEQUENCED'] || 0) + (stageCounts['MEETING_REQUESTED'] || 0) + (stageCounts['OPENED'] || 0);\nconst sequenced = stageCounts['SEQUENCED'] || 0;\nconst replied = (stageCounts['MEETING_REQUESTED'] || 0) + (stageCounts['REPLIED_NEUTRAL'] || 0);\nconst meetings = stageCounts['MEETING_REQUESTED'] || 0;\nconst positiveReplies = stageCounts['MEETING_REQUESTED'] || 0;\n\n// Cost estimates (rough: $0.05/contact enrichment + $0.01/email)\nconst estimatedCost = (qualified * 0.05) + (sequenced * 0.01);\nconst costPerMeeting = meetings > 0 ? (estimatedCost / meetings).toFixed(2) : 'N/A';\n\n// Reply rate\nconst replyRate = sequenced > 0 ? ((replied / sequenced) * 100).toFixed(1) + '%' : '0%';\nconst openRate = sequenced > 0 ? (((stageCounts['OPENED'] || 0) / sequenced) * 100).toFixed(1) + '%' : '0%';\n\nreturn [{\n  json: {\n    date: todayStr,\n    timestamp: now.toISOString(),\n    total_signals: totalSignals,\n    qualified,\n    sequenced,\n    replied,\n    meetings,\n    positive_replies: positiveReplies,\n    open_rate: openRate,\n    reply_rate: replyRate,\n    estimated_cost_usd: estimatedCost.toFixed(2),\n    cost_per_meeting_usd: costPerMeeting,\n    tier_breakdown: tierCounts,\n    stage_breakdown: stageCounts,\n    signal_type_breakdown: signalTypeCounts\n  }\n}];"
+      },
+      "id": "aaaabbbb-cccc-dddd-eeee-ffff00001111",
+      "name": "Calculate Metrics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 650]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.GOOGLE_SHEETS_ANALYTICS_DOC_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Daily Analytics",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $json.date }}",
+            "Total Signals": "={{ $json.total_signals }}",
+            "Qualified": "={{ $json.qualified }}",
+            "Sequenced": "={{ $json.sequenced }}",
+            "Replied": "={{ $json.replied }}",
+            "Meetings": "={{ $json.meetings }}",
+            "Open Rate": "={{ $json.open_rate }}",
+            "Reply Rate": "={{ $json.reply_rate }}",
+            "Cost USD": "={{ $json.estimated_cost_usd }}",
+            "Cost Per Meeting": "={{ $json.cost_per_meeting_usd }}",
+            "Tier A": "={{ $json.tier_breakdown.A }}",
+            "Tier B": "={{ $json.tier_breakdown.B }}",
+            "Tier C": "={{ $json.tier_breakdown.C }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "bbbbcccc-dddd-eeee-ffff-000011112222",
+      "name": "Write to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1000, 650],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-creds",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "message",
+        "operation": "post",
+        "channel": "={{ $vars.SLACK_ANALYTICS_CHANNEL || '#gtm-analytics' }}",
+        "text": "Daily GTM Digest",
+        "otherOptions": {
+          "mrkdwn": true
+        },
+        "blocksUi": {
+          "blocksValues": [
+            {
+              "type": "header",
+              "text": {
+                "type": "plain_text",
+                "text": "Daily GTM Digest — {{ $json.date }}"
+              }
+            },
+            {
+              "type": "section",
+              "fields": [
+                {
+                  "type": "mrkdwn",
+                  "text": "={{ '*Signals*\\n' + $json.total_signals }}"
+                },
+                {
+                  "type": "mrkdwn",
+                  "text": "={{ '*Qualified*\\n' + $json.qualified }}"
+                },
+                {
+                  "type": "mrkdwn",
+                  "text": "={{ '*Sequenced*\\n' + $json.sequenced }}"
+                },
+                {
+                  "type": "mrkdwn",
+                  "text": "={{ '*Replied*\\n' + $json.replied }}"
+                },
+                {
+                  "type": "mrkdwn",
+                  "text": "={{ '*Meetings*\\n' + $json.meetings }}"
+                },
+                {
+                  "type": "mrkdwn",
+                  "text": "={{ '*Cost/Meeting*\\n$' + $json.cost_per_meeting_usd }}"
+                }
+              ]
+            },
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "={{ '*Rates* — Open: ' + $json.open_rate + ' · Reply: ' + $json.reply_rate + '\\n*Tier breakdown* — A: ' + $json.tier_breakdown.A + ' · B: ' + $json.tier_breakdown.B + ' · C: ' + $json.tier_breakdown.C }}"
+              }
+            }
+          ]
+        }
+      },
+      "id": "ccccdddd-eeee-ffff-0000-111122223333",
+      "name": "Slack Daily Digest",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [1250, 650],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-creds",
+          "name": "Slack OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Instantly Events Webhook": {
+      "main": [
+        [
+          {"node": "Ack Instantly Event", "type": "main", "index": 0},
+          {"node": "Classify Engagement Event", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Classify Engagement Event": {
+      "main": [[{"node": "HubSpot Update Contact Stage", "type": "main", "index": 0}]]
+    },
+    "HubSpot Update Contact Stage": {
+      "main": [[{"node": "Positive Reply?", "type": "main", "index": 0}]]
+    },
+    "Positive Reply?": {
+      "main": [
+        [{"node": "Slack Hot Lead Alert", "type": "main", "index": 0}],
+        [{"node": "Add to Suppression List", "type": "main", "index": 0}]
+      ]
+    },
+    "Daily Analytics Trigger": {
+      "main": [[{"node": "HubSpot Pull All Deals", "type": "main", "index": 0}]]
+    },
+    "HubSpot Pull All Deals": {
+      "main": [[{"node": "Calculate Metrics", "type": "main", "index": 0}]]
+    },
+    "Calculate Metrics": {
+      "main": [[{"node": "Write to Google Sheets", "type": "main", "index": 0}]]
+    },
+    "Write to Google Sheets": {
+      "main": [[{"node": "Slack Daily Digest", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": ["gtm", "crm", "analytics"],
+  "triggerCount": 2,
+  "updatedAt": "2026-03-17T00:00:00.000Z",
+  "versionId": "1"
+}

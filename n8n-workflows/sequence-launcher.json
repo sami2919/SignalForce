@@ -1,0 +1,229 @@
+{
+  "name": "Sequence Launcher",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sequence-launcher",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1a2a3a4-b1b2-c1c2-d1d2-e1e2e3e4e5e6",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 400],
+      "webhookId": "sequence-launcher-webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"status\": \"accepted\", \"message\": \"Sequence launch initiated\"}",
+        "options": {}
+      },
+      "id": "b2b3b4b5-c2c3-d2d3-e2e3-f2f3f4f5f6f7",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [500, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Select email template based on signal type and ICP tier\nconst body = $input.first().json.body || $input.first().json;\nconst signal = typeof body.signal === 'string' ? JSON.parse(body.signal) : body.signal || body;\nconst dealId = body.deal_id || null;\n\n// Template map: signal_type → template ID and campaign\nconst TEMPLATE_MAP = {\n  GITHUB_RL_REPO: {\n    template_id: 'github-rl-cold-v2',\n    campaign_id: $vars.INSTANTLY_CAMPAIGN_GITHUB || 'campaign-github-rl',\n    subject_hint: 'RL infrastructure at {company}',\n    angle: 'github_activity'\n  },\n  ARXIV_PAPER: {\n    template_id: 'research-lab-cold-v1',\n    campaign_id: $vars.INSTANTLY_CAMPAIGN_ARXIV || 'campaign-arxiv-labs',\n    subject_hint: 'Scaling {company}\\'s RL research',\n    angle: 'research_publication'\n  },\n  JOB_POSTING: {\n    template_id: 'hiring-signal-cold-v1',\n    campaign_id: $vars.INSTANTLY_CAMPAIGN_JOBS || 'campaign-hiring-signal',\n    subject_hint: 'Re: {company} RL infra hiring',\n    angle: 'hiring_intent'\n  },\n  HUGGINGFACE_MODEL: {\n    template_id: 'hf-model-cold-v1',\n    campaign_id: $vars.INSTANTLY_CAMPAIGN_HF || 'campaign-hf-models',\n    subject_hint: 'RL training infra for {company}',\n    angle: 'model_upload'\n  },\n  FUNDING_EVENT: {\n    template_id: 'funded-cold-v1',\n    campaign_id: $vars.INSTANTLY_CAMPAIGN_FUNDING || 'campaign-funded-cos',\n    subject_hint: 'Congrats on the round — RL infra',\n    angle: 'funding_event'\n  }\n};\n\nconst templateConfig = TEMPLATE_MAP[signal.signal_type] || TEMPLATE_MAP['GITHUB_RL_REPO'];\n\n// A/B variant selection: rotate 1/3 each\nconst variants = ['A', 'B', 'C'];\nconst variantIndex = Math.abs(\n  (signal.company_name || 'unknown').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)\n) % 3;\nconst selected_variant = variants[variantIndex];\n\nreturn [{\n  json: {\n    signal,\n    deal_id: dealId,\n    template_config: templateConfig,\n    selected_variant,\n    contacts: signal.contacts || [],\n    company_name: signal.company_name || 'Unknown',\n    company_domain: signal.company_domain || '',\n    icp_score: signal.icp_score || 'B',\n    prepared_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "c3c4c5c6-d3d4-e3e4-f3f4-a3a4a5a6a7a8",
+      "name": "Select Template",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $vars.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'claude-haiku-4-5',\n  max_tokens: 600,\n  messages: [{\n    role: 'user',\n    content: `You are a B2B cold email copywriter for SignalForce, a sales intelligence tool for RL infrastructure.\\n\\nWrite a cold email for variant ${$json.selected_variant} (A=pain-focused, B=curiosity-focused, C=social-proof-focused).\\n\\nSignal context:\\n- Company: ${$json.company_name}\\n- Signal type: ${$json.signal_type || $json.signal.signal_type}\\n- Angle: ${$json.template_config.angle}\\n- ICP tier: ${$json.icp_score}\\n\\nRequirements:\\n- Subject line: 6-8 words, no clickbait\\n- Body: 3 short paragraphs, under 100 words total\\n- CTA: one clear question, not 'schedule a call'\\n- No emojis, no hyperbole\\n\\nRespond as JSON: { subject, body, cta }`\n  }]\n}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "d4d5d6d7-e4e5-f4f5-a4a5-b4b5b6b7b8b9",
+      "name": "Generate Email Copy",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse LLM response and select variant copy\nconst templateData = $('Select Template').first().json;\nconst llmResponse = $input.first().json;\n\nlet emailCopy;\ntry {\n  const content = llmResponse?.content?.[0]?.text || '{}';\n  // Strip markdown code fences if present\n  const cleaned = content.replace(/^```json\\n?|```$/gm, '').trim();\n  emailCopy = JSON.parse(cleaned);\n} catch (e) {\n  emailCopy = {\n    subject: `RL infrastructure at ${templateData.company_name}`,\n    body: `Hi,\\n\\nI noticed ${templateData.company_name} is actively building RL systems. We help teams like yours reduce training iteration time.\\n\\nWould a quick comparison of your current setup be useful?`,\n    cta: 'Worth a 15-min chat?'\n  };\n}\n\n// Build per-contact payloads\nconst contacts = templateData.contacts || [];\nconst payloads = contacts.map(contact => ({\n  ...templateData,\n  contact,\n  email_copy: {\n    subject: emailCopy.subject.replace('{company}', templateData.company_name),\n    body: emailCopy.body\n      .replace('{first_name}', contact.first_name || 'there')\n      .replace('{company}', templateData.company_name),\n    cta: emailCopy.cta\n  },\n  email_generated_at: new Date().toISOString()\n}));\n\nif (payloads.length === 0) {\n  return [{ json: { ...templateData, email_copy: emailCopy, contacts: [], skipped: true, reason: 'no_verified_contacts' } }];\n}\n\nreturn payloads.map(p => ({ json: p }));"
+      },
+      "id": "e5e6e7e8-f5f6-a5a6-b5b6-c5c6c7c8c9ca",
+      "name": "Assemble Email Variants",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.instantly.ai/api/v1/lead/add",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  api_key: $vars.INSTANTLY_API_KEY,\n  campaign_id: $json.template_config.campaign_id,\n  skip_if_in_workspace: true,\n  leads: [{\n    email: $json.contact.email,\n    first_name: $json.contact.first_name,\n    last_name: $json.contact.last_name,\n    company_name: $json.company_name,\n    personalization: $json.email_copy.body,\n    custom_variables: {\n      subject: $json.email_copy.subject,\n      cta: $json.email_copy.cta,\n      signal_type: $json.signal.signal_type,\n      icp_score: $json.icp_score,\n      variant: $json.selected_variant\n    }\n  }]\n}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "f6f7f8f9-a6a7-b6b7-c6c7-d6d7d8d9dadb",
+      "name": "Add to Instantly Campaign",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "resource": "deal",
+        "operation": "update",
+        "dealId": "={{ $('Select Template').first().json.deal_id }}",
+        "updateFields": {
+          "customPropertiesUi": {
+            "customPropertiesValues": [
+              {
+                "property": "dealstage",
+                "value": "SEQUENCED"
+              },
+              {
+                "property": "sequence_variant",
+                "value": "={{ $('Select Template').first().json.selected_variant }}"
+              },
+              {
+                "property": "sequence_launched_at",
+                "value": "={{ new Date().toISOString() }}"
+              },
+              {
+                "property": "campaign_id",
+                "value": "={{ $('Select Template').first().json.template_config.campaign_id }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "a7a8a9aa-b7b8-c7c8-d7d8-e7e8e9eaebec",
+      "name": "HubSpot Update Deal Stage",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [1500, 400],
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "hubspot-creds",
+          "name": "HubSpot OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "message",
+        "operation": "post",
+        "channel": "={{ $vars.SLACK_SIGNAL_CHANNEL || '#rl-signals' }}",
+        "text": "={{ '📨 Sequence launched for ' + $('Select Template').first().json.company_name }}",
+        "otherOptions": {
+          "mrkdwn": true
+        },
+        "blocksUi": {
+          "blocksValues": [
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "={{ '*Sequence Launched*\\n\\n• Company: *' + $('Select Template').first().json.company_name + '*\\n• ICP Score: ' + $('Select Template').first().json.icp_score + '\\n• Variant: ' + $('Select Template').first().json.selected_variant + '\\n• Contacts: ' + ($('Select Template').first().json.contacts || []).length + '\\n• Campaign: ' + $('Select Template').first().json.template_config.campaign_id }}"
+              }
+            }
+          ]
+        }
+      },
+      "id": "b8b9babb-c8c9-d8d9-e8e9-f8f9fafbfcfd",
+      "name": "Slack Launch Notification",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [1750, 400],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-creds",
+          "name": "Slack OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {"node": "Respond to Webhook", "type": "main", "index": 0},
+          {"node": "Select Template", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Select Template": {
+      "main": [[{"node": "Generate Email Copy", "type": "main", "index": 0}]]
+    },
+    "Generate Email Copy": {
+      "main": [[{"node": "Assemble Email Variants", "type": "main", "index": 0}]]
+    },
+    "Assemble Email Variants": {
+      "main": [[{"node": "Add to Instantly Campaign", "type": "main", "index": 0}]]
+    },
+    "Add to Instantly Campaign": {
+      "main": [[{"node": "HubSpot Update Deal Stage", "type": "main", "index": 0}]]
+    },
+    "HubSpot Update Deal Stage": {
+      "main": [[{"node": "Slack Launch Notification", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": ["gtm", "email", "sequences"],
+  "triggerCount": 1,
+  "updatedAt": "2026-03-17T00:00:00.000Z",
+  "versionId": "1"
+}

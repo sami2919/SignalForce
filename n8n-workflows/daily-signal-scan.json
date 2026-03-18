@@ -1,0 +1,251 @@
+{
+  "name": "Daily Signal Scan",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 15 * * *"
+            }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "command": "cd /opt/signalforce && python3 -m scripts.github_rl_scanner --lookback-days 7 --output /tmp/github_signals.json && echo 'github_done'"
+      },
+      "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "name": "Scan GitHub",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [500, 150]
+    },
+    {
+      "parameters": {
+        "command": "cd /opt/signalforce && python3 -m scripts.arxiv_monitor --lookback-days 7 --output /tmp/arxiv_signals.json && echo 'arxiv_done'"
+      },
+      "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+      "name": "Scan ArXiv",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [500, 250]
+    },
+    {
+      "parameters": {
+        "command": "cd /opt/signalforce && python3 -m scripts.hf_model_monitor --lookback-days 7 --output /tmp/hf_signals.json && echo 'hf_done'"
+      },
+      "id": "d4e5f6a7-b8c9-0123-defa-234567890123",
+      "name": "Scan HuggingFace",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [500, 350]
+    },
+    {
+      "parameters": {
+        "command": "cd /opt/signalforce && python3 -m scripts.job_posting_scanner --lookback-days 7 --output /tmp/job_signals.json && echo 'jobs_done'"
+      },
+      "id": "e5f6a7b8-c9d0-1234-efab-345678901234",
+      "name": "Scan Job Postings",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [500, 450]
+    },
+    {
+      "parameters": {
+        "command": "cd /opt/signalforce && python3 -m scripts.funding_tracker --lookback-days 30 --output /tmp/funding_signals.json && echo 'funding_done'"
+      },
+      "id": "f6a7b8c9-d0e1-2345-fabc-456789012345",
+      "name": "Scan Funding",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [500, 550]
+    },
+    {
+      "parameters": {
+        "mode": "waitForAll",
+        "numberInputs": 5
+      },
+      "id": "a7b8c9d0-e1f2-3456-abcd-567890123456",
+      "name": "Merge Scanner Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [750, 350]
+    },
+    {
+      "parameters": {
+        "command": "cd /opt/signalforce && python3 -m scripts.signal_stacker --inputs /tmp/github_signals.json /tmp/arxiv_signals.json /tmp/hf_signals.json /tmp/job_signals.json /tmp/funding_signals.json --output /tmp/stacked_signals.json && cat /tmp/stacked_signals.json"
+      },
+      "id": "b8c9d0e1-f2a3-4567-bcde-678901234567",
+      "name": "Stack Signals",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1000, 350]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse stacked signals and deduplicate against existing HubSpot records\nconst stdout = $input.first().json.stdout || '{\"signals\":[]}';\nlet signals;\ntry {\n  signals = JSON.parse(stdout);\n} catch (e) {\n  signals = { signals: [] };\n}\n\nconst signalList = signals.signals || signals;\n\n// Retrieve known company domains from workflow static data\nconst knownDomains = $getWorkflowStaticData('global').knownDomains || [];\n\nconst newSignals = [];\nconst existingSignals = [];\n\nfor (const signal of signalList) {\n  const domain = signal.company_domain || signal.domain || '';\n  if (domain && knownDomains.includes(domain)) {\n    existingSignals.push(signal);\n  } else {\n    newSignals.push(signal);\n    if (domain) knownDomains.push(domain);\n  }\n}\n\n// Persist updated known domains\n$getWorkflowStaticData('global').knownDomains = knownDomains.slice(-5000); // cap at 5k\n\nconst now = new Date().toISOString();\nreturn [\n  {\n    json: {\n      timestamp: now,\n      total: signalList.length,\n      new_signals: newSignals,\n      existing_signals: existingSignals,\n      new_count: newSignals.length,\n      existing_count: existingSignals.length\n    }\n  }\n];"
+      },
+      "id": "c9d0e1f2-a3b4-5678-cdef-789012345678",
+      "name": "Deduplicate Signals",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 350]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "tier-a-filter",
+              "leftValue": "={{ $json.new_signals.filter(s => s.icp_score === 'A' || s.tier === 'A').length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "d0e1f2a3-b4c5-6789-defa-890123456789",
+      "name": "A-Tier Signals?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1500, 350]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "message",
+        "operation": "post",
+        "channel": "={{ $vars.SLACK_SIGNAL_CHANNEL || '#rl-signals' }}",
+        "text": "={{ '🚨 *A-Tier RL Signals Detected* — ' + new Date().toLocaleDateString('en-US', {timeZone: 'America/Los_Angeles'}) }}",
+        "otherOptions": {
+          "mrkdwn": true
+        },
+        "blocksUi": {
+          "blocksValues": [
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "={{ '*Daily Signal Scan Complete*\\n\\n' + $('Deduplicate Signals').first().json.new_signals.filter(s => s.icp_score === 'A' || s.tier === 'A').map(s => '• *' + (s.company_name || s.org || 'Unknown') + '* — ' + (s.signal_type || s.type || 'signal') + ' (' + (s.icp_score || s.tier || 'A') + ')').join('\\n') + '\\n\\n_Total new signals: ' + $('Deduplicate Signals').first().json.new_count + '_' }}"
+              }
+            }
+          ]
+        }
+      },
+      "id": "e1f2a3b4-c5d6-7890-efab-901234567890",
+      "name": "Slack A-Tier Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [1750, 250],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-creds",
+          "name": "Slack OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "url": "={{ $vars.N8N_WEBHOOK_BASE_URL }}/webhook/enrichment-pipeline",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "signals",
+              "value": "={{ JSON.stringify($('Deduplicate Signals').first().json.new_signals) }}"
+            },
+            {
+              "name": "source",
+              "value": "daily-scan"
+            },
+            {
+              "name": "timestamp",
+              "value": "={{ $('Deduplicate Signals').first().json.timestamp }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f2a3b4c5-d6e7-8901-fabc-012345678901",
+      "name": "Trigger Enrichment Pipeline",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1750, 450]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {"node": "Scan GitHub", "type": "main", "index": 0},
+          {"node": "Scan ArXiv", "type": "main", "index": 0},
+          {"node": "Scan HuggingFace", "type": "main", "index": 0},
+          {"node": "Scan Job Postings", "type": "main", "index": 0},
+          {"node": "Scan Funding", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Scan GitHub": {
+      "main": [[{"node": "Merge Scanner Results", "type": "main", "index": 0}]]
+    },
+    "Scan ArXiv": {
+      "main": [[{"node": "Merge Scanner Results", "type": "main", "index": 1}]]
+    },
+    "Scan HuggingFace": {
+      "main": [[{"node": "Merge Scanner Results", "type": "main", "index": 2}]]
+    },
+    "Scan Job Postings": {
+      "main": [[{"node": "Merge Scanner Results", "type": "main", "index": 3}]]
+    },
+    "Scan Funding": {
+      "main": [[{"node": "Merge Scanner Results", "type": "main", "index": 4}]]
+    },
+    "Merge Scanner Results": {
+      "main": [[{"node": "Stack Signals", "type": "main", "index": 0}]]
+    },
+    "Stack Signals": {
+      "main": [[{"node": "Deduplicate Signals", "type": "main", "index": 0}]]
+    },
+    "Deduplicate Signals": {
+      "main": [[{"node": "A-Tier Signals?", "type": "main", "index": 0}]]
+    },
+    "A-Tier Signals?": {
+      "main": [
+        [{"node": "Slack A-Tier Alert", "type": "main", "index": 0}],
+        [{"node": "Trigger Enrichment Pipeline", "type": "main", "index": 0}]
+      ]
+    },
+    "Slack A-Tier Alert": {
+      "main": [[{"node": "Trigger Enrichment Pipeline", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": ["gtm", "signals", "daily"],
+  "triggerCount": 1,
+  "updatedAt": "2026-03-17T00:00:00.000Z",
+  "versionId": "1"
+}
