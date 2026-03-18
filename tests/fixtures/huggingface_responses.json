@@ -1,0 +1,54 @@
+{
+  "models_list": [
+    {
+      "modelId": "meta-llama/Llama-3-RL-8B",
+      "id": "meta-llama/Llama-3-RL-8B",
+      "lastModified": "2026-03-15T12:00:00.000Z",
+      "tags": ["ppo", "reinforcement-learning", "transformers"],
+      "pipeline_tag": "text-generation",
+      "downloads": 5000,
+      "likes": 120
+    },
+    {
+      "modelId": "google/gemma-rlhf-7b",
+      "id": "google/gemma-rlhf-7b",
+      "lastModified": "2026-03-14T08:30:00.000Z",
+      "tags": ["rlhf", "reward-model", "transformers"],
+      "pipeline_tag": "text-generation",
+      "downloads": 3200,
+      "likes": 87
+    },
+    {
+      "modelId": "mistralai/Mistral-DPO-v2",
+      "id": "mistralai/Mistral-DPO-v2",
+      "lastModified": "2026-03-13T16:45:00.000Z",
+      "tags": ["dpo", "reinforcement-learning", "transformers"],
+      "pipeline_tag": "text-generation",
+      "downloads": 8900,
+      "likes": 234
+    },
+    {
+      "modelId": "personal-user/my-ppo-experiment",
+      "id": "personal-user/my-ppo-experiment",
+      "lastModified": "2026-03-10T09:00:00.000Z",
+      "tags": ["ppo", "reinforcement-learning"],
+      "pipeline_tag": "text-generation",
+      "downloads": 12,
+      "likes": 1
+    }
+  ],
+  "model_info": {
+    "modelId": "meta-llama/Llama-3-RL-8B",
+    "id": "meta-llama/Llama-3-RL-8B",
+    "lastModified": "2026-03-15T12:00:00.000Z",
+    "tags": ["ppo", "reinforcement-learning", "transformers", "pytorch"],
+    "pipeline_tag": "text-generation",
+    "downloads": 5000,
+    "likes": 120,
+    "cardData": {
+      "language": ["en"],
+      "license": "llama3",
+      "library_name": "transformers"
+    }
+  }
+}
