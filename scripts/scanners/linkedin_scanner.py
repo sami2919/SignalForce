@@ -5,6 +5,7 @@ The 48-hour activity filter alone doubles response rates (Gojiberry AI).
 
 Works in data-input mode: accepts pre-collected activity data as JSON/dicts.
 Data can come from Sales Navigator export, Phantom Buster, or manual research.
+Keywords driving relevance filtering are configurable via ScannerConfig.keywords.
 """
 
 from __future__ import annotations
@@ -13,12 +14,12 @@ import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, UTC
 
-from scripts.models import ScanResult, Signal, SignalStrength, SignalType
+from scripts.scanners.base import ScannerConfig, ScanResult, Signal, SignalStrength
 
 logger = logging.getLogger(__name__)
 
-# Keywords indicating RL/ML relevance in activity topics
-RL_KEYWORDS = [
+# Default keywords indicating relevance in activity topics
+_DEFAULT_KEYWORDS: list[str] = [
     "reinforcement learning",
     "rlhf",
     "grpo",
@@ -42,12 +43,16 @@ RL_KEYWORDS = [
     "mlops",
 ]
 
+# Module-level alias kept for backward compatibility with tests that patch RL_KEYWORDS directly
+RL_KEYWORDS = _DEFAULT_KEYWORDS
+
 
 class LinkedInActivityScanner:
-    """Scans LinkedIn activity data for RL/ML engagement signals."""
+    """Scans LinkedIn activity data for engagement signals."""
 
-    def __init__(self, max_age_hours: int = 48) -> None:
+    def __init__(self, max_age_hours: int = 48, keywords: list[str] | None = None) -> None:
         self.max_age_hours = max_age_hours
+        self._keywords = keywords if keywords is not None else _DEFAULT_KEYWORDS
 
     def scan_from_data(
         self,
@@ -71,7 +76,6 @@ class LinkedInActivityScanner:
         started_at = now
         cutoff = now - timedelta(hours=self.max_age_hours)
 
-        # Filter to recent + RL-relevant activities
         relevant: list[dict] = []
         total_raw = len(activity_data)
         for activity in activity_data:
@@ -79,18 +83,16 @@ class LinkedInActivityScanner:
             if ts is None or ts < cutoff:
                 continue
             topic = activity.get("topic", "").lower()
-            if not self._is_rl_relevant(topic):
+            if not self._is_relevant(topic):
                 continue
             relevant.append(activity)
 
-        # Group by company
         company_activities: dict[str, list[dict]] = defaultdict(list)
         for activity in relevant:
             company = activity.get("company", "").strip()
             if company:
                 company_activities[company].append(activity)
 
-        # Create signals
         signals: list[Signal] = []
         for company, activities in company_activities.items():
             strength = self._score_activities(activities)
@@ -98,7 +100,7 @@ class LinkedInActivityScanner:
             signals.append(signal)
 
         return ScanResult(
-            scan_type=SignalType.LINKEDIN_ACTIVITY,
+            scan_type="linkedin_activity",
             started_at=started_at,
             completed_at=datetime.now(UTC),
             signals_found=signals,
@@ -106,14 +108,15 @@ class LinkedInActivityScanner:
             total_after_dedup=len(signals),
         )
 
-    def _is_rl_relevant(self, topic: str) -> bool:
-        return any(kw in topic for kw in RL_KEYWORDS)
+    def _is_relevant(self, topic: str) -> bool:
+        """Return True if topic contains any configured keyword."""
+        return any(kw in topic for kw in self._keywords)
 
     def _score_activities(self, activities: list[dict]) -> SignalStrength:
         """Score based on activity type and volume.
 
-        - Posted about RL: STRONG (highest intent)
-        - Commented on RL content: MODERATE
+        - Posted about topic: STRONG (highest intent)
+        - Commented on content: MODERATE
         - Liked/shared: WEAK
         Multiple activities from same company → highest type wins.
         """
@@ -134,7 +137,7 @@ class LinkedInActivityScanner:
         contacts = list({a.get("name", "") for a in activities if a.get("name")})
 
         return Signal(
-            signal_type=SignalType.LINKEDIN_ACTIVITY,
+            signal_type="linkedin_activity",
             company_name=company,
             signal_strength=strength,
             source_url=f"https://linkedin.com/company/{company.lower().replace(' ', '-')}",
@@ -157,6 +160,33 @@ class LinkedInActivityScanner:
             return dt
         except (ValueError, TypeError):
             return None
+
+
+# ---------------------------------------------------------------------------
+# Module-level entry point
+# ---------------------------------------------------------------------------
+
+
+def scan(config: ScannerConfig) -> ScanResult:
+    """Run a LinkedIn activity scan using configuration.
+
+    Because LinkedIn activity data must be pre-collected externally (from
+    Sales Navigator, Phantom Buster, etc.), this entry point returns an empty
+    ScanResult when called without external data. Use scan_from_data() directly
+    when you have activity data to process.
+
+    Args:
+        config: ScannerConfig with keywords list and lookback_days.
+
+    Returns:
+        ScanResult (empty unless data is injected via scan_from_data).
+    """
+    keywords = config.keywords or None
+    scanner = LinkedInActivityScanner(
+        max_age_hours=config.lookback_days * 24,
+        keywords=keywords,
+    )
+    return scanner.scan_from_data([])
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, UTC
 
-from scripts.linkedin_activity import LinkedInActivityScanner
-from scripts.models import SignalType, SignalStrength
+from scripts.scanners.linkedin_scanner import LinkedInActivityScanner
+from scripts.models import SignalStrength
 
 
 def _make_activity(
@@ -30,7 +30,7 @@ class TestLinkedInActivityScanner:
         data = [_make_activity()]
         scanner = LinkedInActivityScanner()
         result = scanner.scan_from_data(data)
-        assert result.scan_type == SignalType.LINKEDIN_ACTIVITY
+        assert result.scan_type == "linkedin_activity"
         assert len(result.signals_found) == 1
 
     def test_filters_non_rl_activity(self):
