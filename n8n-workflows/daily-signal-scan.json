@@ -20,7 +20,7 @@
     },
     {
       "parameters": {
-        "command": "cd /opt/signalforce && python3 -m scripts.github_rl_scanner --lookback-days 7 --output /tmp/github_signals.json && echo 'github_done'"
+        "command": "cd /opt/signalforce && python3 -m scripts.scanners.github_scanner --lookback-days 7 --output /tmp/github_signals.json && echo 'github_done'"
       },
       "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
       "name": "Scan GitHub",
@@ -30,7 +30,7 @@
     },
     {
       "parameters": {
-        "command": "cd /opt/signalforce && python3 -m scripts.arxiv_monitor --lookback-days 7 --output /tmp/arxiv_signals.json && echo 'arxiv_done'"
+        "command": "cd /opt/signalforce && python3 -m scripts.scanners.arxiv_scanner --lookback-days 7 --output /tmp/arxiv_signals.json && echo 'arxiv_done'"
       },
       "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
       "name": "Scan ArXiv",
@@ -40,7 +40,7 @@
     },
     {
       "parameters": {
-        "command": "cd /opt/signalforce && python3 -m scripts.hf_model_monitor --lookback-days 7 --output /tmp/hf_signals.json && echo 'hf_done'"
+        "command": "cd /opt/signalforce && python3 -m scripts.scanners.hf_scanner --lookback-days 7 --output /tmp/hf_signals.json && echo 'hf_done'"
       },
       "id": "d4e5f6a7-b8c9-0123-defa-234567890123",
       "name": "Scan HuggingFace",
@@ -50,7 +50,7 @@
     },
     {
       "parameters": {
-        "command": "cd /opt/signalforce && python3 -m scripts.job_posting_scanner --lookback-days 7 --output /tmp/job_signals.json && echo 'jobs_done'"
+        "command": "cd /opt/signalforce && python3 -m scripts.scanners.job_scanner --lookback-days 7 --output /tmp/job_signals.json && echo 'jobs_done'"
       },
       "id": "e5f6a7b8-c9d0-1234-efab-345678901234",
       "name": "Scan Job Postings",
@@ -60,7 +60,7 @@
     },
     {
       "parameters": {
-        "command": "cd /opt/signalforce && python3 -m scripts.funding_tracker --lookback-days 30 --output /tmp/funding_signals.json && echo 'funding_done'"
+        "command": "cd /opt/signalforce && python3 -m scripts.scanners.funding_scanner --lookback-days 30 --output /tmp/funding_signals.json && echo 'funding_done'"
       },
       "id": "f6a7b8c9-d0e1-2345-fabc-456789012345",
       "name": "Scan Funding",
@@ -142,8 +142,8 @@
         "authentication": "oAuth2",
         "resource": "message",
         "operation": "post",
-        "channel": "={{ $vars.SLACK_SIGNAL_CHANNEL || '#rl-signals' }}",
-        "text": "={{ '🚨 *A-Tier RL Signals Detected* — ' + new Date().toLocaleDateString('en-US', {timeZone: 'America/Los_Angeles'}) }}",
+        "channel": "={{ $vars.SLACK_SIGNAL_CHANNEL || '#signals' }}",
+        "text": "={{ '🚨 *A-Tier Signals Detected* — ' + new Date().toLocaleDateString('en-US', {timeZone: 'America/Los_Angeles'}) }}",
         "otherOptions": {
           "mrkdwn": true
         },

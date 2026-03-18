@@ -256,7 +256,7 @@
         "resource": "deal",
         "operation": "upsert",
         "additionalFields": {
-          "dealName": "={{ $json.company_name + ' — RL Signal (' + $json.signal_type + ')' }}",
+          "dealName": "={{ $json.company_name + ' — Signal (' + $json.signal_type + ')' }}",
           "amount": "",
           "dealStage": "appointmentscheduled",
           "hubspotDefined": {
