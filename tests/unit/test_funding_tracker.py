@@ -632,8 +632,10 @@ class TestCLI:
             total_after_dedup=0,
         )
 
-        with patch("scripts.config_loader.load_config") as mock_load, \
-             patch("scripts.scanners.funding_scanner.FundingTracker") as MockTracker:
+        with (
+            patch("scripts.config_loader.load_config") as mock_load,
+            patch("scripts.scanners.funding_scanner.FundingTracker") as MockTracker,
+        ):
             mock_load.return_value.scanners = {}
             mock_instance = MockTracker.return_value
             mock_instance.scan.return_value = mock_result
@@ -676,8 +678,10 @@ class TestCLI:
             total_after_dedup=1,
         )
 
-        with patch("scripts.config_loader.load_config") as mock_load, \
-             patch("scripts.scanners.funding_scanner.FundingTracker") as MockTracker:
+        with (
+            patch("scripts.config_loader.load_config") as mock_load,
+            patch("scripts.scanners.funding_scanner.FundingTracker") as MockTracker,
+        ):
             mock_load.return_value.scanners = {}
             mock_instance = MockTracker.return_value
             mock_instance.scan.return_value = mock_result
@@ -701,8 +705,10 @@ class TestCLI:
 
         output_file = tmp_path / "output.json"
 
-        with patch("scripts.config_loader.load_config") as mock_load, \
-             patch("scripts.scanners.funding_scanner.FundingTracker") as MockTracker:
+        with (
+            patch("scripts.config_loader.load_config") as mock_load,
+            patch("scripts.scanners.funding_scanner.FundingTracker") as MockTracker,
+        ):
             mock_load.return_value.scanners = {}
             mock_instance = MockTracker.return_value
             mock_instance.scan.return_value = mock_result

@@ -74,7 +74,7 @@ def make_ashby_result(company_slug: str, role: str) -> dict:
     )
 
 
-def make_scanner_with_defaults() -> "JobPostingScanner":
+def make_scanner_with_defaults():
     """Build a JobPostingScanner without calling __init__, with defaults set."""
     from scripts.scanners.job_scanner import JobPostingScanner, _DEFAULT_SKILLS
 
@@ -632,9 +632,7 @@ class TestBuildSearchQueries:
     def test_build_search_queries_returns_list(self):
         from scripts.scanners.job_scanner import JobPostingScanner
 
-        scanner = JobPostingScanner(
-            titles=["reinforcement learning engineer", "RL researcher"]
-        )
+        scanner = JobPostingScanner(titles=["reinforcement learning engineer", "RL researcher"])
         queries = scanner._build_search_queries(lookback_days=7)
         assert isinstance(queries, list)
         assert len(queries) > 0

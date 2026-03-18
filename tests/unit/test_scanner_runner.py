@@ -48,9 +48,18 @@ class TestRunAllScanners:
             assert "github" in call_arg
 
     def test_handles_missing_module(self, caplog: pytest.LogCaptureFixture) -> None:
+        from scripts.config_loader import ScannerConfig
+
         config = load_config(_FIXTURES / "sample_config.yaml")
+        # Override the github scanner to point at a nonexistent module to test error handling
+        bad_scanner = ScannerConfig(
+            module="scripts.scanners.does_not_exist",
+            keywords=["test"],
+            enabled=True,
+        )
+        bad_config = config.model_copy(update={"scanners": {"bad": bad_scanner}})
         with caplog.at_level(logging.ERROR):
-            signals = run_all_scanners(config)
+            signals = run_all_scanners(bad_config)
         assert "not found" in caplog.text.lower() or len(signals) == 0
 
     def test_handles_scanner_exception(self) -> None:
