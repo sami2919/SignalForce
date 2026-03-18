@@ -4,7 +4,137 @@ Use this rubric to score and grade every inbound signal before outreach. Only co
 
 ---
 
-## Dimensions and Weights
+## Updated Scoring Formula (v2)
+
+### Formula
+
+```
+COMBINED_SCORE = (ICP_Fit × 0.4) + (Intent_Signal × 0.6)
+```
+
+Intent receives 60% weight because timing beats targeting — a moderately good fit company actively publishing RL research now is a better prospect than a perfect-fit company with no recent signals.
+
+---
+
+### ICP Fit Score (0–5)
+
+ICP Fit is a weighted composite of four dimensions:
+
+| Dimension | Weight of ICP Fit | Details |
+|-----------|-------------------|---------|
+| RL Maturity | 40% | Depth of RL embedded in core technical work |
+| Company Fit / Tier | 30% | Match to ICP tier definitions (see Legacy v1 below) |
+| Budget Likelihood | 20% | Proxy indicators for spend capacity |
+| Accessibility | 10% | Quality of contact data for highest-priority decision maker |
+
+```
+ICP_Fit = (rl_maturity_pts × 0.40) +
+          (company_fit_pts  × 0.30) +
+          (budget_pts       × 0.20) +
+          (accessibility_pts × 0.10)
+```
+
+Maximum ICP Fit = 5 × (0.40 + 0.30 + 0.20 + 0.10) = 5.0
+
+---
+
+### Intent Score Calculation
+
+```
+per_signal_value = signal_strength × intent_weight × recency_decay
+
+intent_score = sum(per_signal_value for each signal) × breadth_multiplier
+```
+
+**Intent Weights by Signal Type:**
+
+| Signal Type | Intent Weight | Rationale |
+|-------------|--------------|-----------|
+| ArXiv paper published | 3.0 | Strongest buying signal — active research output |
+| GitHub RL repo created/updated | 2.5 | Active code = production intent |
+| HuggingFace model uploaded | 2.5 | Active experimentation |
+| Hiring (RL/ML job postings) | 2.0 | Team growth precedes tooling spend |
+| Funding event | 1.5 | Budget available but intent indirect |
+
+**Recency Decay Half-Lives:**
+
+Signals decay exponentially. After one half-life, the signal contributes 50% of its original value.
+
+| Signal Type | Half-Life |
+|-------------|-----------|
+| LinkedIn activity | 2 days |
+| GitHub activity | 5 days |
+| HuggingFace upload | 7 days |
+| ArXiv publication | 10 days |
+| Job posting | 10 days |
+| Funding announcement | 21 days |
+
+**Breadth Multiplier:**
+
+Corroboration across multiple source types multiplies confidence.
+
+| Unique Source Types | Multiplier |
+|--------------------|------------|
+| 1 | 1.0× |
+| 2 | 1.5× |
+| 3 | 2.0× |
+| 4+ | 3.0× |
+
+---
+
+### Grade Thresholds (v2)
+
+| Grade | Combined Score | Action |
+|-------|---------------|--------|
+| A | ≥ 8.0 | Prioritize — personalize outreach, fast-track |
+| B | ≥ 5.0 | Contact — use standard signal-specific template |
+| C | ≥ 2.0 | Nurture — add to lower-priority sequence, revisit in 30 days |
+| D | < 2.0 | Skip — do not contact; log for future re-evaluation |
+
+---
+
+### Worked Example (v2 Intent Scoring)
+
+**Prospect:** Acme Robotics (Series B, 120 employees, sim-to-real work)
+
+**Step 1 — Calculate ICP Fit:**
+
+| Dimension | Evidence | Points | Weight | Contribution |
+|-----------|----------|--------|--------|--------------|
+| RL Maturity | 2 active RL repos, commits last 30 days → SCALING | 4 | 0.40 | 1.60 |
+| Company Fit | Robotics sim-to-real → Tier 3 | 3 | 0.30 | 0.90 |
+| Budget Likelihood | Series B, 120 employees | 5 | 0.20 | 1.00 |
+| Accessibility | Verified email for Head of Simulation | 5 | 0.10 | 0.50 |
+| **ICP Fit** | | | | **4.00** |
+
+**Step 2 — Calculate Intent Score:**
+
+Signals detected: 1 ArXiv paper (7 days ago, strength=3), 1 GitHub repo (3 days ago, strength=2)
+
+| Signal | Strength | Intent Weight | Recency Decay (half-life) | Days Old | Decay Factor | Weighted Value |
+|--------|----------|--------------|--------------------------|----------|--------------|----------------|
+| ArXiv paper | 3 | 3.0 | 10d | 7d | 0.616 | 3 × 3.0 × 0.616 = 5.54 |
+| GitHub repo | 2 | 2.5 | 5d | 3d | 0.659 | 2 × 2.5 × 0.659 = 3.30 |
+
+Sum = 8.84, Breadth multiplier (2 unique types) = 1.5×
+
+**Intent Score = 8.84 × 1.5 = 13.26**
+
+**Step 3 — Combined Score:**
+
+```
+COMBINED = (4.00 × 0.4) + (13.26 × 0.6) = 1.60 + 7.96 = 9.56
+```
+
+**Grade: A** — Prioritize outreach. Strong recent signals + solid ICP fit.
+
+---
+
+## Legacy Scoring Formula (v1)
+
+> The formula below is retained for reference and backward compatibility. New scoring uses the v2 intent-weighted formula above.
+
+### Dimensions and Weights
 
 | # | Dimension | Weight |
 |---|-----------|--------|
@@ -86,7 +216,7 @@ Quality of contact data available for the highest-priority decision maker.
 
 ---
 
-## Weighted Score Formula
+## Weighted Score Formula (v1)
 
 ```
 weighted_score = (
@@ -104,7 +234,7 @@ Weight verification: `0.30 + 0.25 + 0.20 + 0.15 + 0.10 = 1.00` ✓
 
 ---
 
-## Grade Thresholds
+## Grade Thresholds (v1)
 
 | Grade | Weighted Score | Action |
 |-------|---------------|--------|
@@ -128,7 +258,7 @@ Log all disqualified prospects with the override reason for future review.
 
 ---
 
-## Worked Example
+## Worked Example (v1)
 
 **Prospect:** Acme Robotics (Series B, 120 employees, sim-to-real work)
 
