@@ -1,0 +1,188 @@
+# Example config — customize for your use case
+
+company:
+  name: "SecureAPI"
+  product: "API security testing platform"
+  category: "Application security / DevSecOps"
+  website: "https://secureapi.io"
+
+icp:
+  tiers:
+    - name: "Enterprise DevSecOps Teams"
+      description: "Security-conscious engineering orgs at enterprise SaaS — dedicated AppSec or DevSecOps function, API-first architecture"
+      signals:
+        - "API security"
+        - "DAST"
+        - "SAST"
+        - "vulnerability scanning"
+        - "penetration testing"
+
+    - name: "API-First SaaS Companies"
+      description: "Startups and mid-size SaaS where the product IS an API — any security incident is a product incident"
+      signals:
+        - "REST API"
+        - "GraphQL security"
+        - "API gateway"
+        - "zero-day"
+        - "OWASP"
+
+    - name: "Financial Services and Fintech"
+      description: "Banks, fintechs, and payment processors with strict compliance requirements (PCI-DSS, SOC2)"
+      signals:
+        - "PCI-DSS"
+        - "SOC2"
+        - "API compliance"
+        - "financial API security"
+
+    - name: "Healthcare and MedTech"
+      description: "HIPAA-regulated orgs exposing patient data via APIs"
+      signals:
+        - "HIPAA"
+        - "FHIR API"
+        - "healthcare data security"
+
+  maturity_stages:
+    - EXPLORING
+    - BUILDING
+    - SCALING
+    - PRODUCTIONIZING
+
+  target_titles:
+    - "CISO"
+    - "Head of Application Security"
+    - "VP of Security"
+    - "Director of Security Engineering"
+    - "Principal Security Engineer"
+    - "DevSecOps Lead"
+    - "VP Engineering"
+    - "CTO"
+    - "Application Security Engineer"
+    - "Staff Security Engineer"
+
+  disqualifiers:
+    - "No public API surface — internal tools only"
+    - "Security handled entirely by a managed MSSP with no internal team"
+    - "Fewer than 20 employees or pre-product"
+    - "No engineering team (no-code / low-code only)"
+
+scanners:
+  github:
+    enabled: true
+    module: "scripts.scanners.github_scanner"
+    lookback_days: 7
+    topics:
+      - "api-security"
+      - "owasp"
+      - "fuzzing"
+      - "devsecops"
+      - "appsec"
+      - "penetration-testing"
+      - "vulnerability-scanning"
+      - "dast"
+      - "sast"
+    libraries:
+      - "burp-suite"
+      - "zap"
+      - "semgrep"
+      - "trivy"
+      - "snyk"
+    keywords: []
+
+  arxiv:
+    enabled: true
+    module: "scripts.scanners.arxiv_scanner"
+    lookback_days: 7
+    queries:
+      - "API security testing"
+      - "automated vulnerability detection"
+      - "fuzzing REST API"
+      - "web application security"
+      - "zero-day vulnerability discovery"
+
+  huggingface:
+    enabled: false
+    module: "scripts.scanners.hf_scanner"
+    lookback_days: 7
+    training_tags: []
+    card_keywords: []
+
+  jobs:
+    enabled: true
+    module: "scripts.scanners.job_scanner"
+    lookback_days: 7
+    titles:
+      - "Application Security Engineer"
+      - "DevSecOps Engineer"
+      - "Security Engineer"
+      - "API Security Engineer"
+      - "Penetration Tester"
+      - "AppSec Lead"
+    skills:
+      - "OWASP"
+      - "DAST"
+      - "SAST"
+      - "Burp Suite"
+      - "ZAP"
+      - "Semgrep"
+      - "API security"
+      - "penetration testing"
+      - "vulnerability scanning"
+      - "fuzzing"
+      - "zero-day"
+      - "threat modeling"
+
+  funding:
+    enabled: true
+    module: "scripts.scanners.funding_scanner"
+    lookback_days: 21
+    keywords:
+      - "cybersecurity"
+      - "application security"
+      - "API security"
+      - "DevSecOps"
+      - "zero trust"
+      - "vulnerability management"
+      - "cloud security"
+
+  linkedin:
+    enabled: true
+    module: "scripts.scanners.linkedin_scanner"
+    lookback_days: 2
+    keywords:
+      - "API security"
+      - "application security"
+      - "OWASP"
+      - "DAST"
+      - "SAST"
+      - "vulnerability"
+      - "penetration testing"
+      - "DevSecOps"
+      - "zero-day"
+      - "fuzzing"
+      - "security testing"
+      - "appsec"
+
+scoring:
+  intent_weights:
+    github_repo: 2.5
+    arxiv_paper: 2.0
+    huggingface_model: 1.0
+    job_posting: 3.0
+    funding_event: 2.0
+    linkedin_activity: 2.5
+
+  half_lives_days:
+    github_repo: 7.0
+    arxiv_paper: 14.0
+    huggingface_model: 7.0
+    job_posting: 10.0
+    funding_event: 21.0
+    linkedin_activity: 2.0
+
+  icp_weight: 0.4
+  intent_weight: 0.6
+
+  grade_thresholds:
+    A: 8.0
+    B: 5.0
+    C: 2.0

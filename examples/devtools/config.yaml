@@ -1,0 +1,168 @@
+# Example config — customize for your use case
+
+company:
+  name: "DevFlow"
+  product: "Developer productivity platform"
+  category: "Developer tooling / Platform engineering"
+  website: "https://devflow.dev"
+
+icp:
+  tiers:
+    - name: "Engineering Leaders at Mid-Size SaaS"
+      description: "VPs of Engineering and CTOs at 50–500 person SaaS companies experiencing developer experience pain — slow CI, onboarding friction, toil"
+      signals:
+        - "developer experience"
+        - "engineering productivity"
+        - "CI/CD"
+        - "developer tooling"
+        - "platform engineering"
+
+    - name: "Platform Engineering Teams"
+      description: "Dedicated platform or DevEx teams building internal developer platforms (IDPs)"
+      signals:
+        - "internal developer platform"
+        - "IDP"
+        - "platform team"
+        - "golden path"
+        - "developer portal"
+
+    - name: "Fast-Growing Startups Scaling Engineering"
+      description: "Series B–D startups growing from 20 to 100+ engineers where process debt is compounding"
+      signals:
+        - "engineering scaling"
+        - "developer onboarding"
+        - "technical debt"
+        - "monorepo"
+
+  maturity_stages:
+    - EXPLORING
+    - BUILDING
+    - SCALING
+    - PRODUCTIONIZING
+
+  target_titles:
+    - "VP of Engineering"
+    - "CTO"
+    - "Director of Engineering"
+    - "Head of Platform Engineering"
+    - "Head of Developer Experience"
+    - "Staff Engineer"
+    - "Principal Engineer"
+    - "Engineering Manager"
+
+  disqualifiers:
+    - "Fewer than 15 engineers"
+    - "No internal tooling or platform engineering function"
+    - "Engineering entirely outsourced"
+    - "No CI/CD pipeline"
+
+scanners:
+  github:
+    enabled: true
+    module: "scripts.scanners.github_scanner"
+    lookback_days: 7
+    topics:
+      - "developer-tools"
+      - "devex"
+      - "cli"
+      - "internal-developer-platform"
+      - "platform-engineering"
+      - "developer-experience"
+      - "monorepo"
+      - "ci-cd"
+    libraries:
+      - "backstage"
+      - "nx"
+      - "turborepo"
+      - "bazel"
+    keywords: []
+
+  arxiv:
+    enabled: false
+    module: "scripts.scanners.arxiv_scanner"
+    lookback_days: 7
+    queries: []
+
+  huggingface:
+    enabled: false
+    module: "scripts.scanners.hf_scanner"
+    lookback_days: 7
+    training_tags: []
+    card_keywords: []
+
+  jobs:
+    enabled: true
+    module: "scripts.scanners.job_scanner"
+    lookback_days: 7
+    titles:
+      - "Platform Engineer"
+      - "Developer Experience Engineer"
+      - "DevEx Engineer"
+      - "Staff Engineer"
+      - "Senior Software Engineer platform"
+      - "Internal Tools Engineer"
+    skills:
+      - "developer experience"
+      - "CI/CD"
+      - "internal tooling"
+      - "platform engineering"
+      - "Backstage"
+      - "monorepo"
+      - "Kubernetes"
+      - "Terraform"
+      - "GitHub Actions"
+      - "developer portal"
+
+  funding:
+    enabled: true
+    module: "scripts.scanners.funding_scanner"
+    lookback_days: 21
+    keywords:
+      - "developer productivity"
+      - "developer tooling"
+      - "platform engineering"
+      - "developer experience"
+      - "CI/CD"
+      - "internal developer platform"
+
+  linkedin:
+    enabled: true
+    module: "scripts.scanners.linkedin_scanner"
+    lookback_days: 2
+    keywords:
+      - "developer experience"
+      - "platform engineering"
+      - "CI/CD"
+      - "internal tooling"
+      - "developer productivity"
+      - "developer portal"
+      - "monorepo"
+      - "golden path"
+      - "internal developer platform"
+      - "engineering productivity"
+      - "onboarding"
+
+scoring:
+  intent_weights:
+    github_repo: 3.0
+    arxiv_paper: 1.0
+    huggingface_model: 1.0
+    job_posting: 3.0
+    funding_event: 2.0
+    linkedin_activity: 2.5
+
+  half_lives_days:
+    github_repo: 7.0
+    arxiv_paper: 14.0
+    huggingface_model: 7.0
+    job_posting: 10.0
+    funding_event: 21.0
+    linkedin_activity: 2.0
+
+  icp_weight: 0.4
+  intent_weight: 0.6
+
+  grade_thresholds:
+    A: 8.0
+    B: 5.0
+    C: 2.0

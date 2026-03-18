@@ -1,0 +1,197 @@
+# Example config — customize for your use case
+
+company:
+  name: "PipelineHQ"
+  product: "Data pipeline orchestration"
+  category: "Data infrastructure / Data engineering"
+  website: "https://pipelinehq.io"
+
+icp:
+  tiers:
+    - name: "Data Engineering Teams at Analytics-Heavy Companies"
+      description: "Companies where data is a core product input — e-commerce, fintech, media, SaaS — with dedicated data engineering functions"
+      signals:
+        - "data pipeline"
+        - "ETL"
+        - "data engineering"
+        - "data lakehouse"
+        - "dbt"
+
+    - name: "Enterprise Data Platforms"
+      description: "Large enterprises modernizing legacy data infrastructure — moving from on-prem Hadoop to cloud-native lakehouse"
+      signals:
+        - "Hadoop migration"
+        - "data lakehouse"
+        - "data platform modernization"
+        - "cloud data warehouse"
+
+    - name: "Real-Time and Streaming Data Teams"
+      description: "Companies with latency-sensitive data requirements — fraud detection, personalization, operational analytics"
+      signals:
+        - "streaming data"
+        - "Kafka"
+        - "real-time analytics"
+        - "event streaming"
+        - "stream processing"
+
+    - name: "Data-First Startups"
+      description: "Series A–C startups where data infrastructure is a competitive differentiator — ML platforms, analytics products, data APIs"
+      signals:
+        - "data API"
+        - "ML feature store"
+        - "data product"
+        - "analytics platform"
+
+  maturity_stages:
+    - EXPLORING
+    - BUILDING
+    - SCALING
+    - PRODUCTIONIZING
+
+  target_titles:
+    - "Head of Data Engineering"
+    - "VP of Data"
+    - "Director of Data Engineering"
+    - "Data Engineering Manager"
+    - "Principal Data Engineer"
+    - "Staff Data Engineer"
+    - "VP Engineering"
+    - "CTO"
+    - "Head of Platform Engineering"
+
+  disqualifiers:
+    - "No data engineering function — data work done by analysts only"
+    - "Fewer than 5 data engineers"
+    - "Fully managed by a turnkey BI vendor with no pipeline ownership"
+    - "No active data pipeline development"
+
+scanners:
+  github:
+    enabled: true
+    module: "scripts.scanners.github_scanner"
+    lookback_days: 7
+    topics:
+      - "data-pipeline"
+      - "etl"
+      - "data-engineering"
+      - "data-lakehouse"
+      - "apache-airflow"
+      - "dbt"
+      - "apache-spark"
+      - "kafka"
+      - "streaming"
+      - "data-orchestration"
+    libraries:
+      - "airflow"
+      - "dbt"
+      - "spark"
+      - "kafka"
+      - "flink"
+      - "dagster"
+      - "prefect"
+      - "great-expectations"
+    keywords: []
+
+  arxiv:
+    enabled: true
+    module: "scripts.scanners.arxiv_scanner"
+    lookback_days: 7
+    queries:
+      - "data pipeline optimization"
+      - "stream processing scalability"
+      - "data lakehouse architecture"
+      - "ETL automation"
+
+  huggingface:
+    enabled: false
+    module: "scripts.scanners.hf_scanner"
+    lookback_days: 7
+    training_tags: []
+    card_keywords: []
+
+  jobs:
+    enabled: true
+    module: "scripts.scanners.job_scanner"
+    lookback_days: 7
+    titles:
+      - "Data Engineer"
+      - "Senior Data Engineer"
+      - "Staff Data Engineer"
+      - "Data Platform Engineer"
+      - "Data Infrastructure Engineer"
+      - "Analytics Engineer"
+    skills:
+      - "data pipeline"
+      - "ETL"
+      - "ELT"
+      - "data lakehouse"
+      - "Airflow"
+      - "dbt"
+      - "Spark"
+      - "Kafka"
+      - "Flink"
+      - "Dagster"
+      - "Prefect"
+      - "Snowflake"
+      - "Databricks"
+      - "BigQuery"
+      - "data quality"
+      - "streaming"
+
+  funding:
+    enabled: true
+    module: "scripts.scanners.funding_scanner"
+    lookback_days: 21
+    keywords:
+      - "data infrastructure"
+      - "data engineering"
+      - "data pipeline"
+      - "analytics"
+      - "data lakehouse"
+      - "real-time data"
+      - "stream processing"
+      - "data platform"
+
+  linkedin:
+    enabled: true
+    module: "scripts.scanners.linkedin_scanner"
+    lookback_days: 2
+    keywords:
+      - "data pipeline"
+      - "ETL"
+      - "data engineering"
+      - "data lakehouse"
+      - "dbt"
+      - "Airflow"
+      - "Spark"
+      - "Kafka"
+      - "streaming"
+      - "data platform"
+      - "data quality"
+      - "data orchestration"
+      - "analytics engineering"
+
+scoring:
+  intent_weights:
+    github_repo: 2.5
+    arxiv_paper: 1.5
+    huggingface_model: 1.0
+    job_posting: 3.0
+    funding_event: 2.0
+    linkedin_activity: 2.5
+
+  half_lives_days:
+    github_repo: 7.0
+    arxiv_paper: 14.0
+    huggingface_model: 7.0
+    job_posting: 10.0
+    funding_event: 21.0
+    linkedin_activity: 2.0
+
+  icp_weight: 0.4
+  intent_weight: 0.6
+
+  grade_thresholds:
+    A: 8.0
+    B: 5.0
+    C: 2.0
