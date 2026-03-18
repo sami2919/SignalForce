@@ -93,6 +93,8 @@ class DealStage(str, Enum):
     ENGAGED = "ENGAGED"
     RESPONDED = "RESPONDED"
     MEETING_SCHEDULED = "MEETING_SCHEDULED"
+    MEETING_COMPLETED = "MEETING_COMPLETED"
+    PROPOSAL_SENT = "PROPOSAL_SENT"
     DISQUALIFIED = "DISQUALIFIED"
 
 
@@ -262,3 +264,27 @@ class ScanResult(BaseModel):
     total_raw_results: int
     total_after_dedup: int
     errors: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Meeting outcome model
+# ---------------------------------------------------------------------------
+
+
+class MeetingOutcome(BaseModel):
+    """Structured output from a discovery/demo meeting."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    deal_id: str
+    meeting_date: datetime
+    attendees: list[str]
+    outcome: str  # "positive", "neutral", "negative", "no_show"
+    objections: list[str] = Field(default_factory=list)
+    next_steps: list[str] = Field(default_factory=list)
+    decision_timeline: str | None = None
+    stakeholders_needed: list[str] = Field(default_factory=list)
+    follow_up_resources: list[str] = Field(default_factory=list)
+    notes: str = ""
+    recorded_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
