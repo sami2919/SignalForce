@@ -7,7 +7,6 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from scripts.recency import (
-    SignalHalfLife,
     apply_recency_weight,
     calculate_decay_factor,
 )
@@ -66,21 +65,3 @@ class TestApplyRecencyWeight:
         assert result == pytest.approx(2.0)
 
 
-class TestSignalHalfLife:
-    def test_github_fast_decay(self):
-        assert SignalHalfLife.GITHUB_RL_REPO == 5
-
-    def test_arxiv_medium_decay(self):
-        assert SignalHalfLife.ARXIV_PAPER == 10
-
-    def test_funding_slow_decay(self):
-        assert SignalHalfLife.FUNDING_EVENT == 21
-
-    def test_job_posting_medium_decay(self):
-        assert SignalHalfLife.JOB_POSTING == 10
-
-    def test_huggingface_fast_decay(self):
-        assert SignalHalfLife.HUGGINGFACE_MODEL == 7
-
-    def test_linkedin_fastest_decay(self):
-        assert SignalHalfLife.LINKEDIN_ACTIVITY == 2

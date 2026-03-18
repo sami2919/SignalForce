@@ -3,30 +3,15 @@
 Signal value decays exponentially over time using the formula:
     decay_factor = 2^(-age_days / half_life)
 
-Different signal types decay at different rates:
-- GitHub commits: 5-day half-life (code activity is time-sensitive)
-- LinkedIn activity: 2-day half-life (the 48-hour window)
-- Job postings: 10-day half-life (hiring cycles are slower)
-- ArXiv papers: 10-day half-life (research remains relevant longer)
-- Funding events: 21-day half-life (post-funding windows last months)
-- HF model uploads: 7-day half-life
+Half-life values are signal-type-specific and come from the SignalForce
+configuration (scoring.half_lives_days). Pass the appropriate half_life_days
+value when calling calculate_decay_factor or apply_recency_weight.
 """
 
 from __future__ import annotations
 
 import math
 from datetime import datetime
-
-
-class SignalHalfLife:
-    """Half-life in days for each signal type."""
-
-    GITHUB_RL_REPO = 5
-    ARXIV_PAPER = 10
-    JOB_POSTING = 10
-    HUGGINGFACE_MODEL = 7
-    FUNDING_EVENT = 21
-    LINKEDIN_ACTIVITY = 2
 
 
 def calculate_decay_factor(
