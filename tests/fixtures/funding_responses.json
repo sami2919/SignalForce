@@ -1,0 +1,49 @@
+{
+  "funding_rounds": [
+    {
+      "company_name": "NeuralDrive AI",
+      "funding_amount": 50000000,
+      "round_type": "series_b",
+      "investors": ["Andreessen Horowitz", "Sequoia Capital"],
+      "announced_date": "2026-03-10",
+      "company_description": "NeuralDrive builds AI infrastructure for model training at scale, focusing on reinforcement learning and foundation model deployment.",
+      "source_url": "https://techcrunch.com/2026/03/10/neuraldrive-raises-50m-series-b"
+    },
+    {
+      "company_name": "PolicyNet Labs",
+      "funding_amount": 15000000,
+      "round_type": "series_a",
+      "investors": ["Lightspeed Venture Partners"],
+      "announced_date": "2026-03-05",
+      "company_description": "PolicyNet builds machine learning infrastructure for autonomous systems and robot control policies.",
+      "source_url": "https://techcrunch.com/2026/03/05/policynet-raises-15m-series-a"
+    },
+    {
+      "company_name": "AgentFlow",
+      "funding_amount": 3000000,
+      "round_type": "seed",
+      "investors": ["Y Combinator", "Pioneer Fund"],
+      "announced_date": "2026-03-01",
+      "company_description": "AgentFlow develops AI agent orchestration platforms enabling companies to deploy autonomous systems in production.",
+      "source_url": "https://techcrunch.com/2026/03/01/agentflow-raises-3m-seed"
+    },
+    {
+      "company_name": "RetailEdge Inc",
+      "funding_amount": 100000000,
+      "round_type": "series_c",
+      "investors": ["Tiger Global", "General Atlantic"],
+      "announced_date": "2026-03-08",
+      "company_description": "RetailEdge provides supply chain optimization software for enterprise retail and logistics companies.",
+      "source_url": "https://techcrunch.com/2026/03/08/retailedge-raises-100m-series-c"
+    },
+    {
+      "company_name": "MysteryTech",
+      "funding_amount": null,
+      "round_type": "unknown",
+      "investors": ["Undisclosed"],
+      "announced_date": "2026-03-12",
+      "company_description": "MysteryTech develops natural language processing tools and LLM-based automation systems for enterprise workflows.",
+      "source_url": "https://techcrunch.com/2026/03/12/mysterytech-raises-undisclosed-round"
+    }
+  ]
+}
