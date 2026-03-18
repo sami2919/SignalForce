@@ -13,59 +13,219 @@ rl-gtm-engine is a three-layer signal-based outbound GTM engine targeting reinfo
 ## Data Flow
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    SIGNAL SOURCES                        │
-│  GitHub Repos  ArXiv Papers  HF Models  Jobs  Funding   │
-└──────────────────────┬──────────────────────────────────┘
-                       │ raw API responses
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│                  PYTHON SCANNERS                         │
-│  github_rl_scanner  arxiv_monitor  hf_model_monitor     │
-│  job_posting_scanner  funding_tracker                    │
-│               → Signal objects (JSON)                    │
-└──────────────────────┬──────────────────────────────────┘
-                       │ ScanResult JSON files
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│                  SIGNAL STACKER                          │
-│  signal_stacker.py                                       │
-│  Groups by company, deduplicates, applies multipliers    │
-│               → CompanyProfile objects (ranked)          │
-└──────────────────────┬──────────────────────────────────┘
-                       │ ranked profiles + ICP grades
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│                  ENRICHMENT                              │
-│  contact-finder skill + enrichment-pipeline workflow     │
-│  Waterfall: Apollo → Hunter → Prospeo                    │
-│  ZeroBounce verification                                 │
-│               → Contact objects with verified emails     │
-└──────────────────────┬──────────────────────────────────┘
-                       │ contacts + company profiles
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│                  EMAIL GENERATION                        │
-│  email-writer skill + Claude API (Anthropic)             │
-│  Signal-specific templates, 3 variants per contact       │
-│               → GeneratedEmail objects                   │
-└──────────────────────┬──────────────────────────────────┘
-                       │ personalized email copy
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│                  SEQUENCES                               │
-│  sequence-launcher workflow + Instantly.ai API           │
-│  Routes by signal type to dedicated campaigns            │
-│               → leads enrolled in email sequences        │
-└──────────────────────┬──────────────────────────────────┘
-                       │ engagement events (webhooks)
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│                  CRM + ANALYTICS                         │
-│  pipeline-tracker skill + crm-sync workflow              │
-│  HubSpot deal creation, stage progression                │
-│  Reply classification, Slack alerts, Google Sheets       │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                        SIGNAL SOURCES                            │
+│  GitHub Repos  ArXiv Papers  HF Models  Jobs  Funding  LinkedIn │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ raw API responses / activity data
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      PYTHON SCANNERS                             │
+│  github_rl_scanner  arxiv_monitor  hf_model_monitor             │
+│  job_posting_scanner  funding_tracker  linkedin_activity         │
+│                   → Signal objects (JSON)                        │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ ScanResult JSON files
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      INTENT SCORING                              │
+│  intent_scorer.py  +  recency.py                                 │
+│  Gojiberry formula: COMBINED = (ICP_Fit × 0.4) + (Intent × 0.6) │
+│  Recency decay + signal-type weights + breadth multiplier        │
+│                   → ScoringResult per company                    │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ intent + combined scores
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      SIGNAL STACKER                              │
+│  signal_stacker.py                                               │
+│  Groups by company, deduplicates, applies multipliers            │
+│                   → CompanyProfile objects (ranked)              │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ ranked profiles + ICP grades
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      ENRICHMENT                                  │
+│  contact-finder skill + enrichment-pipeline workflow             │
+│  Waterfall: Apollo → Hunter → Prospeo                            │
+│  ZeroBounce verification                                         │
+│                   → Contact objects with verified emails         │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ contacts + company profiles
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      OUTREACH GENERATION                         │
+│  email-writer / resource-offer / multi-channel-writer skills     │
+│  multi_channel_sequencer.py — staggered Email + LinkedIn timing  │
+│  Signal-specific templates, 3 variants per contact               │
+│                   → GeneratedEmail + SequenceStep objects        │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ personalized copy + sequence plan
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      SEQUENCES                                   │
+│  sequence-launcher workflow + Instantly.ai API                   │
+│  Routes by signal type to dedicated campaigns                    │
+│                   → leads enrolled in email/LinkedIn sequences   │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ engagement events (webhooks)
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      MEETING + POST-MEETING                      │
+│  meeting-followup skill + MeetingOutcome model                   │
+│  Outcome extraction → template routing → follow-up sequence      │
+│  CRM stage: MEETING_COMPLETED                                    │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ deal stage events + follow-up emails
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      CRM + ANALYTICS                             │
+│  pipeline-tracker skill + crm-sync workflow                      │
+│  HubSpot deal creation, stage progression                        │
+│  Reply classification, Slack alerts, Google Sheets               │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Intent-Weighted Scoring
+
+### The Gojiberry Formula
+
+```
+COMBINED = (ICP_Fit × 0.4) + (Intent × 0.6)
+```
+
+Intent receives 60% weight because **timing beats targeting** — a mediocre ICP fit with strong real-time buying signals outperforms a perfect ICP fit with no activity.
+
+### How Intent Score Is Calculated
+
+For each signal detected for a company:
+
+```
+weighted_value = signal_strength × intent_weight × recency_decay
+```
+
+Summed across all signals, then scaled by a **breadth multiplier** based on how many distinct signal source types are present.
+
+### Signal-Type Intent Weights
+
+| Signal Type | Weight | Rationale |
+|-------------|--------|-----------|
+| LinkedIn Activity | 3.0 | Real-time engagement = highest urgency |
+| ArXiv Paper | 3.0 | Research publication = active RL work |
+| GitHub RL Repo | 2.5 | Code activity = hands-on development |
+| HuggingFace Model | 2.5 | Model upload = production-path intent |
+| Job Posting | 2.0 | Hiring = budget allocated |
+| Funding Event | 1.5 | Capital = future spend, not immediate |
+
+### Recency Decay
+
+Signal value decays exponentially: `decay_factor = 2^(-age_days / half_life)`
+
+| Signal Type | Half-Life | Reasoning |
+|-------------|-----------|-----------|
+| LinkedIn Activity | 2 days | The 48-hour engagement window |
+| GitHub RL Repo | 5 days | Code activity is time-sensitive |
+| HuggingFace Model | 7 days | Model uploads remain relevant ~1 week |
+| ArXiv Paper | 10 days | Research stays relevant longer |
+| Job Posting | 10 days | Hiring cycles are slower |
+| Funding Event | 21 days | Post-funding windows last months |
+
+### Breadth Multiplier
+
+Companies active across multiple signal types signal broader, more persistent intent:
+
+| Unique Signal Types | Multiplier |
+|--------------------|------------|
+| 1 | 1.0× |
+| 2 | 1.5× |
+| 3 | 2.0× |
+| 4+ | 3.0× |
+
+### Grade Thresholds
+
+| Combined Score | Grade |
+|---------------|-------|
+| ≥ 8.0 | A |
+| ≥ 5.0 | B |
+| ≥ 2.0 | C |
+| < 2.0 | D |
+
+---
+
+## Multi-Channel Sequencing
+
+### Dual-Channel Timing (Email + LinkedIn)
+
+When a prospect has both a verified email and a LinkedIn URL, the sequence is staggered across 8 days:
+
+```
+Day 0  ──  Email 1 (problem_focused)
+Day 1  ──  LinkedIn connection request (signal_reference note)
+Day 3  ──  Email 2 (outcome_focused)
+Day 4  ──  LinkedIn follow-up message (resource/insight lead)
+Day 7  ──  Email 3 (break_up)
+Day 8  ──  LinkedIn second follow-up
+```
+
+### Single-Channel Fallbacks
+
+- **Email only**: Days 0, 3, 7 (3 steps)
+- **LinkedIn only**: Days 0, 3, 7 (3 steps — connection request, then follow-ups)
+
+The channel plan is determined by `select_primary_channel()` in `multi_channel_sequencer.py` and the full step list is built by `build_sequence()`.
+
+---
+
+## Resource-First Outreach Funnel
+
+Technical buyers (RL researchers, ML leads, simulation engineers) respond poorly to unsolicited demo requests. The **blueprint-before-demo** approach offers a free, relevant resource before asking for anything.
+
+### Why It Works
+
+- Resource-first outreach converts at ~50% reply rate vs. 8-15% for demo asks
+- Technical buyers respond to peer knowledge-sharing, not vendor pitches
+- The resource creates a reason to respond without requiring a buying decision
+
+### Funnel Structure
+
+```
+Email 1 — Offer a free resource tied to the detected signal
+Email 2 — Share a specific, non-obvious insight from the resource
+Email 3 — Low-friction CTA: resource walkthrough (not a demo)
+```
+
+The resource is selected based on signal type using the mapping in `templates/email-sequences/resource-offer-signal.md`. No email in the sequence asks for a meeting or a demo until the prospect has received the full resource.
+
+Default audience: **ICP Tier 1 (AI Labs)** and **Tier 3 (Robotics)**.
+
+---
+
+## Post-Meeting Automation Flow
+
+```
+Meeting completed
+      │
+      ▼
+MeetingOutcome extraction (meeting-followup skill)
+      │  Fields: outcome, objections, next_steps,
+      │          decision_timeline, stakeholders_needed,
+      │          follow_up_resources
+      ▼
+Template routing by outcome
+  ├── positive  → 3-email sequence (Day 0, 3, 7)
+  ├── neutral   → 3-email sequence (Day 0, 5, 14)
+  ├── negative  → 1 email; flag for 6-month re-qualification
+  └── no_show   → 2-email sequence (Day 0, 3)
+      │
+      ▼
+Follow-up emails generated (signal-specific, objection-aware)
+      │
+      ▼
+CRM update: DealStage → MEETING_COMPLETED
+Stakeholder tasks created if stakeholders_needed is non-empty
+Re-qualification reminder set if outcome is negative
 ```
 
 ---
@@ -80,6 +240,9 @@ rl-gtm-engine is a three-layer signal-based outbound GTM engine targeting reinfo
 | `prospect-researcher` | Skill | Deep-dive company research, RL maturity assessment | Company name/domain | Research report, ICP score |
 | `contact-finder` | Skill | Waterfall enrichment across Apollo/Hunter/Prospeo | Company domain, target titles | Verified Contact objects |
 | `email-writer` | Skill | Generate personalized outreach from signal + research | Signal payload, Contact, research | GeneratedEmail (3 variants) |
+| `resource-offer` | Skill | Blueprint-first outreach; offer resource before meeting | Signal payload, Contact, research | 3-variant resource-offer sequence |
+| `multi-channel-writer` | Skill | Staggered Email + LinkedIn outreach sequences | Contact data, signal type/payload | SequenceStep list + full copy |
+| `meeting-followup` | Skill | Extract MeetingOutcome and generate follow-up emails | Meeting notes or MeetingOutcome | Follow-up sequence + CRM actions |
 | `pipeline-tracker` | Skill | Sync to HubSpot, generate analytics reports | Deal stage events | HubSpot records, metrics |
 | `champion-tracker` | Skill | Monitor job changes of past champions | Champion list, Clay alerts | New opportunity signals |
 | `deliverability-manager` | Skill | Configure sending infrastructure, DNS, warmup | Domain list | DNS records, warmup schedule |
@@ -94,6 +257,10 @@ rl-gtm-engine is a three-layer signal-based outbound GTM engine targeting reinfo
 | `hf_model_monitor.py` | Scanner | Find RL model uploads on HuggingFace Hub | `--lookback-days`, `--output` | `ScanResult` JSON |
 | `job_posting_scanner.py` | Scanner | Detect RL job postings at target companies | `--lookback-days`, `--output` | `ScanResult` JSON |
 | `funding_tracker.py` | Scanner | Find funding events at AI/RL companies | `--lookback-days`, `--output` | `ScanResult` JSON |
+| `linkedin_activity.py` | Scanner | Process LinkedIn activity data for RL/ML engagement signals | Activity JSON (data-input mode) | `ScanResult` JSON |
+| `intent_scorer.py` | Scorer | Gojiberry intent-weighted scoring with recency decay | `list[Signal]`, `icp_fit` float | `ScoringResult` (intent, combined, grade) |
+| `recency.py` | Utility | Exponential decay functions for signal freshness | Signal timestamp, half-life | Decay factor (0.0–1.0) |
+| `multi_channel_sequencer.py` | Sequencer | Build staggered Email + LinkedIn outreach sequences | Channels, signal type | `list[SequenceStep]` |
 | `signal_stacker.py` | Aggregator | Group signals by company, score, grade ICP | Multiple `ScanResult` JSON files | Ranked `CompanyProfile` JSON |
 | `models.py` | Data | Pydantic models for all pipeline data structures | — | Type definitions |
 | `config.py` | Config | Load and validate all environment variables | `.env` file | `AppConfig` singleton |
@@ -103,10 +270,25 @@ rl-gtm-engine is a three-layer signal-based outbound GTM engine targeting reinfo
 
 | Name | Type | Purpose | Trigger | Calls |
 |------|------|---------|---------|-------|
-| `daily-signal-scan.json` | Orchestrator | Run all 5 scanners, stack signals, alert on A-tier | Cron: 7 AM PST daily | enrichment-pipeline webhook |
+| `daily-signal-scan.json` | Orchestrator | Run all 6 scanners, stack signals, alert on A-tier | Cron: 7 AM PST daily | enrichment-pipeline webhook |
 | `enrichment-pipeline.json` | Processor | Enrich B+ companies, find contacts, create HubSpot deals | Webhook from daily-signal-scan | sequence-launcher webhook |
 | `sequence-launcher.json` | Sender | Generate email copy via Claude, enroll in Instantly.ai | Webhook from enrichment-pipeline | Instantly.ai API, HubSpot API |
 | `crm-sync.json` | Sync | Process Instantly reply/open/bounce events, update HubSpot, compute daily analytics | Webhook (Instantly) + Cron (6 PM PST) | HubSpot API, Google Sheets, Slack |
+
+---
+
+## Signal Sources
+
+| Source | Scanner | Signal Type | Data Collection | Half-Life |
+|--------|---------|-------------|-----------------|-----------|
+| GitHub | `github_rl_scanner.py` | `GITHUB_RL_REPO` | GitHub Search API | 5 days |
+| ArXiv / Semantic Scholar | `arxiv_monitor.py` | `ARXIV_PAPER` | Semantic Scholar API | 10 days |
+| HuggingFace Hub | `hf_model_monitor.py` | `HUGGINGFACE_MODEL` | HF Hub public API | 7 days |
+| Job boards | `job_posting_scanner.py` | `JOB_POSTING` | Scraped / API | 10 days |
+| Crunchbase / funding APIs | `funding_tracker.py` | `FUNDING_EVENT` | Funding APIs | 21 days |
+| LinkedIn (data-input) | `linkedin_activity.py` | `LINKEDIN_ACTIVITY` | Sales Navigator / PhantomBuster export | 2 days |
+
+LinkedIn operates in **data-input mode** — the scanner does not call the LinkedIn API directly. Activity data is pre-collected via Sales Navigator export, PhantomBuster, or manual research, then passed as a JSON array. This avoids LinkedIn's API restrictions while still capturing the highest-intent signal in the pipeline.
 
 ---
 
@@ -115,34 +297,57 @@ rl-gtm-engine is a three-layer signal-based outbound GTM engine targeting reinfo
 ```
 ScanResult
   └─ signals: list[Signal]
-       └─ signal_type: SignalType (GITHUB_RL_REPO | ARXIV_PAPER | ...)
+       └─ signal_type: SignalType (GITHUB_RL_REPO | ARXIV_PAPER | LINKEDIN_ACTIVITY | ...)
        └─ signal_strength: SignalStrength (WEAK | MODERATE | STRONG)
        └─ company_name, company_domain, source_url, raw_data
 
+ScoringResult                          ← produced by IntentScorer
+  └─ intent_score: float               ← sum of decay-weighted signal values
+  └─ combined_score: float             ← Gojiberry formula output
+  └─ icp_score: ICPScore (A/B/C/D)
+  └─ signal_count: int
+  └─ source_types: int                 ← drives breadth multiplier
+
 CompanyProfile
-  └─ signals: list[Signal]          ← aggregated from ScanResults by signal_stacker
-  └─ icp_tier: ICPTier              ← assigned by prospect-researcher skill
-  └─ icp_score: ICPScore (A/B/C/D)  ← computed by icp-scoring-model rubric
+  └─ signals: list[Signal]            ← aggregated from ScanResults by signal_stacker
+  └─ icp_tier: ICPTier               ← assigned by prospect-researcher skill
+  └─ icp_score: ICPScore (A/B/C/D)   ← computed by icp-scoring-model rubric
   └─ rl_maturity: RLMaturityStage
   └─ composite_signal_score: float
 
 Contact
-  └─ company_domain                 ← links to CompanyProfile.domain
+  └─ company_domain                   ← links to CompanyProfile.domain
   └─ email, email_verified
   └─ enrichment_source: EnrichmentSource (APOLLO | HUNTER | PROSPEO | ...)
   └─ confidence_score: float
 
+SequenceStep                           ← produced by multi_channel_sequencer.py
+  └─ day: int
+  └─ channel: OutreachChannel (EMAIL | LINKEDIN | LINKEDIN_INMAIL)
+  └─ action: str
+  └─ template_name: str
+  └─ variant: str | None
+
 GeneratedEmail
-  └─ contact_id                     ← links to Contact.id
-  └─ signal_type, signal_reference  ← links back to Signal
+  └─ contact_id                        ← links to Contact.id
+  └─ signal_type, signal_reference     ← links back to Signal
   └─ variant: EmailVariant (PROBLEM_FOCUSED | OUTCOME_FOCUSED | SOCIAL_PROOF_FOCUSED)
   └─ template_name
+
+MeetingOutcome                         ← produced by meeting-followup skill
+  └─ deal_id                           ← links to Deal.id
+  └─ outcome: str (positive | neutral | negative | no_show)
+  └─ objections: list[str]
+  └─ next_steps: list[str]
+  └─ decision_timeline: str | None
+  └─ stakeholders_needed: list[str]
+  └─ follow_up_resources: list[str]
 
 Deal
   └─ company_profile: CompanyProfile
   └─ contacts: list[Contact]
   └─ emails_sent: list[GeneratedEmail]
-  └─ stage: DealStage (SIGNAL_DETECTED → RESEARCHED → ENRICHED → SEQUENCED → ENGAGED → RESPONDED → MEETING_SCHEDULED)
+  └─ stage: DealStage (SIGNAL_DETECTED → ... → MEETING_COMPLETED → PROPOSAL_SENT)
   └─ hubspot_deal_id, instantly_campaign_id
 ```
 
@@ -181,7 +386,15 @@ All data flowing between pipeline components is typed using Pydantic models with
 
 ### Separate scanners per signal source
 
-Each signal source (GitHub, ArXiv, HuggingFace, job postings, funding) is a separate script rather than one monolithic scanner. This allows independent scheduling, independent failure handling, and independent rate-limit budgets. A GitHub API rate limit should not block an ArXiv scan. The signal_stacker combines outputs after the fact.
+Each signal source (GitHub, ArXiv, HuggingFace, job postings, funding, LinkedIn) is a separate script rather than one monolithic scanner. This allows independent scheduling, independent failure handling, and independent rate-limit budgets. A GitHub API rate limit should not block an ArXiv scan. The signal_stacker combines outputs after the fact.
+
+### Intent-over-ICP scoring
+
+The Gojiberry formula weights intent (60%) higher than ICP fit (40%) because outbound timing is the highest-leverage variable. A prospect that perfectly fits the ICP but shows no current activity is less likely to convert than a slightly weaker ICP fit that is actively publishing RL research and hiring ML engineers. Recency decay ensures stale signals do not accumulate false weight over time.
+
+### LinkedIn as data-input signal source
+
+LinkedIn's API restrictions make programmatic activity scanning impractical. Instead, the LinkedIn scanner operates in data-input mode: activity data is pre-collected via Sales Navigator, PhantomBuster, or manual research, then fed as a JSON array. This design separates data collection (human or third-party tooling) from signal processing (automated), and gives LinkedIn the shortest half-life (2 days) to reflect its real-time nature.
 
 ### Waterfall enrichment
 
