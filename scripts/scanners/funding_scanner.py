@@ -1,9 +1,12 @@
-"""Funding Event Tracker.
+"""Funding Event Scanner.
 
 Detects AI/ML companies that recently raised funding by monitoring funding
 announcements. Designed to accept funding data from any source — Crunchbase,
 PitchBook, custom endpoints — via configurable base URL and injectable data.
 Runs in simulation mode when no API key is configured.
+
+AI keyword filtering is driven by ScannerConfig.keywords when called via scan();
+the class-level AI_KEYWORDS list is kept as a default for backward compatibility.
 """
 
 from __future__ import annotations
@@ -15,8 +18,7 @@ from datetime import datetime, timedelta, UTC
 from typing import Any
 
 from scripts.api_client import BaseAPIClient
-from scripts.config import AppConfig, get_config
-from scripts.models import Signal, ScanResult, SignalType, SignalStrength
+from scripts.scanners.base import ScannerConfig, ScanResult, Signal, SignalStrength
 
 logger = logging.getLogger(__name__)
 
@@ -85,38 +87,47 @@ class FundingClient(BaseAPIClient):
 
 
 # ---------------------------------------------------------------------------
-# Funding tracker
+# Round classification sets
 # ---------------------------------------------------------------------------
 
 _WEAK_ROUNDS = {"pre_seed", "pre-seed", "seed", "angel", "grant"}
 _MODERATE_ROUNDS = {"series_a", "series a"}
 _STRONG_ROUNDS = {"series_b", "series b", "series_c", "series c", "series_d", "series d", "growth"}
 
+# Default AI keyword filter (used when no keywords configured)
+_DEFAULT_AI_KEYWORDS: list[str] = [
+    "artificial intelligence",
+    "machine learning",
+    "AI agents",
+    "reinforcement learning",
+    "LLM",
+    "foundation model",
+    "AI infrastructure",
+    "model training",
+    "autonomous systems",
+    "robotics",
+    "computer vision",
+    "natural language processing",
+]
+
+
+# ---------------------------------------------------------------------------
+# Funding tracker class
+# ---------------------------------------------------------------------------
+
 
 class FundingTracker:
     """Scanner that detects AI/ML companies that recently raised funding."""
 
-    AI_KEYWORDS = [
-        "artificial intelligence",
-        "machine learning",
-        "AI agents",
-        "reinforcement learning",
-        "LLM",
-        "foundation model",
-        "AI infrastructure",
-        "model training",
-        "autonomous systems",
-        "robotics",
-        "computer vision",
-        "natural language processing",
-    ]
+    AI_KEYWORDS: list[str] = _DEFAULT_AI_KEYWORDS
 
-    def __init__(self, config: AppConfig | None = None) -> None:
-        self._config = config or get_config()
+    def __init__(self, keywords: list[str] | None = None) -> None:
         self._client = FundingClient(
             base_url="https://api.crunchbase.com/api/v4",
-            api_key=None,  # No Crunchbase key in AppConfig yet; simulation mode by default
+            api_key=None,  # simulation mode by default
         )
+        if keywords is not None:
+            self.AI_KEYWORDS = keywords
 
     # ------------------------------------------------------------------
     # Public interface
@@ -135,8 +146,6 @@ class FundingTracker:
 
         Args:
             lookback_days: How many days back to scan for announced rounds.
-                           Defaults to 30 (funding events are less frequent than
-                           GitHub commits or job postings).
 
         Returns:
             ScanResult with Signal objects for each qualifying funding event.
@@ -145,7 +154,6 @@ class FundingTracker:
         queries = self._build_search_queries(lookback_days)
         min_date = (datetime.now(UTC) - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
 
-        # company_name → first funding round dict seen
         seen_companies: dict[str, dict] = {}
         total_raw = 0
         errors: list[str] = []
@@ -170,11 +178,9 @@ class FundingTracker:
 
                 total_raw += 1
 
-                # Deduplicate: first occurrence wins
                 if company not in seen_companies:
                     seen_companies[company] = funding_round
 
-        # Build signals from deduplicated data
         signals: list[Signal] = []
         for company_name, funding_data in seen_companies.items():
             round_type = funding_data.get("round_type", "")
@@ -185,7 +191,7 @@ class FundingTracker:
         completed_at = datetime.now(UTC)
 
         return ScanResult(
-            scan_type=SignalType.FUNDING_EVENT,
+            scan_type="funding_event",
             started_at=started_at,
             completed_at=completed_at,
             signals_found=signals,
@@ -199,14 +205,7 @@ class FundingTracker:
     # ------------------------------------------------------------------
 
     def _build_search_queries(self, lookback_days: int) -> list[str]:
-        """Build search query strings for AI/ML funding announcements.
-
-        Args:
-            lookback_days: Number of days to look back.
-
-        Returns:
-            List of search query strings covering major AI/ML funding categories.
-        """
+        """Build search query strings for AI/ML funding announcements."""
         return [
             "artificial intelligence startup funding",
             "machine learning company funding round",
@@ -222,12 +221,6 @@ class FundingTracker:
         - WEAK:     pre_seed, pre-seed, seed, angel, grant, unknown, other
         - MODERATE: series_a, "series a"
         - STRONG:   series_b/c/d, "series b/c/d", growth
-
-        Args:
-            round_type: Raw round type string from the data source.
-
-        Returns:
-            SignalStrength enum value.
         """
         normalised = round_type.strip().lower()
 
@@ -237,18 +230,10 @@ class FundingTracker:
         if normalised in _STRONG_ROUNDS:
             return SignalStrength.STRONG
 
-        # WEAK is the default (covers seed, pre-seed, angel, grant, unknown, "")
         return SignalStrength.WEAK
 
     def _is_ai_company(self, description: str) -> bool:
-        """Return True if the description contains any AI_KEYWORDS (case-insensitive).
-
-        Args:
-            description: Company description text.
-
-        Returns:
-            True if at least one AI keyword is found.
-        """
+        """Return True if the description contains any AI_KEYWORDS (case-insensitive)."""
         lower_desc = description.lower()
         return any(kw.lower() in lower_desc for kw in self.AI_KEYWORDS)
 
@@ -258,22 +243,13 @@ class FundingTracker:
         funding_data: dict,
         score: SignalStrength,
     ) -> Signal:
-        """Build a Signal object for a detected funding event.
-
-        Args:
-            company: Company name.
-            funding_data: Raw funding round dict.
-            score: Pre-computed SignalStrength for this round.
-
-        Returns:
-            Signal with FUNDING_EVENT type and rich metadata.
-        """
+        """Build a Signal object for a detected funding event."""
         source_url = funding_data.get(
             "source_url", f"https://crunchbase.com/organization/{company}"
         )
 
         return Signal(
-            signal_type=SignalType.FUNDING_EVENT,
+            signal_type="funding_event",
             company_name=company,
             signal_strength=score,
             source_url=source_url,
@@ -286,6 +262,25 @@ class FundingTracker:
                 "company_description": funding_data.get("company_description"),
             },
         )
+
+
+# ---------------------------------------------------------------------------
+# Module-level entry point
+# ---------------------------------------------------------------------------
+
+
+def scan(config: ScannerConfig) -> ScanResult:
+    """Run a full funding event scan using configuration.
+
+    Args:
+        config: ScannerConfig with keywords list and lookback_days.
+
+    Returns:
+        ScanResult with Signal objects for each qualifying funding event.
+    """
+    keywords = config.keywords or None
+    tracker = FundingTracker(keywords=keywords)
+    return tracker.scan(config.lookback_days)
 
 
 # ---------------------------------------------------------------------------
@@ -321,14 +316,23 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> None:
-    """CLI entry point for the funding event tracker."""
+    """CLI entry point for the funding event scanner."""
+    from scripts.config_loader import load_config
+
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
 
-    tracker = FundingTracker()
-    result = tracker.scan(lookback_days=args.lookback_days)
+    sf_config = load_config()
+    scanner_cfg = sf_config.scanners.get("funding")
+    if scanner_cfg is None:
+        # Fallback: run with default keywords
+        tracker = FundingTracker()
+        result = tracker.scan(lookback_days=args.lookback_days)
+    else:
+        if args.lookback_days != 30:
+            scanner_cfg = scanner_cfg.model_copy(update={"lookback_days": args.lookback_days})
+        result = scan(scanner_cfg)
 
-    # Filter by minimum strength
     filtered_signals = [s for s in result.signals_found if s.signal_strength >= args.min_strength]
 
     print(f"Scan complete — {len(filtered_signals)} signals (min strength: {args.min_strength})")

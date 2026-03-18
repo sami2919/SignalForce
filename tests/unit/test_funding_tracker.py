@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 
-from scripts.models import SignalType, SignalStrength, ScanResult, Signal
+from scripts.models import SignalStrength, ScanResult, Signal
 
 # ---------------------------------------------------------------------------
 # Fixture helpers
@@ -54,13 +54,13 @@ def make_funding_round(
 
 class TestFundingClient:
     def test_client_initializes_with_base_url(self):
-        from scripts.funding_tracker import FundingClient
+        from scripts.scanners.funding_scanner import FundingClient
 
         client = FundingClient(base_url="https://api.crunchbase.com")
         assert client.base_url == "https://api.crunchbase.com"
 
     def test_search_funding_rounds_returns_list(self):
-        from scripts.funding_tracker import FundingClient
+        from scripts.scanners.funding_scanner import FundingClient
 
         client = FundingClient(base_url="https://api.crunchbase.com")
         with patch.object(
@@ -72,7 +72,7 @@ class TestFundingClient:
         assert isinstance(results, list)
 
     def test_search_funding_rounds_empty_response(self):
-        from scripts.funding_tracker import FundingClient
+        from scripts.scanners.funding_scanner import FundingClient
 
         client = FundingClient(base_url="https://api.crunchbase.com")
         with patch.object(client, "get", return_value={}):
@@ -80,14 +80,14 @@ class TestFundingClient:
         assert results == []
 
     def test_simulation_mode_returns_list_when_no_api_key(self):
-        from scripts.funding_tracker import FundingClient
+        from scripts.scanners.funding_scanner import FundingClient
 
         client = FundingClient(base_url="https://api.crunchbase.com", api_key=None)
         results = client.search_funding_rounds("artificial intelligence")
         assert isinstance(results, list)
 
     def test_search_funding_rounds_with_min_date(self):
-        from scripts.funding_tracker import FundingClient
+        from scripts.scanners.funding_scanner import FundingClient
 
         # Provide an api_key so the client is NOT in simulation mode and makes real HTTP calls.
         client = FundingClient(base_url="https://api.crunchbase.com", api_key="test-key")
@@ -100,7 +100,7 @@ class TestFundingClient:
             mock_get.assert_called_once()
 
     def test_search_funding_rounds_respects_limit(self):
-        from scripts.funding_tracker import FundingClient
+        from scripts.scanners.funding_scanner import FundingClient
 
         client = FundingClient(base_url="https://api.crunchbase.com")
         rounds = [make_funding_round(company_name=f"Company{i}") for i in range(10)]
@@ -120,7 +120,7 @@ class TestFundingClient:
 
 class TestScanReturnsScanResult:
     def test_scan_returns_scan_result_type(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         tracker._client = MagicMock()
@@ -129,10 +129,10 @@ class TestScanReturnsScanResult:
         result = tracker.scan(lookback_days=30)
 
         assert isinstance(result, ScanResult)
-        assert result.scan_type == SignalType.FUNDING_EVENT
+        assert result.scan_type == "funding_event"
 
     def test_scan_has_started_and_completed_at(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         tracker._client = MagicMock()
@@ -153,7 +153,7 @@ class TestScanReturnsScanResult:
 class TestLongerDefaultLookback:
     def test_default_lookback_is_30_days(self):
         """FundingTracker.scan() default lookback is 30 days (not 7)."""
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
         import inspect
 
         sig = inspect.signature(FundingTracker.scan)
@@ -161,7 +161,7 @@ class TestLongerDefaultLookback:
         assert default_lookback == 30
 
     def test_scan_passes_lookback_to_client(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         tracker._client = MagicMock()
@@ -180,7 +180,7 @@ class TestLongerDefaultLookback:
 
 class TestFiltersNonAiCompanies:
     def test_filters_non_ai_companies(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         tracker._client = MagicMock()
@@ -201,7 +201,7 @@ class TestFiltersNonAiCompanies:
         assert "RetailEdge Inc" not in company_names
 
     def test_includes_ai_companies(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         tracker._client = MagicMock()
@@ -229,91 +229,91 @@ class TestFiltersNonAiCompanies:
 
 class TestClassifyRound:
     def test_classify_round_seed_is_weak(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         assert tracker._classify_round("seed") == SignalStrength.WEAK
 
     def test_classify_round_pre_seed_is_weak(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         assert tracker._classify_round("pre_seed") == SignalStrength.WEAK
 
     def test_classify_round_pre_seed_hyphen_is_weak(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         assert tracker._classify_round("pre-seed") == SignalStrength.WEAK
 
     def test_classify_round_angel_is_weak(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         assert tracker._classify_round("angel") == SignalStrength.WEAK
 
     def test_classify_round_grant_is_weak(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         assert tracker._classify_round("grant") == SignalStrength.WEAK
 
     def test_classify_round_series_a_is_moderate(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         assert tracker._classify_round("series_a") == SignalStrength.MODERATE
 
     def test_classify_round_series_a_spaced_is_moderate(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         assert tracker._classify_round("series a") == SignalStrength.MODERATE
 
     def test_classify_round_series_b_is_strong(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         assert tracker._classify_round("series_b") == SignalStrength.STRONG
 
     def test_classify_round_series_b_spaced_is_strong(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         assert tracker._classify_round("series b") == SignalStrength.STRONG
 
     def test_classify_round_series_c_is_strong(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         assert tracker._classify_round("series_c") == SignalStrength.STRONG
 
     def test_classify_round_series_d_is_strong(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         assert tracker._classify_round("series_d") == SignalStrength.STRONG
 
     def test_classify_round_growth_is_strong(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         assert tracker._classify_round("growth") == SignalStrength.STRONG
 
     def test_classify_round_unknown_is_weak(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         assert tracker._classify_round("unknown") == SignalStrength.WEAK
 
     def test_classify_round_empty_string_is_weak(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         assert tracker._classify_round("") == SignalStrength.WEAK
 
     def test_classify_round_case_insensitive(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         assert tracker._classify_round("Series A") == SignalStrength.MODERATE
@@ -328,7 +328,7 @@ class TestClassifyRound:
 
 class TestMetadataIncludesFundingAmount:
     def test_metadata_includes_funding_amount(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         funding_data = make_funding_round(
@@ -342,7 +342,7 @@ class TestMetadataIncludesFundingAmount:
         assert signal.metadata["funding_amount"] == 15_000_000
 
     def test_metadata_includes_round_type(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         funding_data = make_funding_round(round_type="series_b")
@@ -352,7 +352,7 @@ class TestMetadataIncludesFundingAmount:
         assert signal.metadata["round_type"] == "series_b"
 
     def test_metadata_includes_investors(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         funding_data = make_funding_round(investors=["Andreessen Horowitz", "Sequoia"])
@@ -362,7 +362,7 @@ class TestMetadataIncludesFundingAmount:
         assert signal.metadata["investors"] == ["Andreessen Horowitz", "Sequoia"]
 
     def test_metadata_includes_announced_date(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         funding_data = make_funding_round(announced_date="2026-03-10")
@@ -372,7 +372,7 @@ class TestMetadataIncludesFundingAmount:
         assert signal.metadata["announced_date"] == "2026-03-10"
 
     def test_metadata_includes_company_description(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         funding_data = make_funding_round(
@@ -392,7 +392,7 @@ class TestMetadataIncludesFundingAmount:
 class TestHandlesUndisclosedAmount:
     def test_handles_undisclosed_amount(self):
         """funding_amount can be None (undisclosed rounds)."""
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         tracker._client = MagicMock()
@@ -413,7 +413,7 @@ class TestHandlesUndisclosedAmount:
         assert "StealthAI" in company_names
 
     def test_metadata_funding_amount_is_none_when_undisclosed(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         funding_data = make_funding_round(funding_amount=None)
@@ -429,7 +429,7 @@ class TestHandlesUndisclosedAmount:
 
 class TestDeduplicatesByCompany:
     def test_deduplicates_by_company(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         tracker._client = MagicMock()
@@ -455,7 +455,7 @@ class TestDeduplicatesByCompany:
         assert company_names.count("AI Corp") == 1
 
     def test_deduplication_keeps_first_occurrence(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         tracker._client = MagicMock()
@@ -487,7 +487,7 @@ class TestDeduplicatesByCompany:
 
 class TestHandlesEmptyResults:
     def test_handles_empty_results(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         tracker._client = MagicMock()
@@ -499,7 +499,7 @@ class TestHandlesEmptyResults:
         assert result.signals_found == []
 
     def test_handles_client_exception_gracefully(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         tracker._client = MagicMock()
@@ -523,31 +523,31 @@ class TestHandlesEmptyResults:
 
 class TestIsAiCompany:
     def test_returns_true_for_machine_learning(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         assert tracker._is_ai_company("A company building machine learning pipelines.")
 
     def test_returns_true_for_reinforcement_learning(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         assert tracker._is_ai_company("Develops reinforcement learning algorithms.")
 
     def test_returns_true_for_llm(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         assert tracker._is_ai_company("Building LLM-based enterprise automation.")
 
     def test_returns_true_case_insensitive(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         assert tracker._is_ai_company("A MACHINE LEARNING startup.")
 
     def test_returns_false_for_non_ai_description(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         assert not tracker._is_ai_company(
@@ -555,7 +555,7 @@ class TestIsAiCompany:
         )
 
     def test_returns_false_for_empty_description(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         assert not tracker._is_ai_company("")
@@ -568,15 +568,15 @@ class TestIsAiCompany:
 
 class TestCreateSignal:
     def test_create_signal_has_correct_type(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         funding_data = make_funding_round()
         signal = tracker._create_signal("AI Corp", funding_data, SignalStrength.MODERATE)
-        assert signal.signal_type == SignalType.FUNDING_EVENT
+        assert signal.signal_type == "funding_event"
 
     def test_create_signal_has_correct_company(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         funding_data = make_funding_round()
@@ -584,7 +584,7 @@ class TestCreateSignal:
         assert signal.company_name == "Acme AI Labs"
 
     def test_create_signal_has_correct_strength(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         funding_data = make_funding_round(round_type="series_b")
@@ -592,7 +592,7 @@ class TestCreateSignal:
         assert signal.signal_strength == SignalStrength.STRONG
 
     def test_create_signal_source_url_from_funding_data(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         funding_data = make_funding_round(
@@ -602,7 +602,7 @@ class TestCreateSignal:
         assert signal.source_url == "https://techcrunch.com/2026/03/10/acme-raises-series-b"
 
     def test_create_signal_metadata_has_required_keys(self):
-        from scripts.funding_tracker import FundingTracker
+        from scripts.scanners.funding_scanner import FundingTracker
 
         tracker = FundingTracker.__new__(FundingTracker)
         funding_data = make_funding_round()
@@ -621,10 +621,10 @@ class TestCreateSignal:
 
 class TestCLI:
     def test_cli_prints_summary(self, capsys):
-        from scripts.funding_tracker import main
+        from scripts.scanners.funding_scanner import main
 
         mock_result = ScanResult(
-            scan_type=SignalType.FUNDING_EVENT,
+            scan_type="funding_event",
             started_at=datetime.now(UTC),
             completed_at=datetime.now(UTC),
             signals_found=[],
@@ -632,7 +632,9 @@ class TestCLI:
             total_after_dedup=0,
         )
 
-        with patch("scripts.funding_tracker.FundingTracker") as MockTracker:
+        with patch("scripts.config_loader.load_config") as mock_load, \
+             patch("scripts.scanners.funding_scanner.FundingTracker") as MockTracker:
+            mock_load.return_value.scanners = {}
             mock_instance = MockTracker.return_value
             mock_instance.scan.return_value = mock_result
             main(["--lookback-days", "30"])
@@ -641,17 +643,17 @@ class TestCLI:
         assert "0" in captured.out
 
     def test_cli_default_lookback_is_30(self, capsys):
-        from scripts.funding_tracker import _build_arg_parser
+        from scripts.scanners.funding_scanner import _build_arg_parser
 
         parser = _build_arg_parser()
         args = parser.parse_args([])
         assert args.lookback_days == 30
 
     def test_cli_with_min_strength_filters(self, capsys):
-        from scripts.funding_tracker import main
+        from scripts.scanners.funding_scanner import main
 
         weak_signal = Signal(
-            signal_type=SignalType.FUNDING_EVENT,
+            signal_type="funding_event",
             company_name="SeedAI",
             signal_strength=SignalStrength.WEAK,
             source_url="https://techcrunch.com/seedai-raises-seed",
@@ -666,7 +668,7 @@ class TestCLI:
         )
 
         mock_result = ScanResult(
-            scan_type=SignalType.FUNDING_EVENT,
+            scan_type="funding_event",
             started_at=datetime.now(UTC),
             completed_at=datetime.now(UTC),
             signals_found=[weak_signal],
@@ -674,7 +676,9 @@ class TestCLI:
             total_after_dedup=1,
         )
 
-        with patch("scripts.funding_tracker.FundingTracker") as MockTracker:
+        with patch("scripts.config_loader.load_config") as mock_load, \
+             patch("scripts.scanners.funding_scanner.FundingTracker") as MockTracker:
+            mock_load.return_value.scanners = {}
             mock_instance = MockTracker.return_value
             mock_instance.scan.return_value = mock_result
             main(["--lookback-days", "30", "--min-strength", "2"])
@@ -684,10 +688,10 @@ class TestCLI:
         assert "0" in captured.out
 
     def test_cli_writes_output_file(self, tmp_path):
-        from scripts.funding_tracker import main
+        from scripts.scanners.funding_scanner import main
 
         mock_result = ScanResult(
-            scan_type=SignalType.FUNDING_EVENT,
+            scan_type="funding_event",
             started_at=datetime.now(UTC),
             completed_at=datetime.now(UTC),
             signals_found=[],
@@ -697,7 +701,9 @@ class TestCLI:
 
         output_file = tmp_path / "output.json"
 
-        with patch("scripts.funding_tracker.FundingTracker") as MockTracker:
+        with patch("scripts.config_loader.load_config") as mock_load, \
+             patch("scripts.scanners.funding_scanner.FundingTracker") as MockTracker:
+            mock_load.return_value.scanners = {}
             mock_instance = MockTracker.return_value
             mock_instance.scan.return_value = mock_result
             main(["--lookback-days", "30", "--output", str(output_file)])
