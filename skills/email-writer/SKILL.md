@@ -16,12 +16,15 @@ description: Use when generating outreach emails for target accounts, when perso
 
 | Signal Type | Template |
 |-------------|----------|
+| Any signal + technical buyer | `templates/email-sequences/resource-offer-signal.md` **(RECOMMENDED)** |
 | GitHub repo activity | `templates/email-sequences/github-rl-signal.md` |
 | ArXiv paper | `templates/email-sequences/arxiv-paper-signal.md` |
 | Job posting (RL role) | `templates/email-sequences/hiring-signal.md` |
 | Funding round | `templates/email-sequences/funding-signal.md` |
 | HuggingFace model upload | `templates/email-sequences/huggingface-model-signal.md` |
 | Champion changed jobs | `templates/email-sequences/champion-job-change.md` |
+
+> **Resource-first outreach gets 50% reply rates vs. 8-15% for demo asks. Default to `resource-offer-signal.md` for ICP Tier 1 (AI Labs) and Tier 3 (Robotics). Use signal-specific templates when the prospect is already in a demo pipeline or has explicitly requested product information.**
 
 ## Generate 3 Variants
 
