@@ -19,6 +19,7 @@ from scripts.recency import SignalHalfLife, apply_recency_weight
 
 # Intent weights by signal type — higher = stronger buying intent
 INTENT_WEIGHTS: dict[SignalType, float] = {
+    SignalType.LINKEDIN_ACTIVITY: 3.0,  # Real-time engagement = highest urgency
     SignalType.ARXIV_PAPER: 3.0,
     SignalType.GITHUB_RL_REPO: 2.5,
     SignalType.HUGGINGFACE_MODEL: 2.5,
@@ -33,6 +34,7 @@ _HALF_LIVES: dict[SignalType, float] = {
     SignalType.JOB_POSTING: SignalHalfLife.JOB_POSTING,
     SignalType.HUGGINGFACE_MODEL: SignalHalfLife.HUGGINGFACE_MODEL,
     SignalType.FUNDING_EVENT: SignalHalfLife.FUNDING_EVENT,
+    SignalType.LINKEDIN_ACTIVITY: SignalHalfLife.LINKEDIN_ACTIVITY,
 }
 
 # Breadth multiplier keyed on number of unique source types;

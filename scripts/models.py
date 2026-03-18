@@ -26,6 +26,7 @@ class SignalType(str, Enum):
     JOB_POSTING = "JOB_POSTING"
     HUGGINGFACE_MODEL = "HUGGINGFACE_MODEL"
     FUNDING_EVENT = "FUNDING_EVENT"
+    LINKEDIN_ACTIVITY = "LINKEDIN_ACTIVITY"
 
 
 class SignalStrength(IntEnum):

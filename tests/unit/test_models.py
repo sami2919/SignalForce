@@ -138,6 +138,7 @@ def test_enum_values_correct():
     assert SignalType.JOB_POSTING == "JOB_POSTING"
     assert SignalType.HUGGINGFACE_MODEL == "HUGGINGFACE_MODEL"
     assert SignalType.FUNDING_EVENT == "FUNDING_EVENT"
+    assert SignalType.LINKEDIN_ACTIVITY == "LINKEDIN_ACTIVITY"
 
     # SignalStrength
     assert SignalStrength.WEAK == 1
