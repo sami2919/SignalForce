@@ -11,14 +11,17 @@ from pathlib import Path
 
 import pytest
 
+from scripts.config_loader import load_config
 from scripts.models import (
     ICPScore,
     ScanResult,
     Signal,
     SignalStrength,
-    SignalType,
 )
 from scripts.signal_stacker import SignalStacker, stack_from_files
+
+_FIXTURES = Path(__file__).parent.parent / "fixtures"
+_SAMPLE_CONFIG = _FIXTURES / "sample_config.yaml"
 
 
 # ---------------------------------------------------------------------------
@@ -29,18 +32,18 @@ from scripts.signal_stacker import SignalStacker, stack_from_files
 def make_signal(
     company_name: str = "Acme Corp",
     company_domain: str | None = None,
-    signal_type: SignalType = SignalType.ARXIV_PAPER,
+    signal_type: str = "arxiv_paper",
     signal_strength: SignalStrength = SignalStrength.MODERATE,
     source_url: str = "https://example.com",
     metadata: dict | None = None,
 ) -> Signal:
     """Factory for Signal objects with sensible defaults.
 
-    GITHUB_RL_REPO signals require 'repo_name' in metadata — pass it explicitly
-    or use a non-GitHub type (default is ARXIV_PAPER).
+    github_repo signals require 'repo_name' in metadata — pass it explicitly
+    or use a non-GitHub type (default is arxiv_paper).
     """
     if metadata is None:
-        if signal_type == SignalType.GITHUB_RL_REPO:
+        if signal_type == "github_repo":
             metadata = {"repo_name": "acme/repo"}
         else:
             metadata = {}
@@ -56,9 +59,7 @@ def make_signal(
     )
 
 
-def make_scan_result(
-    signals: list[Signal], scan_type: SignalType = SignalType.ARXIV_PAPER
-) -> ScanResult:
+def make_scan_result(signals: list[Signal], scan_type: str = "arxiv_paper") -> ScanResult:
     """Factory for ScanResult objects."""
     now = datetime.now(UTC)
     return ScanResult(
@@ -88,8 +89,8 @@ class TestCalculateCompositeScore:
         """2 different source types → multiplier = 1.5"""
         stacker = SignalStacker()
         signals = [
-            make_signal(signal_type=SignalType.ARXIV_PAPER, signal_strength=SignalStrength.WEAK),
-            make_signal(signal_type=SignalType.JOB_POSTING, signal_strength=SignalStrength.WEAK),
+            make_signal(signal_type="arxiv_paper", signal_strength=SignalStrength.WEAK),
+            make_signal(signal_type="job_posting", signal_strength=SignalStrength.WEAK),
         ]
         # base = 1 + 1 = 2, multiplier = 1.5
         score = stacker._calculate_composite_score(signals)
@@ -99,9 +100,9 @@ class TestCalculateCompositeScore:
         """3 different source types → multiplier = 2.0"""
         stacker = SignalStacker()
         signals = [
-            make_signal(signal_type=SignalType.ARXIV_PAPER, signal_strength=SignalStrength.WEAK),
-            make_signal(signal_type=SignalType.JOB_POSTING, signal_strength=SignalStrength.WEAK),
-            make_signal(signal_type=SignalType.FUNDING_EVENT, signal_strength=SignalStrength.WEAK),
+            make_signal(signal_type="arxiv_paper", signal_strength=SignalStrength.WEAK),
+            make_signal(signal_type="job_posting", signal_strength=SignalStrength.WEAK),
+            make_signal(signal_type="funding_event", signal_strength=SignalStrength.WEAK),
         ]
         # base = 1 + 1 + 1 = 3, multiplier = 2.0
         score = stacker._calculate_composite_score(signals)
@@ -111,11 +112,11 @@ class TestCalculateCompositeScore:
         """4+ different source types → multiplier = 3.0"""
         stacker = SignalStacker()
         signals = [
-            make_signal(signal_type=SignalType.ARXIV_PAPER, signal_strength=SignalStrength.WEAK),
-            make_signal(signal_type=SignalType.JOB_POSTING, signal_strength=SignalStrength.WEAK),
-            make_signal(signal_type=SignalType.FUNDING_EVENT, signal_strength=SignalStrength.WEAK),
+            make_signal(signal_type="arxiv_paper", signal_strength=SignalStrength.WEAK),
+            make_signal(signal_type="job_posting", signal_strength=SignalStrength.WEAK),
+            make_signal(signal_type="funding_event", signal_strength=SignalStrength.WEAK),
             make_signal(
-                signal_type=SignalType.GITHUB_RL_REPO,
+                signal_type="github_repo",
                 signal_strength=SignalStrength.WEAK,
                 metadata={"repo_name": "acme/rl"},
             ),
@@ -129,12 +130,12 @@ class TestCalculateCompositeScore:
         stacker = SignalStacker()
         signals = [
             make_signal(
-                signal_type=SignalType.GITHUB_RL_REPO,
+                signal_type="github_repo",
                 signal_strength=SignalStrength.STRONG,
                 metadata={"repo_name": "acme/rl-1"},
             ),
             make_signal(
-                signal_type=SignalType.GITHUB_RL_REPO,
+                signal_type="github_repo",
                 signal_strength=SignalStrength.STRONG,
                 metadata={"repo_name": "acme/rl-2"},
             ),
@@ -325,24 +326,24 @@ class TestStackSignals:
             make_signal(
                 company_name="High Score Co",
                 company_domain="high.com",
-                signal_type=SignalType.ARXIV_PAPER,
+                signal_type="arxiv_paper",
                 signal_strength=SignalStrength.WEAK,
             ),
             make_signal(
                 company_name="High Score Co",
                 company_domain="high.com",
-                signal_type=SignalType.JOB_POSTING,
+                signal_type="job_posting",
                 signal_strength=SignalStrength.WEAK,
             ),
             make_signal(
                 company_name="High Score Co",
                 company_domain="high.com",
-                signal_type=SignalType.FUNDING_EVENT,
+                signal_type="funding_event",
                 signal_strength=SignalStrength.WEAK,
             ),
         ]
-        scan_low = make_scan_result(signals_low, SignalType.ARXIV_PAPER)
-        scan_high = make_scan_result(signals_high, SignalType.ARXIV_PAPER)
+        scan_low = make_scan_result(signals_low, "arxiv_paper")
+        scan_high = make_scan_result(signals_high, "arxiv_paper")
         results = stacker.stack_signals([scan_low, scan_high])
         assert len(results) == 2
         assert results[0].domain == "high.com"
@@ -355,13 +356,13 @@ class TestStackSignals:
             make_signal(
                 company_name="OpenAI",
                 company_domain="openai.com",
-                signal_type=SignalType.ARXIV_PAPER,
+                signal_type="arxiv_paper",
                 source_url="https://arxiv.org/paper1",
             ),
             make_signal(
                 company_name="OpenAI Inc",
                 company_domain="openai.com",
-                signal_type=SignalType.JOB_POSTING,
+                signal_type="job_posting",
                 source_url="https://jobs.example.com/1",
             ),
         ]
@@ -414,20 +415,20 @@ class TestStackSignals:
                 make_signal(
                     company_name="Acme",
                     company_domain="acme.com",
-                    signal_type=SignalType.ARXIV_PAPER,
+                    signal_type="arxiv_paper",
                 )
             ],
-            SignalType.ARXIV_PAPER,
+            "arxiv_paper",
         )
         scan2 = make_scan_result(
             [
                 make_signal(
                     company_name="Acme",
                     company_domain="acme.com",
-                    signal_type=SignalType.JOB_POSTING,
+                    signal_type="job_posting",
                 )
             ],
-            SignalType.JOB_POSTING,
+            "job_posting",
         )
         results = stacker.stack_signals([scan1, scan2])
         assert len(results) == 1
@@ -444,12 +445,8 @@ class TestStackFromFiles:
         """stack_from_files should deserialize ScanResult JSON and run stacking."""
         SignalStacker()
         signals = [
-            make_signal(
-                company_name="Acme", company_domain="acme.com", signal_type=SignalType.ARXIV_PAPER
-            ),
-            make_signal(
-                company_name="Acme", company_domain="acme.com", signal_type=SignalType.JOB_POSTING
-            ),
+            make_signal(company_name="Acme", company_domain="acme.com", signal_type="arxiv_paper"),
+            make_signal(company_name="Acme", company_domain="acme.com", signal_type="job_posting"),
         ]
         scan = make_scan_result(signals)
 
@@ -482,19 +479,20 @@ class TestIntentScoringIntegration:
 
     def test_intent_scoring_produces_different_scores(self):
         """Intent-weighted scores differ from legacy."""
+        config = load_config(_SAMPLE_CONFIG)
         signals = [
-            make_signal(company_name="IntentCo", signal_type=SignalType.ARXIV_PAPER),
-            make_signal(company_name="IntentCo", signal_type=SignalType.GITHUB_RL_REPO),
+            make_signal(company_name="IntentCo", signal_type="arxiv_paper"),
+            make_signal(company_name="IntentCo", signal_type="github_repo"),
         ]
         scan_result = ScanResult(
-            scan_type=SignalType.ARXIV_PAPER,
+            scan_type="arxiv_paper",
             started_at=datetime.now(UTC),
             completed_at=datetime.now(UTC),
             signals_found=signals,
             total_raw_results=2,
             total_after_dedup=2,
         )
-        intent_stacker = SignalStacker(use_intent_scoring=True)
+        intent_stacker = SignalStacker(use_intent_scoring=True, config=config)
         legacy_stacker = SignalStacker(use_intent_scoring=False)
         intent_profiles = intent_stacker.stack_signals([scan_result])
         legacy_profiles = legacy_stacker.stack_signals([scan_result])
@@ -505,9 +503,9 @@ class TestIntentScoringIntegration:
     def test_legacy_mode_matches_original_behavior(self):
         """Legacy mode = same scores as before."""
         stacker = SignalStacker(use_intent_scoring=False)
-        signals = [make_signal(company_name="LegacyCo", signal_type=SignalType.GITHUB_RL_REPO)]
+        signals = [make_signal(company_name="LegacyCo", signal_type="github_repo")]
         scan_result = ScanResult(
-            scan_type=SignalType.GITHUB_RL_REPO,
+            scan_type="github_repo",
             started_at=datetime.now(UTC),
             completed_at=datetime.now(UTC),
             signals_found=signals,

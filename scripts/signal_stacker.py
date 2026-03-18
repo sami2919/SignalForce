@@ -7,7 +7,7 @@ Usage:
     # As a module
     from scripts.signal_stacker import SignalStacker, stack_from_files
 
-    stacker = SignalStacker()
+    stacker = SignalStacker(config=load_config())
     profiles = stacker.stack_signals(scan_results)
 
     # As a CLI
@@ -23,6 +23,7 @@ import re
 import sys
 from pathlib import Path
 
+from scripts.config_loader import SignalForceConfig, load_config
 from scripts.intent_scorer import IntentScorer
 from scripts.models import (
     CompanyProfile,
@@ -67,9 +68,11 @@ class SignalStacker:
         self,
         known_domains: dict[str, str] | None = None,
         use_intent_scoring: bool = False,
+        config: SignalForceConfig | None = None,
     ) -> None:
         self._known_domains: dict[str, str] = known_domains or {}
         self.use_intent_scoring: bool = use_intent_scoring
+        self._config = config
 
     # ------------------------------------------------------------------
     # Public API
@@ -95,8 +98,8 @@ class SignalStacker:
 
         profiles: list[CompanyProfile] = []
         for group_key, signals in groups.items():
-            if self.use_intent_scoring:
-                scoring_result = IntentScorer().score_signals(signals, icp_fit=0.0)
+            if self.use_intent_scoring and self._config is not None:
+                scoring_result = IntentScorer(self._config).score_signals(signals, icp_fit=0.0)
                 composite = scoring_result.combined_score
                 icp = scoring_result.icp_score
             else:
@@ -266,6 +269,7 @@ class SignalStacker:
 def stack_from_files(
     file_paths: list[str],
     use_intent_scoring: bool = False,
+    config: SignalForceConfig | None = None,
 ) -> list[CompanyProfile]:
     """Load ScanResult JSON files, deserialize, and run the stacking pipeline.
 
@@ -273,6 +277,7 @@ def stack_from_files(
         file_paths: Paths to JSON files each containing a serialized ScanResult.
         use_intent_scoring: When True, use intent-weighted scoring. Defaults to False
             for backward compatibility.
+        config: Optional SignalForceConfig for intent scoring weights and thresholds.
 
     Returns:
         Ranked list of CompanyProfile objects.
@@ -289,7 +294,9 @@ def stack_from_files(
             logger.exception("Failed to load ScanResult from %s", path)
             raise
 
-    return SignalStacker(use_intent_scoring=use_intent_scoring).stack_signals(scan_results)
+    return SignalStacker(use_intent_scoring=use_intent_scoring, config=config).stack_signals(
+        scan_results
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -323,8 +330,9 @@ def main(argv: list[str] | None = None) -> None:
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
 
+    config = load_config()
     logger.info("Loading %d scan result file(s)…", len(args.inputs))
-    profiles = stack_from_files(args.inputs)
+    profiles = stack_from_files(args.inputs, config=config)
     logger.info("Stacked into %d company profiles.", len(profiles))
 
     output_path = Path(args.output)
