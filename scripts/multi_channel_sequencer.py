@@ -10,6 +10,7 @@ Timing (dual channel):
 - Day 7: Email 3 (break-up)
 - Day 8: LinkedIn second follow-up
 """
+
 from __future__ import annotations
 
 from scripts.models import OutreachChannel, SequenceStep, SignalType
@@ -58,9 +59,7 @@ def build_sequence(
     if not channels:
         return []
 
-    email_template = _TEMPLATE_MAP.get(signal_type, {}).get(
-        OutreachChannel.EMAIL, "general-signal"
-    )
+    email_template = _TEMPLATE_MAP.get(signal_type, {}).get(OutreachChannel.EMAIL, "general-signal")
     linkedin_template = _TEMPLATE_MAP.get(signal_type, {}).get(
         OutreachChannel.LINKEDIN, "general-signal"
     )

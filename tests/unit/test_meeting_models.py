@@ -1,4 +1,5 @@
 """Tests for post-meeting data models."""
+
 from __future__ import annotations
 
 from datetime import datetime, UTC
@@ -49,13 +50,19 @@ class TestMeetingOutcome:
         assert outcome.follow_up_resources == []
 
     def test_auto_generates_id(self):
-        o1 = MeetingOutcome(deal_id="d1", meeting_date=datetime.now(UTC), attendees=[], outcome="positive")
-        o2 = MeetingOutcome(deal_id="d2", meeting_date=datetime.now(UTC), attendees=[], outcome="negative")
+        o1 = MeetingOutcome(
+            deal_id="d1", meeting_date=datetime.now(UTC), attendees=[], outcome="positive"
+        )
+        o2 = MeetingOutcome(
+            deal_id="d2", meeting_date=datetime.now(UTC), attendees=[], outcome="negative"
+        )
         assert o1.id != o2.id
         assert len(o1.id) == 36  # UUID format
 
     def test_recorded_at_defaults_to_now(self):
-        outcome = MeetingOutcome(deal_id="d1", meeting_date=datetime.now(UTC), attendees=[], outcome="positive")
+        outcome = MeetingOutcome(
+            deal_id="d1", meeting_date=datetime.now(UTC), attendees=[], outcome="positive"
+        )
         assert outcome.recorded_at is not None
 
     def test_new_deal_stages_exist(self):

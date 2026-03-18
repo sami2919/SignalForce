@@ -1,4 +1,5 @@
 """Tests for LinkedIn activity signal scanner."""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, UTC
@@ -15,8 +16,13 @@ def _make_activity(
     hours_ago: float = 1,
 ) -> dict:
     ts = (datetime.now(UTC) - timedelta(hours=hours_ago)).isoformat()
-    return {"name": name, "company": company, "activity_type": activity_type,
-            "topic": topic, "timestamp": ts}
+    return {
+        "name": name,
+        "company": company,
+        "activity_type": activity_type,
+        "topic": topic,
+        "timestamp": ts,
+    }
 
 
 class TestLinkedInActivityScanner:
@@ -98,8 +104,15 @@ class TestLinkedInActivityScanner:
         assert len(result.signals_found) == 0
 
     def test_invalid_timestamp_skipped(self):
-        data = [{"name": "X", "company": "Y", "activity_type": "posted",
-                 "topic": "reinforcement learning", "timestamp": "not-a-date"}]
+        data = [
+            {
+                "name": "X",
+                "company": "Y",
+                "activity_type": "posted",
+                "topic": "reinforcement learning",
+                "timestamp": "not-a-date",
+            }
+        ]
         scanner = LinkedInActivityScanner()
         result = scanner.scan_from_data(data)
         assert len(result.signals_found) == 0
@@ -108,7 +121,9 @@ class TestLinkedInActivityScanner:
         """If one person posted and another liked, company gets STRONG."""
         data = [
             _make_activity(name="A", company="Co", activity_type="liked", topic="machine learning"),
-            _make_activity(name="B", company="Co", activity_type="posted", topic="reinforcement learning"),
+            _make_activity(
+                name="B", company="Co", activity_type="posted", topic="reinforcement learning"
+            ),
         ]
         scanner = LinkedInActivityScanner()
         result = scanner.scan_from_data(data)

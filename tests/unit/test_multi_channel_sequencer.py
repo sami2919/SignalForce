@@ -159,7 +159,7 @@ def test_dual_channel_alternates():
     # No two consecutive steps should be the same channel
     for i in range(len(step_channels) - 1):
         assert step_channels[i] != step_channels[i + 1], (
-            f"Steps {i} and {i+1} both use {step_channels[i]} — expected alternation"
+            f"Steps {i} and {i + 1} both use {step_channels[i]} — expected alternation"
         )
 
 

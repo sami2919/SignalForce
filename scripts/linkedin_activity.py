@@ -6,6 +6,7 @@ The 48-hour activity filter alone doubles response rates (Gojiberry AI).
 Works in data-input mode: accepts pre-collected activity data as JSON/dicts.
 Data can come from Sales Navigator export, Phantom Buster, or manual research.
 """
+
 from __future__ import annotations
 
 import logging
@@ -18,11 +19,27 @@ logger = logging.getLogger(__name__)
 
 # Keywords indicating RL/ML relevance in activity topics
 RL_KEYWORDS = [
-    "reinforcement learning", "rlhf", "grpo", "reward model", "rl environment",
-    "gymnasium", "stable-baselines", "policy optimization", "ppo", "dpo",
-    "machine learning", "deep learning", "ai agent", "llm training",
-    "model training", "neural network", "transformer", "fine-tuning",
-    "artificial intelligence", "ml infrastructure", "mlops",
+    "reinforcement learning",
+    "rlhf",
+    "grpo",
+    "reward model",
+    "rl environment",
+    "gymnasium",
+    "stable-baselines",
+    "policy optimization",
+    "ppo",
+    "dpo",
+    "machine learning",
+    "deep learning",
+    "ai agent",
+    "llm training",
+    "model training",
+    "neural network",
+    "transformer",
+    "fine-tuning",
+    "artificial intelligence",
+    "ml infrastructure",
+    "mlops",
 ]
 
 
@@ -151,11 +168,16 @@ if __name__ == "__main__":  # pragma: no cover
     print("Usage: pipe JSON array of activity dicts to stdin")
     print()
     print("Example activity dict:")
-    print(json.dumps({
-        "name": "Jane Smith",
-        "company": "Acme AI",
-        "activity_type": "posted",
-        "topic": "reinforcement learning environments for robotics",
-        "timestamp": "2024-01-15T10:30:00Z",
-    }, indent=2))
+    print(
+        json.dumps(
+            {
+                "name": "Jane Smith",
+                "company": "Acme AI",
+                "activity_type": "posted",
+                "topic": "reinforcement learning environments for robotics",
+                "timestamp": "2024-01-15T10:30:00Z",
+            },
+            indent=2,
+        )
+    )
     sys.exit(0)

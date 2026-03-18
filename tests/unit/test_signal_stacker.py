@@ -498,7 +498,9 @@ class TestIntentScoringIntegration:
         legacy_stacker = SignalStacker(use_intent_scoring=False)
         intent_profiles = intent_stacker.stack_signals([scan_result])
         legacy_profiles = legacy_stacker.stack_signals([scan_result])
-        assert intent_profiles[0].composite_signal_score != legacy_profiles[0].composite_signal_score
+        assert (
+            intent_profiles[0].composite_signal_score != legacy_profiles[0].composite_signal_score
+        )
 
     def test_legacy_mode_matches_original_behavior(self):
         """Legacy mode = same scores as before."""
