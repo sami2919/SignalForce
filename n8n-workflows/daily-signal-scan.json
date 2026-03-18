@@ -70,8 +70,18 @@
     },
     {
       "parameters": {
+        "jsCode": "// Process LinkedIn activity data if available\nconst fs = require('fs');\ntry {\n  const data = JSON.parse(fs.readFileSync('/tmp/linkedin_data.json', 'utf8'));\n  return [{ json: { source: 'linkedin', signals: data } }];\n} catch (e) {\n  return [{ json: { source: 'linkedin', signals: [] } }];\n}"
+      },
+      "id": "linkedin-scanner-node",
+      "name": "LinkedIn Activity Scanner",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 700]
+    },
+    {
+      "parameters": {
         "mode": "waitForAll",
-        "numberInputs": 5
+        "numberInputs": 6
       },
       "id": "a7b8c9d0-e1f2-3456-abcd-567890123456",
       "name": "Merge Scanner Results",
@@ -81,7 +91,7 @@
     },
     {
       "parameters": {
-        "command": "cd /opt/signalforce && python3 -m scripts.signal_stacker --inputs /tmp/github_signals.json /tmp/arxiv_signals.json /tmp/hf_signals.json /tmp/job_signals.json /tmp/funding_signals.json --output /tmp/stacked_signals.json && cat /tmp/stacked_signals.json"
+        "command": "cd /opt/signalforce && python3 -m scripts.signal_stacker --inputs /tmp/github_signals.json /tmp/arxiv_signals.json /tmp/hf_signals.json /tmp/job_signals.json /tmp/funding_signals.json /tmp/linkedin_signals.json --output /tmp/stacked_signals.json && cat /tmp/stacked_signals.json"
       },
       "id": "b8c9d0e1-f2a3-4567-bcde-678901234567",
       "name": "Stack Signals",
@@ -199,7 +209,8 @@
           {"node": "Scan ArXiv", "type": "main", "index": 0},
           {"node": "Scan HuggingFace", "type": "main", "index": 0},
           {"node": "Scan Job Postings", "type": "main", "index": 0},
-          {"node": "Scan Funding", "type": "main", "index": 0}
+          {"node": "Scan Funding", "type": "main", "index": 0},
+          {"node": "LinkedIn Activity Scanner", "type": "main", "index": 0}
         ]
       ]
     },
@@ -217,6 +228,9 @@
     },
     "Scan Funding": {
       "main": [[{"node": "Merge Scanner Results", "type": "main", "index": 4}]]
+    },
+    "LinkedIn Activity Scanner": {
+      "main": [[{"node": "Merge Scanner Results", "type": "main", "index": 5}]]
     },
     "Merge Scanner Results": {
       "main": [[{"node": "Stack Signals", "type": "main", "index": 0}]]
