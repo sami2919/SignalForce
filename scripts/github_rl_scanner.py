@@ -10,10 +10,8 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import sys
 from collections import defaultdict
 from datetime import datetime, timedelta, UTC
-from typing import Any
 
 from scripts.api_client import BaseAPIClient
 from scripts.config import AppConfig, get_config
@@ -315,9 +313,7 @@ def main(argv: list[str] | None = None) -> None:
     result = scanner.scan(lookback_days=args.lookback_days)
 
     # Filter by minimum strength
-    filtered_signals = [
-        s for s in result.signals_found if s.signal_strength >= args.min_strength
-    ]
+    filtered_signals = [s for s in result.signals_found if s.signal_strength >= args.min_strength]
 
     print(f"Scan complete — {len(filtered_signals)} signals (min strength: {args.min_strength})")
     print(f"  Raw results:  {result.total_raw_results}")

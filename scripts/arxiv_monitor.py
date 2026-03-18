@@ -11,7 +11,6 @@ import argparse
 import json
 import logging
 import re
-import sys
 from collections import defaultdict
 from datetime import datetime, timedelta, UTC
 from typing import Any
@@ -309,20 +308,23 @@ class ArxivRLMonitor:
             Signal with ARXIV_PAPER type and paper-related metadata.
         """
         paper_titles = [p.get("title", "") for p in papers]
-        paper_ids = [
-            p.get("externalIds", {}).get("ArXiv") or p.get("paperId", "")
-            for p in papers
-        ]
-        author_names = list({
-            author.get("name", "")
-            for p in papers
-            for author in p.get("authors", [])
-            if author.get("name")
-        })
+        paper_ids = [p.get("externalIds", {}).get("ArXiv") or p.get("paperId", "") for p in papers]
+        author_names = list(
+            {
+                author.get("name", "")
+                for p in papers
+                for author in p.get("authors", [])
+                if author.get("name")
+            }
+        )
 
         # Use first ArXiv paper as the canonical source URL
         first_arxiv_id = next(
-            (p.get("externalIds", {}).get("ArXiv") for p in papers if p.get("externalIds", {}).get("ArXiv")),
+            (
+                p.get("externalIds", {}).get("ArXiv")
+                for p in papers
+                if p.get("externalIds", {}).get("ArXiv")
+            ),
             None,
         )
         source_url = (
@@ -387,9 +389,7 @@ def main(argv: list[str] | None = None) -> None:
     result = monitor.scan(lookback_days=args.lookback_days)
 
     # Filter by minimum strength
-    filtered_signals = [
-        s for s in result.signals_found if s.signal_strength >= args.min_strength
-    ]
+    filtered_signals = [s for s in result.signals_found if s.signal_strength >= args.min_strength]
 
     print(f"Scan complete — {len(filtered_signals)} signals (min strength: {args.min_strength})")
     print(f"  Raw results:  {result.total_raw_results}")

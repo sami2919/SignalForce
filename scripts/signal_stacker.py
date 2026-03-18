@@ -28,7 +28,6 @@ from scripts.models import (
     ICPScore,
     ScanResult,
     Signal,
-    SignalType,
 )
 
 logger = logging.getLogger(__name__)
@@ -80,9 +79,7 @@ class SignalStacker:
             return []
 
         all_signals: list[Signal] = [
-            signal
-            for scan in scan_results
-            for signal in scan.signals_found
+            signal for scan in scan_results for signal in scan.signals_found
         ]
 
         groups: dict[str, list[Signal]] = self._group_signals_by_company(all_signals)
@@ -186,9 +183,7 @@ class SignalStacker:
 
         return False
 
-    def _group_signals_by_company(
-        self, signals: list[Signal]
-    ) -> dict[str, list[Signal]]:
+    def _group_signals_by_company(self, signals: list[Signal]) -> dict[str, list[Signal]]:
         """Partition signals into groups, one per distinct company.
 
         Group keys are domains (preferred) or normalized names (fallback).

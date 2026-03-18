@@ -173,9 +173,7 @@ class Contact(BaseModel):
     @classmethod
     def validate_confidence_score(cls, v: float) -> float:
         if not (0.0 <= v <= 1.0):
-            raise ValueError(
-                f"confidence_score must be between 0.0 and 1.0, got {v}"
-            )
+            raise ValueError(f"confidence_score must be between 0.0 and 1.0, got {v}")
         return v
 
 

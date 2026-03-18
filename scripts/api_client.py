@@ -32,7 +32,9 @@ class APIError(Exception):
 class RateLimitError(APIError):
     """Raised when all retry attempts have been exhausted due to rate limiting."""
 
-    def __init__(self, *, status_code: int, message: str, url: str, retry_after: int | None) -> None:
+    def __init__(
+        self, *, status_code: int, message: str, url: str, retry_after: int | None
+    ) -> None:
         super().__init__(status_code=status_code, message=message, url=url)
         self.retry_after = retry_after
 
@@ -117,7 +119,9 @@ class BaseAPIClient:
                     timeout=current_timeout,
                 )
             except requests.Timeout:
-                logger.warning("Request timed out: %s %s — retrying with doubled timeout", method, url)
+                logger.warning(
+                    "Request timed out: %s %s — retrying with doubled timeout", method, url
+                )
                 current_timeout *= 2
                 # Only retry once for timeout
                 response = self._session.request(

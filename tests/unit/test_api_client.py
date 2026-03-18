@@ -51,7 +51,9 @@ def test_rate_limit_error_has_retry_after():
 
 
 def test_rate_limit_error_retry_after_optional():
-    err = RateLimitError(status_code=429, message="Rate limited", url="https://x.com", retry_after=None)
+    err = RateLimitError(
+        status_code=429, message="Rate limited", url="https://x.com", retry_after=None
+    )
     assert err.retry_after is None
 
 

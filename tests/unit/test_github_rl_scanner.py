@@ -7,13 +7,10 @@ No real API calls are made.
 from __future__ import annotations
 
 import json
-import sys
 from datetime import datetime, UTC
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
-from io import StringIO
+from unittest.mock import MagicMock, patch
 
-import pytest
 
 from scripts.models import SignalType, SignalStrength, ScanResult, Signal
 from scripts.github_rl_scanner import GitHubClient, GitHubRLScanner
@@ -87,7 +84,7 @@ class TestGitHubClient:
     def test_search_repos_calls_correct_endpoint(self):
         client = GitHubClient(token="fake-token")
         with patch.object(client, "get", return_value={"total_count": 0, "items": []}) as mock_get:
-            result = client.search_repos("topic:reinforcement-learning")
+            client.search_repos("topic:reinforcement-learning")
             mock_get.assert_called_once()
             call_args = mock_get.call_args
             assert call_args[0][0] == "/search/repositories"
@@ -96,7 +93,7 @@ class TestGitHubClient:
     def test_get_org_info_calls_correct_endpoint(self):
         client = GitHubClient(token="fake-token")
         with patch.object(client, "get", return_value={"login": "deepmind"}) as mock_get:
-            result = client.get_org_info("deepmind")
+            client.get_org_info("deepmind")
             mock_get.assert_called_once()
             call_args = mock_get.call_args
             assert "/orgs/deepmind" in call_args[0][0]
@@ -118,7 +115,11 @@ class TestScanReturnsScanResult:
         scanner._client = MagicMock()
         scanner._client.search_repos.return_value = make_search_response([])
 
-        with patch.object(scanner, "_build_search_queries", return_value=["topic:reinforcement-learning pushed:>2024-01-01"]):
+        with patch.object(
+            scanner,
+            "_build_search_queries",
+            return_value=["topic:reinforcement-learning pushed:>2024-01-01"],
+        ):
             result = scanner.scan(lookback_days=7)
 
         assert isinstance(result, ScanResult)
@@ -145,9 +146,7 @@ class TestFiltersPersonalRepos:
         org_repo = make_org_repo("acme-ai", "rl-framework")
         user_repo = make_user_repo("johndoe", "my-rl-project")
 
-        scanner._client.search_repos.return_value = make_search_response(
-            [org_repo, user_repo]
-        )
+        scanner._client.search_repos.return_value = make_search_response([org_repo, user_repo])
 
         with patch.object(
             scanner,
@@ -208,9 +207,7 @@ class TestDeduplicatesSameOrg:
         # First query returns 1 repo (WEAK candidate)
         repo1 = make_org_repo("acme-ai", "rl-agent", repo_id=1)
         # Second query returns 4 repos → STRONG
-        repos_strong = [
-            make_org_repo("acme-ai", f"repo-{i}", repo_id=10 + i) for i in range(4)
-        ]
+        repos_strong = [make_org_repo("acme-ai", f"repo-{i}", repo_id=10 + i) for i in range(4)]
 
         scanner._client.search_repos.side_effect = [
             make_search_response([repo1]),
@@ -316,10 +313,7 @@ class TestSearchQueryFormat:
         queries = scanner._build_search_queries(lookback_days=7)
         # At least one query should reference RL topics
         all_queries = " ".join(queries)
-        assert any(
-            term in all_queries
-            for term in ["reinforcement-learning", "rlhf", "rl", "grpo"]
-        )
+        assert any(term in all_queries for term in ["reinforcement-learning", "rlhf", "rl", "grpo"])
 
 
 class TestHandlesEmptyResults:

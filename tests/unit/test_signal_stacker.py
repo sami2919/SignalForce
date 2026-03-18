@@ -5,7 +5,6 @@ TDD: Tests written before implementation.
 
 from __future__ import annotations
 
-import json
 import tempfile
 from datetime import datetime, UTC
 from pathlib import Path
@@ -57,7 +56,9 @@ def make_signal(
     )
 
 
-def make_scan_result(signals: list[Signal], scan_type: SignalType = SignalType.ARXIV_PAPER) -> ScanResult:
+def make_scan_result(
+    signals: list[Signal], scan_type: SignalType = SignalType.ARXIV_PAPER
+) -> ScanResult:
     """Factory for ScanResult objects."""
     now = datetime.now(UTC)
     return ScanResult(
@@ -218,16 +219,12 @@ class TestMatchCompany:
     def test_matches_by_domain(self):
         """Same domain, different name → should match."""
         stacker = SignalStacker()
-        assert stacker._match_company(
-            "DeepMind", "deepmind.com", "Google DeepMind", "deepmind.com"
-        )
+        assert stacker._match_company("DeepMind", "deepmind.com", "Google DeepMind", "deepmind.com")
 
     def test_does_not_match_different_domains(self):
         """Different domains → no match even if names are similar."""
         stacker = SignalStacker()
-        assert not stacker._match_company(
-            "Acme AI", "acme.com", "Acme Corp", "acme-corp.com"
-        )
+        assert not stacker._match_company("Acme AI", "acme.com", "Acme Corp", "acme-corp.com")
 
     def test_matches_by_name_exact_normalized(self):
         """Same name after normalization → match."""
@@ -248,9 +245,7 @@ class TestMatchCompany:
         """If both have domains, domain match is definitive (no name fallback)."""
         stacker = SignalStacker()
         # Same name but different domains → no match
-        assert not stacker._match_company(
-            "Acme", "acme-us.com", "Acme", "acme-eu.com"
-        )
+        assert not stacker._match_company("Acme", "acme-us.com", "Acme", "acme-eu.com")
 
     def test_no_domain_falls_back_to_name(self):
         """No domains → fall back to name comparison."""
@@ -320,7 +315,11 @@ class TestStackSignals:
         # Company A: 1 WEAK signal (score = 1.0)
         # Company B: 3 signals from 3 different types (score = 3 * 2.0 = 6.0)
         signals_low = [
-            make_signal(company_name="Low Score Co", company_domain="low.com", signal_strength=SignalStrength.WEAK)
+            make_signal(
+                company_name="Low Score Co",
+                company_domain="low.com",
+                signal_strength=SignalStrength.WEAK,
+            )
         ]
         signals_high = [
             make_signal(
@@ -411,11 +410,23 @@ class TestStackSignals:
         """Signals from multiple ScanResult objects are combined correctly."""
         stacker = SignalStacker()
         scan1 = make_scan_result(
-            [make_signal(company_name="Acme", company_domain="acme.com", signal_type=SignalType.ARXIV_PAPER)],
+            [
+                make_signal(
+                    company_name="Acme",
+                    company_domain="acme.com",
+                    signal_type=SignalType.ARXIV_PAPER,
+                )
+            ],
             SignalType.ARXIV_PAPER,
         )
         scan2 = make_scan_result(
-            [make_signal(company_name="Acme", company_domain="acme.com", signal_type=SignalType.JOB_POSTING)],
+            [
+                make_signal(
+                    company_name="Acme",
+                    company_domain="acme.com",
+                    signal_type=SignalType.JOB_POSTING,
+                )
+            ],
             SignalType.JOB_POSTING,
         )
         results = stacker.stack_signals([scan1, scan2])
@@ -431,10 +442,14 @@ class TestStackSignals:
 class TestStackFromFiles:
     def test_loads_and_stacks_from_json_files(self):
         """stack_from_files should deserialize ScanResult JSON and run stacking."""
-        stacker_for_scan = SignalStacker()
+        SignalStacker()
         signals = [
-            make_signal(company_name="Acme", company_domain="acme.com", signal_type=SignalType.ARXIV_PAPER),
-            make_signal(company_name="Acme", company_domain="acme.com", signal_type=SignalType.JOB_POSTING),
+            make_signal(
+                company_name="Acme", company_domain="acme.com", signal_type=SignalType.ARXIV_PAPER
+            ),
+            make_signal(
+                company_name="Acme", company_domain="acme.com", signal_type=SignalType.JOB_POSTING
+            ),
         ]
         scan = make_scan_result(signals)
 

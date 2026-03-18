@@ -243,9 +243,7 @@ class HuggingFaceRLMonitor:
 
         try:
             # HF timestamps are like "2026-03-15T12:00:00.000Z"
-            last_modified = datetime.fromisoformat(
-                last_modified_raw.replace("Z", "+00:00")
-            )
+            last_modified = datetime.fromisoformat(last_modified_raw.replace("Z", "+00:00"))
         except (ValueError, TypeError) as exc:
             logger.warning("Could not parse lastModified '%s': %s", last_modified_raw, exc)
             return False
@@ -289,9 +287,7 @@ class HuggingFaceRLMonitor:
         Returns:
             Signal with HUGGINGFACE_MODEL type and model-specific metadata.
         """
-        model_ids = [
-            m.get("modelId") or m.get("id", "") for m in model_list
-        ]
+        model_ids = [m.get("modelId") or m.get("id", "") for m in model_list]
         training_methods: list[str] = list(
             filter(None, [self._extract_training_method(m) for m in model_list])
         )
@@ -309,9 +305,7 @@ class HuggingFaceRLMonitor:
             key=lambda m: m.get("lastModified", ""),
             reverse=True,
         )
-        primary_model_id = (
-            sorted_models[0].get("modelId") or sorted_models[0].get("id", "")
-        )
+        primary_model_id = sorted_models[0].get("modelId") or sorted_models[0].get("id", "")
 
         source_url = f"https://huggingface.co/{primary_model_id}"
 
@@ -373,9 +367,7 @@ def main(argv: list[str] | None = None) -> None:
     result = monitor.scan(lookback_days=args.lookback_days)
 
     # Filter by minimum strength
-    filtered_signals = [
-        s for s in result.signals_found if s.signal_strength >= args.min_strength
-    ]
+    filtered_signals = [s for s in result.signals_found if s.signal_strength >= args.min_strength]
 
     print(f"Scan complete — {len(filtered_signals)} signals (min strength: {args.min_strength})")
     print(f"  Raw results:  {result.total_raw_results}")

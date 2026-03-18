@@ -11,7 +11,6 @@ from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from scripts.models import SignalType, SignalStrength, ScanResult, Signal
 from scripts.hf_model_monitor import HuggingFaceClient, HuggingFaceRLMonitor
@@ -35,9 +34,7 @@ def make_model(
     days_ago: int = 2,
 ) -> dict:
     """Build a minimal HF model dict matching the API shape."""
-    last_modified = (datetime.now(UTC) - timedelta(days=days_ago)).strftime(
-        "%Y-%m-%dT%H:%M:%S.%fZ"
-    )
+    last_modified = (datetime.now(UTC) - timedelta(days=days_ago)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
     return {
         "modelId": f"{org}/{model_name}",
         "id": f"{org}/{model_name}",
@@ -83,7 +80,7 @@ class TestHuggingFaceClient:
         client = HuggingFaceClient()
         fixture = load_fixture()
         with patch.object(client, "get", return_value=fixture["model_info"]) as mock_get:
-            result = client.get_model_info("meta-llama/Llama-3-RL-8B")
+            client.get_model_info("meta-llama/Llama-3-RL-8B")
             mock_get.assert_called_once()
             call_args = mock_get.call_args
             assert "meta-llama/Llama-3-RL-8B" in call_args[0][0]
@@ -302,9 +299,14 @@ class TestDeduplicatesSameOrgAcrossTags:
         # list_models is called once per RL_TRAINING_TAG; simulate two tag searches
         # returning models from the same org
         monitor._client.list_models.side_effect = [
-            [ppo_model],   # first tag search (ppo)
+            [ppo_model],  # first tag search (ppo)
             [rlhf_model],  # second tag search (rlhf)
-            [], [], [], [], [], [],  # remaining tag searches return empty
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],  # remaining tag searches return empty
         ]
 
         result = monitor.scan(lookback_days=7)

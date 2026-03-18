@@ -11,7 +11,6 @@ from datetime import datetime, UTC
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from scripts.models import SignalType, SignalStrength, ScanResult, Signal
 
@@ -33,11 +32,13 @@ def make_paper(
     """Build a minimal paper dict matching Semantic Scholar API shape."""
     authors = []
     for i, affiliations in enumerate(affiliations_per_author):
-        authors.append({
-            "authorId": f"author_{paper_id}_{i}",
-            "name": f"Author {i}",
-            "affiliations": affiliations,
-        })
+        authors.append(
+            {
+                "authorId": f"author_{paper_id}_{i}",
+                "name": f"Author {i}",
+                "affiliations": affiliations,
+            }
+        )
     return {
         "paperId": paper_id,
         "title": title,
@@ -66,9 +67,7 @@ class TestSemanticScholarClient:
         from scripts.arxiv_monitor import SemanticScholarClient
 
         client = SemanticScholarClient(api_key="fake-key")
-        with patch.object(
-            client, "get", return_value={"total": 0, "data": []}
-        ) as mock_get:
+        with patch.object(client, "get", return_value={"total": 0, "data": []}) as mock_get:
             client.search_papers("reinforcement learning")
             mock_get.assert_called_once()
             call_args = mock_get.call_args
@@ -78,9 +77,7 @@ class TestSemanticScholarClient:
         from scripts.arxiv_monitor import SemanticScholarClient
 
         client = SemanticScholarClient(api_key="fake-key")
-        with patch.object(
-            client, "get", return_value={"total": 0, "data": []}
-        ) as mock_get:
+        with patch.object(client, "get", return_value={"total": 0, "data": []}) as mock_get:
             client.search_papers("RLHF")
             params = mock_get.call_args[1]["params"]
             assert params["query"] == "RLHF"
@@ -405,9 +402,7 @@ class TestHandlesMissingAffiliations:
         monitor._client = MagicMock()
 
         no_affil_paper = make_paper("no_affil", "RL Paper", [[]])
-        monitor._client.search_papers.return_value = make_search_response(
-            [no_affil_paper]
-        )
+        monitor._client.search_papers.return_value = make_search_response([no_affil_paper])
 
         with patch.object(monitor, "_is_recent", return_value=True):
             result = monitor.scan(lookback_days=7)
@@ -485,9 +480,7 @@ class TestMetadataContainsPaperTitles:
             "year": 2024,
             "abstract": "Test",
             "externalIds": {"ArXiv": "2401.11111"},
-            "authors": [
-                {"authorId": "a1", "name": "Alice Smith", "affiliations": ["OpenAI"]}
-            ],
+            "authors": [{"authorId": "a1", "name": "Alice Smith", "affiliations": ["OpenAI"]}],
         }
         monitor._client.search_papers.return_value = make_search_response([paper])
 
@@ -749,11 +742,9 @@ class TestFixtureData:
         fixture = load_fixture()
         papers = fixture["paper_search_result"]["data"]
         deepmind_papers = [
-            p for p in papers
-            if any(
-                "Google DeepMind" in a.get("affiliations", [])
-                for a in p.get("authors", [])
-            )
+            p
+            for p in papers
+            if any("Google DeepMind" in a.get("affiliations", []) for a in p.get("authors", []))
         ]
         assert len(deepmind_papers) >= 1
 
@@ -761,9 +752,13 @@ class TestFixtureData:
         fixture = load_fixture()
         papers = fixture["paper_search_result"]["data"]
         mit_papers = [
-            p for p in papers
+            p
+            for p in papers
             if any(
-                any("MIT" in affil or "Massachusetts" in affil for affil in a.get("affiliations", []))
+                any(
+                    "MIT" in affil or "Massachusetts" in affil
+                    for affil in a.get("affiliations", [])
+                )
                 for a in p.get("authors", [])
             )
         ]

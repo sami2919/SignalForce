@@ -19,7 +19,6 @@ from scripts.models import (
     EnrichmentSource,
     Contact,
     EmailVariant,
-    GeneratedEmail,
     DealStage,
     Deal,
     ScanResult,
