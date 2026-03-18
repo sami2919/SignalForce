@@ -1,0 +1,241 @@
+# SignalForce configuration — RL infrastructure ICP (Collinear AI)
+# Copy this directory to config/ to activate: cp -r config.example/ config/
+
+company:
+  name: "Collinear AI"
+  product: "Environment-as-a-Service for reinforcement learning"
+  category: "RL infrastructure"
+  website: "https://collinear.ai"
+
+icp:
+  tiers:
+    - name: "AI Labs — Frontier Model Training"
+      description: "OpenAI, Anthropic, DeepMind, Mistral, Cohere, xAI, Meta AI — active RLHF/GRPO/reward modeling work"
+      signals:
+        - "RLHF"
+        - "GRPO"
+        - "reward modeling"
+        - "post-training"
+        - "policy gradient"
+
+    - name: "Enterprise AI Agent Builders"
+      description: "Companies building LLM-powered agents for enterprise workflows (Jira, ServiceNow, Shopify, Salesforce)"
+      signals:
+        - "LLM agent"
+        - "enterprise workflow automation"
+        - "agent training"
+        - "tool use"
+
+    - name: "Robotics and Autonomous Systems"
+      description: "Companies using RL for policy learning in physical systems — sim-to-real transfer, custom Gymnasium environments"
+      signals:
+        - "sim-to-real"
+        - "robot learning"
+        - "policy learning"
+        - "Gymnasium environment"
+        - "MuJoCo"
+
+    - name: "Industry-Specific RL Users"
+      description: "Finance (trading), Energy (grid optimization), Gaming (NPC behavior), RecSys"
+      signals:
+        - "RL trading"
+        - "grid optimization"
+        - "recommendation system RL"
+        - "domain-specific RL"
+
+  maturity_stages:
+    - EXPLORING
+    - BUILDING
+    - SCALING
+    - PRODUCTIONIZING
+
+  target_titles:
+    - "Head of ML"
+    - "Director of ML"
+    - "VP of Machine Learning"
+    - "Head of AI"
+    - "VP of AI"
+    - "Principal ML Engineer"
+    - "Staff ML Engineer"
+    - "VP Engineering"
+    - "CTO"
+    - "RL Engineer"
+    - "Simulation Engineer"
+    - "Reward Modeling Lead"
+    - "Post-Training Engineer"
+
+  disqualifiers:
+    - "No RL activity — no repos, papers, RL-related hiring, or RL models"
+    - "Already locked into competing managed solution"
+    - "Fewer than 10 employees or pre-product"
+    - "Budget holder explicitly committed to in-house build"
+
+scanners:
+  github:
+    enabled: true
+    module: "scripts.scanners.github_scanner"
+    lookback_days: 7
+    topics:
+      - "reinforcement-learning"
+      - "rl"
+      - "rlhf"
+      - "grpo"
+      - "reward-modeling"
+      - "policy-gradient"
+      - "sim-to-real"
+      - "gymnasium"
+      - "ppo"
+      - "dpo"
+    libraries:
+      - "gymnasium"
+      - "stable-baselines3"
+      - "rllib"
+      - "torchrl"
+      - "cleanrl"
+      - "mujoco"
+      - "isaacgym"
+      - "isaaclab"
+      - "jax"
+    keywords: []
+
+  arxiv:
+    enabled: true
+    module: "scripts.scanners.arxiv_scanner"
+    lookback_days: 7
+    queries:
+      - "reinforcement learning"
+      - "RLHF"
+      - "reward modeling"
+      - "PPO policy optimization"
+      - "GRPO language model"
+      - "DPO direct preference optimization"
+      - "sim-to-real transfer"
+      - "reinforcement learning from human feedback"
+      - "reward shaping"
+      - "policy gradient methods"
+
+  huggingface:
+    enabled: true
+    module: "scripts.scanners.hf_scanner"
+    lookback_days: 7
+    training_tags:
+      - "ppo"
+      - "dpo"
+      - "grpo"
+      - "rlhf"
+      - "reinforcement-learning"
+      - "reward-model"
+      - "orpo"
+      - "kto"
+    card_keywords:
+      - "reinforcement learning"
+      - "RLHF"
+      - "reward model"
+      - "policy gradient"
+      - "PPO"
+      - "GRPO"
+      - "DPO"
+      - "fine-tuning with RL"
+
+  jobs:
+    enabled: true
+    module: "scripts.scanners.job_scanner"
+    lookback_days: 7
+    titles:
+      - "reinforcement learning engineer"
+      - "RL researcher"
+      - "RLHF engineer"
+      - "simulation engineer"
+      - "post-training engineer"
+      - "reward modeling engineer"
+      - "agent training engineer"
+      - "policy optimization researcher"
+    skills:
+      - "gymnasium"
+      - "pytorch"
+      - "tensorflow"
+      - "simulation"
+      - "reward design"
+      - "reward modeling"
+      - "reward shaping"
+      - "policy optimization"
+      - "policy gradient"
+      - "rlhf"
+      - "ppo"
+      - "dqn"
+      - "stable-baselines"
+      - "stable baselines"
+      - "rllib"
+      - "torchrl"
+      - "cleanrl"
+      - "jax"
+      - "mujoco"
+      - "isaacgym"
+      - "isaaclab"
+
+  funding:
+    enabled: true
+    module: "scripts.scanners.funding_scanner"
+    lookback_days: 21
+    keywords:
+      - "reinforcement learning"
+      - "AI infrastructure"
+      - "machine learning"
+      - "AI agents"
+      - "LLM"
+      - "foundation model"
+      - "model training"
+      - "autonomous systems"
+      - "robotics"
+
+  linkedin:
+    enabled: true
+    module: "scripts.scanners.linkedin_scanner"
+    lookback_days: 2
+    keywords:
+      - "reinforcement learning"
+      - "rlhf"
+      - "grpo"
+      - "reward model"
+      - "rl environment"
+      - "gymnasium"
+      - "stable-baselines"
+      - "policy optimization"
+      - "ppo"
+      - "dpo"
+      - "machine learning"
+      - "deep learning"
+      - "ai agent"
+      - "llm training"
+      - "model training"
+      - "neural network"
+      - "transformer"
+      - "fine-tuning"
+      - "artificial intelligence"
+      - "ml infrastructure"
+      - "mlops"
+
+scoring:
+  intent_weights:
+    github_repo: 2.5
+    arxiv_paper: 3.0
+    huggingface_model: 2.5
+    job_posting: 2.0
+    funding_event: 1.5
+    linkedin_activity: 3.0
+
+  half_lives_days:
+    github_repo: 5.0
+    arxiv_paper: 10.0
+    huggingface_model: 7.0
+    job_posting: 10.0
+    funding_event: 21.0
+    linkedin_activity: 2.0
+
+  icp_weight: 0.4
+  intent_weight: 0.6
+
+  grade_thresholds:
+    A: 8.0
+    B: 5.0
+    C: 2.0
