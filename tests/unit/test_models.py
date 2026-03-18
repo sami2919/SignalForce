@@ -22,6 +22,8 @@ from scripts.models import (
     DealStage,
     Deal,
     ScanResult,
+    OutreachChannel,
+    SequenceStep,
 )
 
 
@@ -306,6 +308,101 @@ def test_scan_result_creation():
     assert scan.total_raw_results == 50
     assert scan.total_after_dedup == 45
     assert scan.errors == []
+
+
+# ---------------------------------------------------------------------------
+# OutreachChannel enum tests
+# ---------------------------------------------------------------------------
+
+
+def test_outreach_channel_email_value():
+    assert OutreachChannel.EMAIL == "EMAIL"
+
+
+def test_outreach_channel_linkedin_value():
+    assert OutreachChannel.LINKEDIN == "LINKEDIN"
+
+
+def test_outreach_channel_linkedin_inmail_value():
+    assert OutreachChannel.LINKEDIN_INMAIL == "LINKEDIN_INMAIL"
+
+
+def test_outreach_channel_is_str_enum():
+    assert isinstance(OutreachChannel.EMAIL, str)
+    assert isinstance(OutreachChannel.LINKEDIN, str)
+
+
+def test_outreach_channel_all_members():
+    members = {m.value for m in OutreachChannel}
+    assert members == {"EMAIL", "LINKEDIN", "LINKEDIN_INMAIL"}
+
+
+# ---------------------------------------------------------------------------
+# SequenceStep model tests
+# ---------------------------------------------------------------------------
+
+
+def test_sequence_step_creation_minimal():
+    step = SequenceStep(
+        day=0,
+        channel=OutreachChannel.EMAIL,
+        action="send_email",
+        template_name="github-rl-signal",
+    )
+    assert step.day == 0
+    assert step.channel == OutreachChannel.EMAIL
+    assert step.action == "send_email"
+    assert step.template_name == "github-rl-signal"
+    assert step.variant is None
+
+
+def test_sequence_step_with_variant():
+    step = SequenceStep(
+        day=1,
+        channel=OutreachChannel.LINKEDIN,
+        action="connection_request",
+        template_name="hiring-signal",
+        variant="signal_reference",
+    )
+    assert step.variant == "signal_reference"
+
+
+def test_sequence_step_frozen_prevents_mutation():
+    step = SequenceStep(
+        day=0,
+        channel=OutreachChannel.EMAIL,
+        action="send_email",
+        template_name="general-signal",
+    )
+    with pytest.raises((TypeError, ValidationError)):
+        step.day = 5  # type: ignore[misc]
+
+
+def test_sequence_step_json_roundtrip():
+    step = SequenceStep(
+        day=3,
+        channel=OutreachChannel.LINKEDIN,
+        action="follow_up_message",
+        template_name="arxiv-paper-signal",
+        variant=None,
+    )
+    json_str = step.model_dump_json()
+    restored = SequenceStep.model_validate_json(json_str)
+    assert restored.day == step.day
+    assert restored.channel == step.channel
+    assert restored.action == step.action
+    assert restored.template_name == step.template_name
+    assert restored.variant == step.variant
+
+
+def test_sequence_step_linkedin_inmail_channel():
+    step = SequenceStep(
+        day=2,
+        channel=OutreachChannel.LINKEDIN_INMAIL,
+        action="send_inmail",
+        template_name="general-signal",
+    )
+    assert step.channel == OutreachChannel.LINKEDIN_INMAIL
 
 
 # ---------------------------------------------------------------------------

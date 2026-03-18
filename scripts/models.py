@@ -79,6 +79,12 @@ class EmailVariant(str, Enum):
     SOCIAL_PROOF_FOCUSED = "SOCIAL_PROOF_FOCUSED"
 
 
+class OutreachChannel(str, Enum):
+    EMAIL = "EMAIL"
+    LINKEDIN = "LINKEDIN"
+    LINKEDIN_INMAIL = "LINKEDIN_INMAIL"
+
+
 class DealStage(str, Enum):
     SIGNAL_DETECTED = "SIGNAL_DETECTED"
     RESEARCHED = "RESEARCHED"
@@ -88,6 +94,23 @@ class DealStage(str, Enum):
     RESPONDED = "RESPONDED"
     MEETING_SCHEDULED = "MEETING_SCHEDULED"
     DISQUALIFIED = "DISQUALIFIED"
+
+
+# ---------------------------------------------------------------------------
+# Sequence step model
+# ---------------------------------------------------------------------------
+
+
+class SequenceStep(BaseModel):
+    """A single step in a multi-channel outreach sequence."""
+
+    model_config = ConfigDict(frozen=True)
+
+    day: int
+    channel: OutreachChannel
+    action: str  # "send_email", "connection_request", "follow_up_message"
+    template_name: str
+    variant: str | None = None
 
 
 # ---------------------------------------------------------------------------
