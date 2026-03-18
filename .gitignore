@@ -25,4 +25,11 @@ Thumbs.db
 venv/
 .venv/
 
+# Coverage
+.coverage
+htmlcov/
+
+# Generated artifacts
+docs/demo-report.pdf
+
 # n8n workflows are tracked — do NOT ignore n8n-workflows/*.json

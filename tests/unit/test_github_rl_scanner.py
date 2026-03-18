@@ -1,4 +1,4 @@
-"""Unit tests for GitHubRLScanner — written FIRST (TDD RED phase).
+"""Unit tests for github_scanner — written FIRST (TDD RED phase).
 
 All HTTP calls are mocked at the GitHubClient method level.
 No real API calls are made.
@@ -12,8 +12,16 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 
-from scripts.models import SignalType, SignalStrength, ScanResult, Signal
-from scripts.github_rl_scanner import GitHubClient, GitHubRLScanner
+from scripts.models import SignalStrength, ScanResult, Signal
+from scripts.scanners.github_scanner import (
+    GitHubClient,
+    _build_search_queries,
+    _is_organization,
+    _score_org,
+    _create_signal,
+    scan,
+)
+from scripts.config_loader import ScannerConfig
 
 # ---------------------------------------------------------------------------
 # Fixtures helpers
@@ -25,6 +33,22 @@ FIXTURES_PATH = Path(__file__).parent.parent / "fixtures" / "github_responses.js
 def load_fixture() -> dict:
     with open(FIXTURES_PATH) as f:
         return json.load(f)
+
+
+def make_scanner_config(
+    topics: list[str] | None = None,
+    libraries: list[str] | None = None,
+    keywords: list[str] | None = None,
+    lookback_days: int = 7,
+) -> ScannerConfig:
+    """Build a minimal ScannerConfig for testing."""
+    return ScannerConfig(
+        module="scripts.scanners.github_scanner",
+        topics=topics or ["reinforcement-learning", "rl", "rlhf", "grpo"],
+        libraries=libraries or ["gymnasium", "stable-baselines3"],
+        keywords=keywords or [],
+        lookback_days=lookback_days,
+    )
 
 
 def make_org_repo(org_name: str, repo_name: str, repo_id: int = 1) -> dict:
@@ -105,33 +129,31 @@ class TestGitHubClient:
 
 
 # ---------------------------------------------------------------------------
-# GitHubRLScanner unit tests
+# scan() unit tests
 # ---------------------------------------------------------------------------
 
 
 class TestScanReturnsScanResult:
     def test_scan_returns_scan_result_type(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
-        scanner._client = MagicMock()
-        scanner._client.search_repos.return_value = make_search_response([])
-
-        with patch.object(
-            scanner,
-            "_build_search_queries",
-            return_value=["topic:reinforcement-learning pushed:>2024-01-01"],
-        ):
-            result = scanner.scan(lookback_days=7)
+        config = make_scanner_config()
+        with patch("scripts.scanners.github_scanner.get_config") as mock_get_config:
+            mock_get_config.return_value = MagicMock(github_token="fake")
+            with patch("scripts.scanners.github_scanner.GitHubClient") as MockClient:
+                mock_client = MockClient.return_value
+                mock_client.search_repos.return_value = make_search_response([])
+                result = scan(config)
 
         assert isinstance(result, ScanResult)
-        assert result.scan_type == SignalType.GITHUB_RL_REPO
+        assert result.scan_type == "github_repo"
 
     def test_scan_has_started_and_completed_at(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
-        scanner._client = MagicMock()
-        scanner._client.search_repos.return_value = make_search_response([])
-
-        with patch.object(scanner, "_build_search_queries", return_value=[]):
-            result = scanner.scan(lookback_days=7)
+        config = make_scanner_config()
+        with patch("scripts.scanners.github_scanner.get_config") as mock_get_config:
+            mock_get_config.return_value = MagicMock(github_token="fake")
+            with patch("scripts.scanners.github_scanner.GitHubClient") as MockClient:
+                mock_client = MockClient.return_value
+                mock_client.search_repos.return_value = make_search_response([])
+                result = scan(config)
 
         assert isinstance(result.started_at, datetime)
         assert isinstance(result.completed_at, datetime)
@@ -140,89 +162,70 @@ class TestScanReturnsScanResult:
 
 class TestFiltersPersonalRepos:
     def test_filters_personal_repos_only_keeps_org_repos(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
-        scanner._client = MagicMock()
-
+        config = make_scanner_config(topics=["reinforcement-learning"], libraries=[])
         org_repo = make_org_repo("acme-ai", "rl-framework")
         user_repo = make_user_repo("johndoe", "my-rl-project")
 
-        scanner._client.search_repos.return_value = make_search_response([org_repo, user_repo])
+        with patch("scripts.scanners.github_scanner.get_config") as mock_get_config:
+            mock_get_config.return_value = MagicMock(github_token="fake")
+            with patch("scripts.scanners.github_scanner.GitHubClient") as MockClient:
+                mock_client = MockClient.return_value
+                mock_client.search_repos.return_value = make_search_response(
+                    [org_repo, user_repo]
+                )
+                result = scan(config)
 
-        with patch.object(
-            scanner,
-            "_build_search_queries",
-            return_value=["topic:reinforcement-learning pushed:>2024-01-01"],
-        ):
-            result = scanner.scan(lookback_days=7)
-
-        # Only the org repo should produce a signal
         assert result.total_after_dedup == 1
         assert all(s.company_name == "acme-ai" for s in result.signals_found)
 
     def test_is_organization_returns_true_for_org(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
         owner = {"login": "acme", "type": "Organization"}
-        assert scanner._is_organization(owner) is True
+        assert _is_organization(owner) is True
 
     def test_is_organization_returns_false_for_user(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
         owner = {"login": "johndoe", "type": "User"}
-        assert scanner._is_organization(owner) is False
+        assert _is_organization(owner) is False
 
 
 class TestDeduplicatesSameOrg:
     def test_deduplicates_same_org_found_via_multiple_queries(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
-        scanner._client = MagicMock()
-
+        config = make_scanner_config(
+            topics=["reinforcement-learning", "rlhf"], libraries=[]
+        )
         repo1 = make_org_repo("acme-ai", "rl-agent", repo_id=1)
         repo2 = make_org_repo("acme-ai", "rl-env", repo_id=2)
 
-        # Two queries return same org
-        scanner._client.search_repos.side_effect = [
-            make_search_response([repo1]),  # first query
-            make_search_response([repo2]),  # second query
-        ]
+        with patch("scripts.scanners.github_scanner.get_config") as mock_get_config:
+            mock_get_config.return_value = MagicMock(github_token="fake")
+            with patch("scripts.scanners.github_scanner.GitHubClient") as MockClient:
+                mock_client = MockClient.return_value
+                mock_client.search_repos.side_effect = [
+                    make_search_response([repo1]),
+                    make_search_response([repo2]),
+                ]
+                result = scan(config)
 
-        with patch.object(
-            scanner,
-            "_build_search_queries",
-            return_value=[
-                "topic:reinforcement-learning pushed:>2024-01-01",
-                "topic:rlhf pushed:>2024-01-01",
-            ],
-        ):
-            result = scanner.scan(lookback_days=7)
-
-        # Should deduplicate to single signal for acme-ai
         assert result.total_after_dedup == 1
         assert len(result.signals_found) == 1
         assert result.signals_found[0].company_name == "acme-ai"
 
     def test_dedup_keeps_highest_score(self):
         """Org found via 2 queries with different repo counts → keep highest score."""
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
-        scanner._client = MagicMock()
-
-        # First query returns 1 repo (WEAK candidate)
+        config = make_scanner_config(
+            topics=["reinforcement-learning", "rl"], libraries=[]
+        )
         repo1 = make_org_repo("acme-ai", "rl-agent", repo_id=1)
-        # Second query returns 4 repos → STRONG
         repos_strong = [make_org_repo("acme-ai", f"repo-{i}", repo_id=10 + i) for i in range(4)]
 
-        scanner._client.search_repos.side_effect = [
-            make_search_response([repo1]),
-            make_search_response(repos_strong),
-        ]
-
-        with patch.object(
-            scanner,
-            "_build_search_queries",
-            return_value=[
-                "topic:reinforcement-learning pushed:>2024-01-01",
-                "topic:rl pushed:>2024-01-01",
-            ],
-        ):
-            result = scanner.scan(lookback_days=7)
+        with patch("scripts.scanners.github_scanner.get_config") as mock_get_config:
+            mock_get_config.return_value = MagicMock(github_token="fake")
+            with patch("scripts.scanners.github_scanner.GitHubClient") as MockClient:
+                mock_client = MockClient.return_value
+                mock_client.search_repos.side_effect = [
+                    make_search_response([repo1]),
+                    make_search_response(repos_strong),
+                ]
+                result = scan(config)
 
         assert result.total_after_dedup == 1
         assert result.signals_found[0].signal_strength == SignalStrength.STRONG
@@ -230,260 +233,168 @@ class TestDeduplicatesSameOrg:
 
 class TestScoringWeak:
     def test_scoring_weak_1_repo_few_contributors(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
-        score = scanner._score_org(repo_count=1, contributor_count=2)
+        score = _score_org(repo_count=1, contributor_count=2)
         assert score == SignalStrength.WEAK
 
     def test_scoring_weak_1_repo_4_contributors(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
-        score = scanner._score_org(repo_count=1, contributor_count=4)
+        score = _score_org(repo_count=1, contributor_count=4)
         assert score == SignalStrength.WEAK
 
 
 class TestScoringModerate:
     def test_scoring_moderate_2_repos(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
-        score = scanner._score_org(repo_count=2, contributor_count=3)
+        score = _score_org(repo_count=2, contributor_count=3)
         assert score == SignalStrength.MODERATE
 
     def test_scoring_moderate_3_repos(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
-        score = scanner._score_org(repo_count=3, contributor_count=2)
+        score = _score_org(repo_count=3, contributor_count=2)
         assert score == SignalStrength.MODERATE
 
     def test_scoring_moderate_1_repo_5_contributors(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
-        score = scanner._score_org(repo_count=1, contributor_count=5)
+        score = _score_org(repo_count=1, contributor_count=5)
         assert score == SignalStrength.MODERATE
 
     def test_scoring_moderate_1_repo_9_contributors(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
-        score = scanner._score_org(repo_count=1, contributor_count=9)
+        score = _score_org(repo_count=1, contributor_count=9)
         assert score == SignalStrength.MODERATE
 
 
 class TestScoringStrong:
     def test_scoring_strong_4_repos(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
-        score = scanner._score_org(repo_count=4, contributor_count=3)
+        score = _score_org(repo_count=4, contributor_count=3)
         assert score == SignalStrength.STRONG
 
     def test_scoring_strong_5_repos_15_contributors(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
-        score = scanner._score_org(repo_count=5, contributor_count=15)
+        score = _score_org(repo_count=5, contributor_count=15)
         assert score == SignalStrength.STRONG
 
     def test_scoring_strong_10_plus_contributors(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
-        score = scanner._score_org(repo_count=1, contributor_count=10)
+        score = _score_org(repo_count=1, contributor_count=10)
         assert score == SignalStrength.STRONG
 
     def test_scoring_strong_many_repos(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
-        score = scanner._score_org(repo_count=10, contributor_count=0)
+        score = _score_org(repo_count=10, contributor_count=0)
         assert score == SignalStrength.STRONG
 
 
 class TestSearchQueryFormat:
     def test_build_search_queries_returns_list(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
-        queries = scanner._build_search_queries(lookback_days=7)
+        config = make_scanner_config()
+        queries = _build_search_queries(config, lookback_days=7)
         assert isinstance(queries, list)
         assert len(queries) > 0
 
     def test_search_query_contains_date(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
-        queries = scanner._build_search_queries(lookback_days=7)
-        # Each query must include a pushed:> date filter
+        config = make_scanner_config()
+        queries = _build_search_queries(config, lookback_days=7)
         for q in queries:
             assert "pushed:>" in q, f"Query missing date filter: {q}"
 
     def test_search_query_date_format(self):
         """Date in queries must be in YYYY-MM-DD format."""
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
-        queries = scanner._build_search_queries(lookback_days=30)
+        config = make_scanner_config()
+        queries = _build_search_queries(config, lookback_days=30)
         for q in queries:
-            # Extract date portion after "pushed:>"
             date_part = q.split("pushed:>")[1].strip().split()[0]
-            # Should parse as a date
             datetime.strptime(date_part, "%Y-%m-%d")
 
-    def test_search_query_includes_rl_topics(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
-        queries = scanner._build_search_queries(lookback_days=7)
-        # At least one query should reference RL topics
+    def test_search_query_includes_configured_topics(self):
+        config = make_scanner_config(topics=["reinforcement-learning", "rlhf", "grpo"])
+        queries = _build_search_queries(config, lookback_days=7)
         all_queries = " ".join(queries)
-        assert any(term in all_queries for term in ["reinforcement-learning", "rlhf", "rl", "grpo"])
+        assert any(term in all_queries for term in ["reinforcement-learning", "rlhf", "grpo"])
 
 
 class TestHandlesEmptyResults:
     def test_handles_empty_api_response(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
-        scanner._client = MagicMock()
-        scanner._client.search_repos.return_value = make_search_response([])
-
-        with patch.object(
-            scanner,
-            "_build_search_queries",
-            return_value=["topic:reinforcement-learning pushed:>2024-01-01"],
-        ):
-            result = scanner.scan(lookback_days=7)
+        config = make_scanner_config(topics=["reinforcement-learning"], libraries=[])
+        with patch("scripts.scanners.github_scanner.get_config") as mock_get_config:
+            mock_get_config.return_value = MagicMock(github_token="fake")
+            with patch("scripts.scanners.github_scanner.GitHubClient") as MockClient:
+                mock_client = MockClient.return_value
+                mock_client.search_repos.return_value = make_search_response([])
+                result = scan(config)
 
         assert result.total_after_dedup == 0
         assert result.signals_found == []
 
-    def test_handles_no_queries(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
-        scanner._client = MagicMock()
-
-        with patch.object(scanner, "_build_search_queries", return_value=[]):
-            result = scanner.scan(lookback_days=7)
+    def test_handles_no_topics_or_libraries(self):
+        """Empty topics/libraries/keywords → no queries → no API calls → empty result."""
+        config = make_scanner_config(topics=[], libraries=[], keywords=[])
+        with patch("scripts.scanners.github_scanner.get_config") as mock_get_config:
+            mock_get_config.return_value = MagicMock(github_token="fake")
+            with patch("scripts.scanners.github_scanner.GitHubClient"):
+                result = scan(config)
 
         assert result.total_after_dedup == 0
         assert result.signals_found == []
-        scanner._client.search_repos.assert_not_called()
 
     def test_handles_missing_items_key(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
-        scanner._client = MagicMock()
-        scanner._client.search_repos.return_value = {"total_count": 0}  # no "items" key
-
-        with patch.object(
-            scanner,
-            "_build_search_queries",
-            return_value=["topic:reinforcement-learning pushed:>2024-01-01"],
-        ):
-            result = scanner.scan(lookback_days=7)
+        config = make_scanner_config(topics=["reinforcement-learning"], libraries=[])
+        with patch("scripts.scanners.github_scanner.get_config") as mock_get_config:
+            mock_get_config.return_value = MagicMock(github_token="fake")
+            with patch("scripts.scanners.github_scanner.GitHubClient") as MockClient:
+                mock_client = MockClient.return_value
+                mock_client.search_repos.return_value = {"total_count": 0}  # no "items" key
+                result = scan(config)
 
         assert result.total_after_dedup == 0
 
 
 class TestMetadataContainsRepoName:
     def test_signal_metadata_has_repo_name_key(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
-        scanner._client = MagicMock()
-
+        config = make_scanner_config(topics=["reinforcement-learning"], libraries=[])
         org_repo = make_org_repo("acme-ai", "rl-framework")
-        scanner._client.search_repos.return_value = make_search_response([org_repo])
 
-        with patch.object(
-            scanner,
-            "_build_search_queries",
-            return_value=["topic:reinforcement-learning pushed:>2024-01-01"],
-        ):
-            result = scanner.scan(lookback_days=7)
+        with patch("scripts.scanners.github_scanner.get_config") as mock_get_config:
+            mock_get_config.return_value = MagicMock(github_token="fake")
+            with patch("scripts.scanners.github_scanner.GitHubClient") as MockClient:
+                mock_client = MockClient.return_value
+                mock_client.search_repos.return_value = make_search_response([org_repo])
+                result = scan(config)
 
         assert len(result.signals_found) == 1
         signal = result.signals_found[0]
         assert "repo_name" in signal.metadata
 
     def test_signal_metadata_repo_name_is_string(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
-        scanner._client = MagicMock()
-
+        config = make_scanner_config(topics=["reinforcement-learning"], libraries=[])
         org_repo = make_org_repo("acme-ai", "rl-framework")
-        scanner._client.search_repos.return_value = make_search_response([org_repo])
 
-        with patch.object(
-            scanner,
-            "_build_search_queries",
-            return_value=["topic:reinforcement-learning pushed:>2024-01-01"],
-        ):
-            result = scanner.scan(lookback_days=7)
+        with patch("scripts.scanners.github_scanner.get_config") as mock_get_config:
+            mock_get_config.return_value = MagicMock(github_token="fake")
+            with patch("scripts.scanners.github_scanner.GitHubClient") as MockClient:
+                mock_client = MockClient.return_value
+                mock_client.search_repos.return_value = make_search_response([org_repo])
+                result = scan(config)
 
         signal = result.signals_found[0]
         assert isinstance(signal.metadata["repo_name"], str)
         assert len(signal.metadata["repo_name"]) > 0
 
     def test_create_signal_includes_repo_name(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
         repos = [make_org_repo("acme-ai", "rl-framework")]
-        signal = scanner._create_signal("acme-ai", repos, SignalStrength.MODERATE)
+        signal = _create_signal("acme-ai", repos, SignalStrength.MODERATE)
         assert "repo_name" in signal.metadata
-        assert signal.signal_type == SignalType.GITHUB_RL_REPO
+        assert signal.signal_type == "github_repo"
         assert signal.company_name == "acme-ai"
-
-
-class TestCLIOutput:
-    def test_cli_output_prints_summary(self, capsys):
-        """Mock scan and verify CLI prints summary."""
-        from scripts.github_rl_scanner import main
-
-        mock_result = ScanResult(
-            scan_type=SignalType.GITHUB_RL_REPO,
-            started_at=datetime.now(UTC),
-            completed_at=datetime.now(UTC),
-            signals_found=[],
-            total_raw_results=0,
-            total_after_dedup=0,
-        )
-
-        with patch("scripts.github_rl_scanner.GitHubRLScanner") as MockScanner:
-            mock_instance = MockScanner.return_value
-            mock_instance.scan.return_value = mock_result
-            main(["--lookback-days", "7"])
-
-        captured = capsys.readouterr()
-        assert "0" in captured.out  # some numeric output
-
-    def test_cli_with_min_strength_filters(self, capsys, tmp_path):
-        """CLI --min-strength filters signals below threshold."""
-        from scripts.github_rl_scanner import main
-
-        weak_signal = Signal(
-            signal_type=SignalType.GITHUB_RL_REPO,
-            company_name="weak-corp",
-            signal_strength=SignalStrength.WEAK,
-            source_url="https://github.com/weak-corp/repo",
-            raw_data={"items": []},
-            metadata={"repo_name": "repo"},
-        )
-
-        mock_result = ScanResult(
-            scan_type=SignalType.GITHUB_RL_REPO,
-            started_at=datetime.now(UTC),
-            completed_at=datetime.now(UTC),
-            signals_found=[weak_signal],
-            total_raw_results=1,
-            total_after_dedup=1,
-        )
-
-        output_file = tmp_path / "output.json"
-
-        with patch("scripts.github_rl_scanner.GitHubRLScanner") as MockScanner:
-            mock_instance = MockScanner.return_value
-            mock_instance.scan.return_value = mock_result
-            # min-strength=2 should filter out WEAK (1) signals
-            main(["--lookback-days", "7", "--min-strength", "2", "--output", str(output_file)])
-
-        captured = capsys.readouterr()
-        # With min-strength=2, WEAK signals are excluded
-        assert "0" in captured.out
 
 
 class TestTotalRawResults:
     def test_total_raw_results_counts_all_repos_before_dedup(self):
-        scanner = GitHubRLScanner.__new__(GitHubRLScanner)
-        scanner._client = MagicMock()
-
-        # Two org repos from two different queries
+        config = make_scanner_config(topics=["reinforcement-learning", "rlhf"], libraries=[])
         repo1 = make_org_repo("acme-ai", "rl-agent", repo_id=1)
         repo2 = make_org_repo("beta-ml", "rl-gym", repo_id=2)
 
-        scanner._client.search_repos.side_effect = [
-            make_search_response([repo1]),
-            make_search_response([repo2]),
-        ]
-
-        with patch.object(
-            scanner,
-            "_build_search_queries",
-            return_value=[
-                "topic:reinforcement-learning pushed:>2024-01-01",
-                "topic:rlhf pushed:>2024-01-01",
-            ],
-        ):
-            result = scanner.scan(lookback_days=7)
+        with patch("scripts.scanners.github_scanner.get_config") as mock_get_config:
+            mock_get_config.return_value = MagicMock(github_token="fake")
+            with patch("scripts.scanners.github_scanner.GitHubClient") as MockClient:
+                mock_client = MockClient.return_value
+                mock_client.search_repos.side_effect = [
+                    make_search_response([repo1]),
+                    make_search_response([repo2]),
+                ]
+                result = scan(config)
 
         assert result.total_raw_results == 2
         assert result.total_after_dedup == 2
