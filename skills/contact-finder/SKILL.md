@@ -1,18 +1,18 @@
 ---
 name: contact-finder
-description: Use when needing to find verified email addresses and LinkedIn profiles for ML decision-makers at target accounts, or when performing waterfall enrichment across multiple data providers
+description: Use when needing to find verified email addresses and LinkedIn profiles for decision-makers at target accounts, or when performing waterfall enrichment across multiple data providers
 ---
 
 # Contact Finder
 
 ## Input
 
-Company name + domain. Target title(s) — default to priority order from `.agents/gtm-context.md`:
+Company name + domain. Target title(s) — default to priority order from `config/gtm-context.md`:
 1. Head of ML / Director of ML / VP ML
 2. Head of AI / VP AI
 3. Principal / Staff ML Engineer
 4. VP Engineering / CTO (companies ≤100 employees)
-5. RL Engineer / Simulation Engineer / Reward Modeling Lead
+5. Domain-specific senior IC roles (see `config/gtm-context.md` for ICP-specific titles)
 
 ## Waterfall Enrichment
 

@@ -13,10 +13,10 @@ description: Use when needing to sync outbound activity to CRM, generate pipelin
 |----------|------|--------|
 | `signal_source` | Enum | github, arxiv, huggingface, hiring, funding |
 | `icp_tier` | Enum | tier1, tier2, tier3, tier4 |
-| `rl_maturity` | Enum | productionizing, scaling, building, exploring, none |
+| `domain_maturity` | Enum | productionizing, scaling, building, exploring, none |
 | `composite_score` | Number | 0–25 |
 | `icp_grade` | Enum | A, B, C, D |
-| `sequence_name` | String | e.g. github-rl-signal-varA |
+| `sequence_name` | String | e.g. github-signal-varA |
 | `signal_date` | Date | date signal was detected |
 
 Create via: HubSpot → Settings → Properties → Contacts/Deals → Create property.

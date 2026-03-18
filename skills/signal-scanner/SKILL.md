@@ -1,6 +1,6 @@
 ---
 name: signal-scanner
-description: Use when looking for companies actively investing in reinforcement learning, when needing to find new target accounts, or when running periodic signal detection scans
+description: Use when looking for companies showing buying signals in your ICP's domain, when needing to find new target accounts, or when running periodic signal detection scans
 ---
 
 # Signal Scanner
@@ -10,7 +10,7 @@ description: Use when looking for companies actively investing in reinforcement 
 | Scanner | Script | Lookback |
 |---------|--------|----------|
 | LinkedIn activity | `scripts.linkedin_activity` | 48 hours |
-| GitHub RL repos | `scripts.github_rl_scanner` | 7 days |
+| GitHub repos | `scripts.github_rl_scanner` | 7 days |
 | ArXiv papers | `scripts.arxiv_monitor` | 7 days |
 | HuggingFace models | `scripts.hf_model_monitor` | 7 days |
 | Job postings | `scripts.job_posting_scanner` | 7 days |
@@ -63,7 +63,7 @@ python3 -m scripts.signal_stacker \
 Show a summary table:
 
 ```
-Company | ICP Tier | RL Maturity | Signals (sources) | Composite Score | Grade
+Company | ICP Tier | Domain Maturity | Signals (sources) | Composite Score | Grade
 ```
 
 Sort by composite score descending. Group by grade (A → B → C → skip D).

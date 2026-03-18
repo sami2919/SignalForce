@@ -7,7 +7,7 @@ description: Use when setting up cold email sending infrastructure, configuring 
 
 ## Domain Strategy
 
-Never send cold email from your primary domain. Buy 3–5 secondary domains (e.g., `getcollinear.ai`, `collinear-ai.com`). Register via Namecheap or Google Domains.
+Never send cold email from your primary domain. Buy 3–5 secondary domains. Register via Namecheap or Google Domains.
 
 Set up Google Workspace on each domain. Create 2–3 sending accounts per domain (e.g., `sami@`, `team@`, `hello@`). This gives 6–15 sending accounts total — each capped at 25–30 emails/day at full warmup.
 

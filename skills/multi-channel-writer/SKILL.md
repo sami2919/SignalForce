@@ -30,8 +30,8 @@ Call `build_sequence(channels, signal_type)`. This returns the ordered `Sequence
 
 For each step, write the actual message using the mapped template:
 
-**Email templates** → `templates/email-sequences/`
-**LinkedIn templates** → `templates/linkedin-sequences/`
+**Email templates** → `config/templates/email-sequences/`
+**LinkedIn templates** → `config/templates/linkedin-sequences/`
 
 Fill all placeholders from the signal payload and contact data. Never leave a placeholder unfilled.
 
@@ -61,4 +61,4 @@ Before outputting, verify:
 - [ ] No placeholder left as `{{placeholder}}`
 - [ ] No product mention in LinkedIn connection note
 - [ ] Steps are in ascending day order
-- [ ] Each step references the specific signal, not generic RL interest
+- [ ] Each step references the specific signal, not generic domain interest

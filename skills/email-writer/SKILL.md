@@ -16,15 +16,15 @@ description: Use when generating outreach emails for target accounts, when perso
 
 | Signal Type | Template |
 |-------------|----------|
-| Any signal + technical buyer | `templates/email-sequences/resource-offer-signal.md` **(RECOMMENDED)** |
-| GitHub repo activity | `templates/email-sequences/github-rl-signal.md` |
-| ArXiv paper | `templates/email-sequences/arxiv-paper-signal.md` |
-| Job posting (RL role) | `templates/email-sequences/hiring-signal.md` |
-| Funding round | `templates/email-sequences/funding-signal.md` |
-| HuggingFace model upload | `templates/email-sequences/huggingface-model-signal.md` |
-| Champion changed jobs | `templates/email-sequences/champion-job-change.md` |
+| Any signal + technical buyer | `config/templates/email-sequences/resource-offer-signal.md` **(RECOMMENDED)** |
+| GitHub repo activity | `config/templates/email-sequences/github-signal.md` |
+| ArXiv paper | `config/templates/email-sequences/arxiv-paper-signal.md` |
+| Job posting | `config/templates/email-sequences/hiring-signal.md` |
+| Funding round | `config/templates/email-sequences/funding-signal.md` |
+| HuggingFace model upload | `config/templates/email-sequences/huggingface-model-signal.md` |
+| Champion changed jobs | `config/templates/email-sequences/champion-job-change.md` |
 
-> **Resource-first outreach gets 50% reply rates vs. 8-15% for demo asks. Default to `resource-offer-signal.md` for ICP Tier 1 (AI Labs) and Tier 3 (Robotics). Use signal-specific templates when the prospect is already in a demo pipeline or has explicitly requested product information.**
+> **Resource-first outreach gets 50% reply rates vs. 8-15% for demo asks. Default to `resource-offer-signal.md` for ICP Tier 1 and Tier 3. Use signal-specific templates when the prospect is already in a demo pipeline or has explicitly requested product information.**
 
 ## Generate 3 Variants
 
@@ -34,7 +34,7 @@ For each variant, write a full 3-email sequence (initial + follow-up 1 + follow-
 - **Variant B — Outcome:** Lead with a proof point (Kore.ai: 91% improvement)
 - **Variant C — Social Proof:** Lead with a peer company or co-author signal
 
-## Voice Rules (from `.agents/gtm-context.md`)
+## Voice Rules (from `config/gtm-context.md`)
 
 - 4 sentences max on initial email
 - Reference their specific technical work (repo name, paper title, job req language)
@@ -44,7 +44,7 @@ For each variant, write a full 3-email sequence (initial + follow-up 1 + follow-
 ## Quality Checklist
 
 Before outputting, verify each email:
-- [ ] References specific signal (not generic "I noticed you work on RL")
+- [ ] References specific signal (not generic "I noticed you work in this domain")
 - [ ] ≤4 sentences in initial outreach
 - [ ] No banned phrases
 - [ ] CTA is low-friction and specific

@@ -28,7 +28,7 @@ From notes, extract and populate a `MeetingOutcome` record:
 
 ## Step 2: Select Template Sequence
 
-Load `templates/email-sequences/meeting-followup.md` and select the block matching `outcome`:
+Load `config/templates/email-sequences/meeting-followup.md` and select the block matching `outcome`:
 
 - `positive` → 3-email sequence (Day 0, 3, 7)
 - `neutral` → 3-email sequence (Day 0, 5, 14)
@@ -45,7 +45,7 @@ For each email in the sequence:
 4. Keep subject lines under 50 characters
 5. CTA must be low-friction: calendar link, async resource, or a direct question
 
-Voice rules (from `.agents/gtm-context.md`): no "just checking in", no "hope this finds you well", no unsolicited demo asks.
+Voice rules (from `config/gtm-context.md`): no "just checking in", no "hope this finds you well", no unsolicited demo asks.
 
 ## Step 4: CRM and Sequencing Recommendations
 
