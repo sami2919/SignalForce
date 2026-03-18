@@ -1,8 +1,8 @@
-"""Job Posting Signal Scanner.
+"""Job Posting Scanner.
 
-Detects companies actively hiring for reinforcement learning roles by searching
-job boards. Supports injecting custom search result data for testing and works
-in simulation mode when no real API key is configured.
+Detects companies actively hiring for target roles by searching job boards.
+Supports injecting custom search result data for testing and works in
+simulation mode when no real API key is configured.
 
 Scoring by posting count:
     1 posting  → WEAK
@@ -20,8 +20,8 @@ from collections import defaultdict
 from datetime import datetime, UTC
 
 from scripts.api_client import BaseAPIClient
-from scripts.config import AppConfig, get_config
-from scripts.models import Signal, ScanResult, SignalType, SignalStrength
+from scripts.config import get_config
+from scripts.scanners.base import ScannerConfig, ScanResult, Signal, SignalStrength
 
 logger = logging.getLogger(__name__)
 
@@ -32,11 +32,7 @@ logger = logging.getLogger(__name__)
 
 
 class JobPostingClient(BaseAPIClient):
-    """Client for job search APIs (e.g. SerpAPI) that return structured results.
-
-    In production, this hits a real search API. For testing the client can be
-    mocked entirely at the ``search_jobs`` method level.
-    """
+    """Client for job search APIs (e.g. SerpAPI) that return structured results."""
 
     def __init__(
         self,
@@ -58,18 +54,6 @@ class JobPostingClient(BaseAPIClient):
             - url: str
             - snippet: str
             - company: str | None
-
-        In production this queries SerpAPI's Google Search endpoint and maps
-        ``organic_results`` to the common shape. The caller is responsible for
-        providing a mocked version during tests.
-
-        Args:
-            query: Search query string (e.g. "reinforcement learning engineer
-                   site:lever.co OR site:greenhouse.io").
-            num_results: Maximum number of results to request.
-
-        Returns:
-            List of result dicts. Empty list if no results or on parse error.
         """
         if not self._api_key:
             logger.debug("No API key configured — returning empty results for query: %s", query)
@@ -99,10 +83,19 @@ class JobPostingClient(BaseAPIClient):
 
 
 # ---------------------------------------------------------------------------
-# Job Posting Scanner
+# URL patterns for major job boards
 # ---------------------------------------------------------------------------
 
-_RL_SKILLS = [
+_URL_PATTERNS: list[tuple[str, str]] = [
+    (r"jobs\.lever\.co/([^/]+)", "lever"),
+    (r"boards\.greenhouse\.io/([^/]+)", "greenhouse"),
+    (r"app\.ashbyhq\.com/jobs/([^/]+)", "ashby"),
+]
+
+_TITLE_AT_PATTERN = re.compile(r"\bat\s+([A-Z][A-Za-z0-9\-]+(?:\s+[A-Z][A-Za-z0-9\-]+)*)\s*$")
+
+# Default skills vocabulary (used when no skills configured; kept for backward compat)
+_DEFAULT_SKILLS: list[str] = [
     "gymnasium",
     "pytorch",
     "tensorflow",
@@ -126,46 +119,33 @@ _RL_SKILLS = [
     "isaaclab",
 ]
 
-# URL patterns for major job boards. Each tuple is (domain_fragment, capture_group_index_after_split).
-_URL_PATTERNS: list[tuple[str, str]] = [
-    # https://jobs.lever.co/{company}/abc123
-    (r"jobs\.lever\.co/([^/]+)", "lever"),
-    # https://boards.greenhouse.io/{company}/jobs/...
-    (r"boards\.greenhouse\.io/([^/]+)", "greenhouse"),
-    # https://app.ashbyhq.com/jobs/{company}/...
-    (r"app\.ashbyhq\.com/jobs/([^/]+)", "ashby"),
-    # https://www.linkedin.com/jobs/view/...  — company not in URL, skip
-]
 
-_TITLE_AT_PATTERN = re.compile(r"\bat\s+([A-Z][A-Za-z0-9\-]+(?:\s+[A-Z][A-Za-z0-9\-]+)*)\s*$")
+# ---------------------------------------------------------------------------
+# Scanner class (internal implementation)
+# ---------------------------------------------------------------------------
 
 
 class JobPostingScanner:
-    """Scanner that detects companies actively hiring for RL roles via job boards."""
-
-    JOB_TITLES = [
-        "reinforcement learning engineer",
-        "RL researcher",
-        "simulation engineer",
-        "RLHF engineer",
-        "reward modeling engineer",
-        "RL environments engineer",
-        "policy optimization engineer",
-        "ML engineer reinforcement learning",
-    ]
+    """Scanner that detects companies actively hiring via job boards."""
 
     JOB_BOARD_DOMAINS = ["linkedin.com", "lever.co", "greenhouse.io", "ashbyhq.com"]
+    JOB_TITLES: list[str] = []
 
-    def __init__(self, config: AppConfig | None = None) -> None:
-        self._config = config or get_config()
+    def __init__(
+        self,
+        titles: list[str] | None = None,
+        skills: list[str] | None = None,
+    ) -> None:
         self._client = JobPostingClient()
+        self.JOB_TITLES = titles or []
+        self._skills = skills if skills is not None else _DEFAULT_SKILLS
 
     # ------------------------------------------------------------------
     # Public interface
     # ------------------------------------------------------------------
 
     def scan(self, lookback_days: int = 7) -> ScanResult:
-        """Run a full job posting scan for RL roles.
+        """Run a full job posting scan.
 
         Steps:
         1. Build search queries (one per job title, scoped to job board domains).
@@ -175,18 +155,10 @@ class JobPostingScanner:
         5. Score each company by total posting count.
         6. Deduplicate: same company across multiple queries → single signal.
         7. Return ScanResult.
-
-        Args:
-            lookback_days: How many days back to consider (informational; included in
-                           query strings where the search engine supports it).
-
-        Returns:
-            ScanResult with Signal objects for each qualifying company.
         """
         started_at = datetime.now(UTC)
         queries = self._build_search_queries(lookback_days)
 
-        # company_slug → list of posting dicts across all queries
         company_postings: dict[str, list[dict]] = defaultdict(list)
         total_raw = 0
         errors: list[str] = []
@@ -205,7 +177,6 @@ class JobPostingScanner:
                 if company is None:
                     continue
                 total_raw += 1
-                # Deduplicate by URL within each company accumulator
                 existing_urls = {p["url"] for p in company_postings[company]}
                 if result["url"] not in existing_urls:
                     company_postings[company].append(result)
@@ -219,7 +190,7 @@ class JobPostingScanner:
         completed_at = datetime.now(UTC)
 
         return ScanResult(
-            scan_type=SignalType.JOB_POSTING,
+            scan_type="job_posting",
             started_at=started_at,
             completed_at=completed_at,
             signals_found=signals,
@@ -233,50 +204,21 @@ class JobPostingScanner:
     # ------------------------------------------------------------------
 
     def _build_search_queries(self, lookback_days: int) -> list[str]:
-        """Build search query strings for each RL job title.
-
-        Each query constrains results to known job board domains using the
-        ``site:`` operator with ``OR`` so that a single query covers multiple
-        boards.
-
-        Args:
-            lookback_days: Currently informational; future implementations may
-                           append a date filter when the target API supports it.
-
-        Returns:
-            List of query strings, one per job title.
-        """
+        """Build search query strings for each job title."""
         domain_filter = " OR ".join(f"site:{d}" for d in self.JOB_BOARD_DOMAINS)
         return [f"{title} {domain_filter}" for title in self.JOB_TITLES]
 
     def _extract_company_from_result(self, result: dict) -> str | None:
-        """Attempt to extract a company name from a search result.
-
-        Priority order:
-        1. ``company`` field if present and non-null.
-        2. URL pattern matching for known job boards (Lever, Greenhouse, Ashby).
-        3. Title parsing: "Role at CompanyName" pattern.
-
-        Args:
-            result: Search result dict with ``title``, ``url``, ``snippet``,
-                    and optional ``company`` keys.
-
-        Returns:
-            Company name string, or None if not extractable.
-        """
-        # 1. Explicit company field
+        """Attempt to extract a company name from a search result."""
         if result.get("company"):
             return result["company"]
 
         url = result.get("url", "")
-
-        # 2. URL pattern matching
         for pattern, _board in _URL_PATTERNS:
             match = re.search(pattern, url)
             if match:
                 return match.group(1)
 
-        # 3. Title "Role at Company" pattern
         title = result.get("title", "")
         title_match = _TITLE_AT_PATTERN.search(title)
         if title_match:
@@ -285,38 +227,16 @@ class JobPostingScanner:
         return None
 
     def _extract_skills(self, description: str) -> list[str]:
-        """Extract RL-related skills from a job description text.
-
-        Performs case-insensitive substring matching against a fixed vocabulary
-        of RL skills and libraries.
-
-        Args:
-            description: Raw job description or snippet text.
-
-        Returns:
-            Sorted, deduplicated list of matched skill strings (lowercase).
-        """
+        """Extract relevant skills from a job description text."""
         lower = description.lower()
         found: list[str] = []
-        for skill in _RL_SKILLS:
+        for skill in self._skills:
             if skill in lower:
                 found.append(skill)
         return found
 
     def _score_company(self, posting_count: int) -> SignalStrength:
-        """Score a company's RL hiring intent based on posting count.
-
-        Scoring rules:
-        - STRONG:   4+ postings
-        - MODERATE: 2–3 postings
-        - WEAK:     1 posting
-
-        Args:
-            posting_count: Total number of RL-related job postings found for the company.
-
-        Returns:
-            SignalStrength enum value.
-        """
+        """Score a company's hiring intent based on posting count."""
         if posting_count >= 4:
             return SignalStrength.STRONG
         if posting_count >= 2:
@@ -329,20 +249,10 @@ class JobPostingScanner:
         postings: list[dict],
         score: SignalStrength,
     ) -> Signal:
-        """Build a Signal object for a company detected as hiring for RL roles.
-
-        Args:
-            company: Company name / slug extracted from job postings.
-            postings: List of posting dicts accumulated for this company.
-            score: Pre-computed SignalStrength for this company.
-
-        Returns:
-            Signal with JOB_POSTING type and rich metadata.
-        """
+        """Build a Signal object for a company detected as hiring."""
         job_titles = list({p.get("title", "") for p in postings if p.get("title")})
         posting_urls = [p["url"] for p in postings if p.get("url")]
 
-        # Aggregate skills from all snippets
         all_skills: set[str] = set()
         for posting in postings:
             snippet = posting.get("snippet", "")
@@ -350,12 +260,12 @@ class JobPostingScanner:
                 all_skills.add(skill)
 
         return Signal(
-            signal_type=SignalType.JOB_POSTING,
+            signal_type="job_posting",
             company_name=company,
             signal_strength=score,
             source_url=posting_urls[0]
             if posting_urls
-            else f"https://www.google.com/search?q={company}+RL+engineer",
+            else f"https://www.google.com/search?q={company}+engineer",
             raw_data={"postings": postings},
             metadata={
                 "job_titles": job_titles,
@@ -367,13 +277,31 @@ class JobPostingScanner:
 
 
 # ---------------------------------------------------------------------------
+# Module-level entry point
+# ---------------------------------------------------------------------------
+
+
+def scan(config: ScannerConfig) -> ScanResult:
+    """Run a full job posting scan using configuration.
+
+    Args:
+        config: ScannerConfig with titles, skills, and lookback_days.
+
+    Returns:
+        ScanResult with Signal objects for each qualifying company.
+    """
+    scanner = JobPostingScanner(titles=config.titles, skills=config.skills)
+    return scanner.scan(config.lookback_days)
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Scan job boards for companies hiring in reinforcement learning.",
+        description="Scan job boards for companies hiring in target roles.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
@@ -400,13 +328,21 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> None:
     """CLI entry point for the job posting scanner."""
+    from scripts.config_loader import load_config
+
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
 
-    scanner = JobPostingScanner()
-    result = scanner.scan(lookback_days=args.lookback_days)
+    sf_config = load_config()
+    scanner_cfg = sf_config.scanners.get("jobs")
+    if scanner_cfg is None:
+        raise SystemExit("No 'jobs' scanner configured in config.yaml")
 
-    # Filter by minimum strength
+    if args.lookback_days != 7:
+        scanner_cfg = scanner_cfg.model_copy(update={"lookback_days": args.lookback_days})
+
+    result = scan(scanner_cfg)
+
     filtered_signals = [s for s in result.signals_found if s.signal_strength >= args.min_strength]
 
     print(f"Scan complete — {len(filtered_signals)} signals (min strength: {args.min_strength})")

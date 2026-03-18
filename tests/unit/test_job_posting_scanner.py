@@ -1,4 +1,4 @@
-"""Unit tests for JobPostingScanner — written FIRST (TDD RED phase).
+"""Unit tests for job_scanner — written FIRST (TDD RED phase).
 
 All HTTP calls are mocked at the JobPostingClient method level.
 No real API calls are made.
@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 
-from scripts.models import SignalType, SignalStrength, ScanResult, Signal
+from scripts.models import SignalStrength, ScanResult, Signal
 
 # ---------------------------------------------------------------------------
 # Fixture helpers
@@ -48,7 +48,7 @@ def make_lever_result(company_slug: str, role: str) -> dict:
         title=f"{role} at {company_slug}",
         url=f"https://jobs.lever.co/{company_slug}/abc{uid:03d}",
         snippet=f"{company_slug} is hiring a {role}. Experience with pytorch required.",
-        company=None,  # company must be extracted from URL
+        company=None,
     )
 
 
@@ -74,6 +74,22 @@ def make_ashby_result(company_slug: str, role: str) -> dict:
     )
 
 
+def make_scanner_with_defaults() -> "JobPostingScanner":
+    """Build a JobPostingScanner without calling __init__, with defaults set."""
+    from scripts.scanners.job_scanner import JobPostingScanner, _DEFAULT_SKILLS
+
+    scanner = JobPostingScanner.__new__(JobPostingScanner)
+    scanner._skills = _DEFAULT_SKILLS
+    scanner.JOB_TITLES = [
+        "reinforcement learning engineer",
+        "RL researcher",
+        "simulation engineer",
+        "RLHF engineer",
+        "reward modeling engineer",
+    ]
+    return scanner
+
+
 # ---------------------------------------------------------------------------
 # JobPostingClient tests
 # ---------------------------------------------------------------------------
@@ -81,13 +97,13 @@ def make_ashby_result(company_slug: str, role: str) -> dict:
 
 class TestJobPostingClient:
     def test_client_initializes_with_base_url(self):
-        from scripts.job_posting_scanner import JobPostingClient
+        from scripts.scanners.job_scanner import JobPostingClient
 
         client = JobPostingClient(base_url="https://serpapi.com")
         assert client.base_url == "https://serpapi.com"
 
     def test_search_jobs_returns_list(self):
-        from scripts.job_posting_scanner import JobPostingClient
+        from scripts.scanners.job_scanner import JobPostingClient
 
         client = JobPostingClient(base_url="https://serpapi.com")
         with patch.object(
@@ -101,7 +117,7 @@ class TestJobPostingClient:
         assert isinstance(results, list)
 
     def test_search_jobs_empty_response(self):
-        from scripts.job_posting_scanner import JobPostingClient
+        from scripts.scanners.job_scanner import JobPostingClient
 
         client = JobPostingClient(base_url="https://serpapi.com")
         with patch.object(client, "get", return_value={}):
@@ -116,23 +132,27 @@ class TestJobPostingClient:
 
 class TestScanReturnsScanResult:
     def test_scan_returns_scan_result_type(self):
-        from scripts.job_posting_scanner import JobPostingScanner
+        from scripts.scanners.job_scanner import JobPostingScanner
 
         scanner = JobPostingScanner.__new__(JobPostingScanner)
         scanner._client = MagicMock()
         scanner._client.search_jobs.return_value = []
+        scanner.JOB_TITLES = []
+        scanner._skills = []
 
         result = scanner.scan(lookback_days=7)
 
         assert isinstance(result, ScanResult)
-        assert result.scan_type == SignalType.JOB_POSTING
+        assert result.scan_type == "job_posting"
 
     def test_scan_has_started_and_completed_at(self):
-        from scripts.job_posting_scanner import JobPostingScanner
+        from scripts.scanners.job_scanner import JobPostingScanner
 
         scanner = JobPostingScanner.__new__(JobPostingScanner)
         scanner._client = MagicMock()
         scanner._client.search_jobs.return_value = []
+        scanner.JOB_TITLES = []
+        scanner._skills = []
 
         result = scanner.scan(lookback_days=7)
 
@@ -148,25 +168,19 @@ class TestScanReturnsScanResult:
 
 class TestExtractsCompanyFromLeverUrl:
     def test_extracts_company_from_lever_url(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         result = make_lever_result("acme-ai", "RL Engineer")
         company = scanner._extract_company_from_result(result)
         assert company == "acme-ai"
 
     def test_extracts_company_from_lever_url_with_different_slug(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         result = make_lever_result("deepmind", "Senior RL Researcher")
         company = scanner._extract_company_from_result(result)
         assert company == "deepmind"
 
     def test_lever_url_with_trailing_path(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         result = make_search_result(
             title="RL Engineer",
             url="https://jobs.lever.co/openai/abc-def-ghi/apply",
@@ -183,17 +197,13 @@ class TestExtractsCompanyFromLeverUrl:
 
 class TestExtractsCompanyFromGreenhouseUrl:
     def test_extracts_company_from_greenhouse_url(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         result = make_greenhouse_result("anthropic", "RL Engineer")
         company = scanner._extract_company_from_result(result)
         assert company == "anthropic"
 
     def test_extracts_company_from_greenhouse_boards_url(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         result = make_search_result(
             title="Policy Optimization Engineer at google-deepmind",
             url="https://boards.greenhouse.io/google-deepmind/jobs/12345",
@@ -210,9 +220,7 @@ class TestExtractsCompanyFromGreenhouseUrl:
 
 class TestExtractsCompanyFromTitlePattern:
     def test_extracts_company_from_title_at_pattern(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         result = make_search_result(
             title="Reinforcement Learning Engineer at AcmeCorp",
             url="https://www.acmecorp.com/careers/rl-engineer",
@@ -222,9 +230,7 @@ class TestExtractsCompanyFromTitlePattern:
         assert company == "AcmeCorp"
 
     def test_extracts_company_field_if_present(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         result = make_search_result(
             title="RL Engineer at SomeCompany",
             url="https://example.com/jobs/123",
@@ -235,9 +241,7 @@ class TestExtractsCompanyFromTitlePattern:
         assert company == "ExplicitCompany"
 
     def test_returns_none_for_personal_blog(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         result = make_search_result(
             title="How I became an RLHF engineer - Personal Blog",
             url="https://medium.com/@user/how-i-became-rlhf-engineer",
@@ -248,9 +252,7 @@ class TestExtractsCompanyFromTitlePattern:
         assert company is None
 
     def test_returns_none_when_no_company_extractable(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         result = make_search_result(
             title="Jobs in ML",
             url="https://randomsite.com/jobs-list",
@@ -267,9 +269,7 @@ class TestExtractsCompanyFromTitlePattern:
 
 class TestExtractsCompanyFromAshbyUrl:
     def test_extracts_company_from_ashbyhq_url(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         result = make_ashby_result("cohere", "RLHF Engineer")
         company = scanner._extract_company_from_result(result)
         assert company == "cohere"
@@ -282,37 +282,27 @@ class TestExtractsCompanyFromAshbyUrl:
 
 class TestScoringByPostingCount:
     def test_score_one_posting_is_weak(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         score = scanner._score_company(posting_count=1)
         assert score == SignalStrength.WEAK
 
     def test_score_two_postings_is_moderate(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         score = scanner._score_company(posting_count=2)
         assert score == SignalStrength.MODERATE
 
     def test_score_three_postings_is_moderate(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         score = scanner._score_company(posting_count=3)
         assert score == SignalStrength.MODERATE
 
     def test_score_four_postings_is_strong(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         score = scanner._score_company(posting_count=4)
         assert score == SignalStrength.STRONG
 
     def test_score_ten_postings_is_strong(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         score = scanner._score_company(posting_count=10)
         assert score == SignalStrength.STRONG
 
@@ -324,12 +314,12 @@ class TestScoringByPostingCount:
 
 class TestDeduplicatesSameCompanyDifferentTitles:
     def test_deduplicates_same_company_from_multiple_job_title_searches(self):
-        from scripts.job_posting_scanner import JobPostingScanner
+        from scripts.scanners.job_scanner import JobPostingScanner
 
         scanner = JobPostingScanner.__new__(JobPostingScanner)
         scanner._client = MagicMock()
+        scanner._skills = []
 
-        # Two different title searches both return DeepMind
         scanner._client.search_jobs.side_effect = [
             [make_lever_result("deepmind", "RL Engineer")],
             [make_greenhouse_result("deepmind", "RL Researcher")],
@@ -342,17 +332,16 @@ class TestDeduplicatesSameCompanyDifferentTitles:
         ):
             result = scanner.scan(lookback_days=7)
 
-        # Should deduplicate to a single signal for deepmind
         company_names = [s.company_name for s in result.signals_found]
         assert company_names.count("deepmind") == 1
 
     def test_dedup_accumulates_posting_count(self):
-        from scripts.job_posting_scanner import JobPostingScanner
+        from scripts.scanners.job_scanner import JobPostingScanner
 
         scanner = JobPostingScanner.__new__(JobPostingScanner)
         scanner._client = MagicMock()
+        scanner._skills = []
 
-        # 3 searches for deepmind across different titles → STRONG (combined = 4)
         scanner._client.search_jobs.side_effect = [
             [make_lever_result("deepmind", "RL Engineer")],
             [make_lever_result("deepmind", "RL Researcher")],
@@ -384,11 +373,13 @@ class TestDeduplicatesSameCompanyDifferentTitles:
 
 class TestHandlesEmptyResults:
     def test_handles_empty_results(self):
-        from scripts.job_posting_scanner import JobPostingScanner
+        from scripts.scanners.job_scanner import JobPostingScanner
 
         scanner = JobPostingScanner.__new__(JobPostingScanner)
         scanner._client = MagicMock()
         scanner._client.search_jobs.return_value = []
+        scanner.JOB_TITLES = []
+        scanner._skills = []
 
         result = scanner.scan(lookback_days=7)
 
@@ -396,12 +387,12 @@ class TestHandlesEmptyResults:
         assert result.signals_found == []
 
     def test_handles_results_with_no_extractable_company(self):
-        from scripts.job_posting_scanner import JobPostingScanner
+        from scripts.scanners.job_scanner import JobPostingScanner
 
         scanner = JobPostingScanner.__new__(JobPostingScanner)
         scanner._client = MagicMock()
+        scanner._skills = []
 
-        # Personal blog result — no company extractable
         scanner._client.search_jobs.return_value = [
             make_search_result(
                 title="My journey into RL engineering",
@@ -422,11 +413,12 @@ class TestHandlesEmptyResults:
         assert result.signals_found == []
 
     def test_handles_client_exception_gracefully(self):
-        from scripts.job_posting_scanner import JobPostingScanner
+        from scripts.scanners.job_scanner import JobPostingScanner
 
         scanner = JobPostingScanner.__new__(JobPostingScanner)
         scanner._client = MagicMock()
         scanner._client.search_jobs.side_effect = Exception("Network error")
+        scanner._skills = []
 
         with patch.object(
             scanner,
@@ -435,7 +427,6 @@ class TestHandlesEmptyResults:
         ):
             result = scanner.scan(lookback_days=7)
 
-        # Should not raise; errors are captured
         assert isinstance(result, ScanResult)
         assert len(result.errors) > 0
 
@@ -447,10 +438,11 @@ class TestHandlesEmptyResults:
 
 class TestMetadataIncludesJobTitles:
     def test_metadata_includes_job_titles(self):
-        from scripts.job_posting_scanner import JobPostingScanner
+        from scripts.scanners.job_scanner import JobPostingScanner
 
         scanner = JobPostingScanner.__new__(JobPostingScanner)
         scanner._client = MagicMock()
+        scanner._skills = []
 
         scanner._client.search_jobs.side_effect = [
             [make_lever_result("acme-ai", "Reinforcement Learning Engineer")],
@@ -471,10 +463,11 @@ class TestMetadataIncludesJobTitles:
         assert len(signal.metadata["job_titles"]) > 0
 
     def test_metadata_includes_posting_urls(self):
-        from scripts.job_posting_scanner import JobPostingScanner
+        from scripts.scanners.job_scanner import JobPostingScanner
 
         scanner = JobPostingScanner.__new__(JobPostingScanner)
         scanner._client = MagicMock()
+        scanner._skills = []
 
         scanner._client.search_jobs.return_value = [make_lever_result("acme-ai", "RL Engineer")]
 
@@ -491,10 +484,11 @@ class TestMetadataIncludesJobTitles:
         assert len(signal.metadata["posting_urls"]) > 0
 
     def test_metadata_includes_posting_count(self):
-        from scripts.job_posting_scanner import JobPostingScanner
+        from scripts.scanners.job_scanner import JobPostingScanner
 
         scanner = JobPostingScanner.__new__(JobPostingScanner)
         scanner._client = MagicMock()
+        scanner._skills = []
 
         scanner._client.search_jobs.return_value = [make_lever_result("acme-ai", "RL Engineer")]
 
@@ -510,10 +504,11 @@ class TestMetadataIncludesJobTitles:
         assert signal.metadata["posting_count"] == 1
 
     def test_metadata_includes_skills_mentioned(self):
-        from scripts.job_posting_scanner import JobPostingScanner
+        from scripts.scanners.job_scanner import JobPostingScanner
 
         scanner = JobPostingScanner.__new__(JobPostingScanner)
         scanner._client = MagicMock()
+        scanner._skills = []
 
         scanner._client.search_jobs.return_value = [make_lever_result("acme-ai", "RL Engineer")]
 
@@ -536,46 +531,34 @@ class TestMetadataIncludesJobTitles:
 
 class TestExtractsRLSkills:
     def test_extracts_pytorch_from_description(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         skills = scanner._extract_skills("Experience with pytorch and gymnasium required.")
         assert "pytorch" in skills
 
     def test_extracts_gymnasium_from_description(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         skills = scanner._extract_skills(
             "Build environments using gymnasium and simulation frameworks."
         )
         assert "gymnasium" in skills
 
     def test_extracts_tensorflow_from_description(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         skills = scanner._extract_skills("We use tensorflow for our training pipelines.")
         assert "tensorflow" in skills
 
     def test_extracts_reward_design_from_description(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         skills = scanner._extract_skills("Experience with reward design and reward shaping.")
         assert "reward design" in skills
 
     def test_extracts_simulation_from_description(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         skills = scanner._extract_skills("Build physics simulation environments for RL training.")
         assert "simulation" in skills
 
     def test_extracts_multiple_skills(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         description = "Experience with pytorch, gymnasium, and reward design. Knowledge of simulation helpful."
         skills = scanner._extract_skills(description)
         assert "pytorch" in skills
@@ -584,16 +567,12 @@ class TestExtractsRLSkills:
         assert "simulation" in skills
 
     def test_returns_empty_list_for_no_skills(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         skills = scanner._extract_skills("Looking for a software engineer.")
         assert skills == []
 
     def test_case_insensitive_extraction(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         skills = scanner._extract_skills("Experience with PyTorch and Gymnasium.")
         assert "pytorch" in skills
         assert "gymnasium" in skills
@@ -606,25 +585,19 @@ class TestExtractsRLSkills:
 
 class TestCreateSignal:
     def test_create_signal_has_correct_type(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         postings = [make_lever_result("acme-ai", "RL Engineer")]
         signal = scanner._create_signal("acme-ai", postings, SignalStrength.WEAK)
-        assert signal.signal_type == SignalType.JOB_POSTING
+        assert signal.signal_type == "job_posting"
 
     def test_create_signal_has_correct_company(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         postings = [make_lever_result("acme-ai", "RL Engineer")]
         signal = scanner._create_signal("acme-ai", postings, SignalStrength.WEAK)
         assert signal.company_name == "acme-ai"
 
     def test_create_signal_has_correct_strength(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         postings = [
             make_lever_result("acme-ai", "RL Engineer"),
             make_greenhouse_result("acme-ai", "RL Researcher"),
@@ -635,17 +608,13 @@ class TestCreateSignal:
         assert signal.signal_strength == SignalStrength.STRONG
 
     def test_create_signal_source_url_is_first_posting_url(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         postings = [make_lever_result("acme-ai", "RL Engineer")]
         signal = scanner._create_signal("acme-ai", postings, SignalStrength.WEAK)
         assert signal.source_url == postings[0]["url"]
 
     def test_create_signal_metadata_has_required_keys(self):
-        from scripts.job_posting_scanner import JobPostingScanner
-
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = make_scanner_with_defaults()
         postings = [make_lever_result("acme-ai", "RL Engineer")]
         signal = scanner._create_signal("acme-ai", postings, SignalStrength.WEAK)
         assert "job_titles" in signal.metadata
@@ -661,28 +630,32 @@ class TestCreateSignal:
 
 class TestBuildSearchQueries:
     def test_build_search_queries_returns_list(self):
-        from scripts.job_posting_scanner import JobPostingScanner
+        from scripts.scanners.job_scanner import JobPostingScanner
 
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = JobPostingScanner(
+            titles=["reinforcement learning engineer", "RL researcher"]
+        )
         queries = scanner._build_search_queries(lookback_days=7)
         assert isinstance(queries, list)
         assert len(queries) > 0
 
-    def test_queries_include_rl_job_titles(self):
-        from scripts.job_posting_scanner import JobPostingScanner
+    def test_queries_include_configured_titles(self):
+        from scripts.scanners.job_scanner import JobPostingScanner
 
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = JobPostingScanner(
+            titles=["reinforcement learning engineer", "simulation engineer", "rlhf engineer"]
+        )
         queries = scanner._build_search_queries(lookback_days=7)
         all_queries = " ".join(queries).lower()
         assert any(
             term in all_queries
-            for term in ["reinforcement learning", "rlhf", "simulation engineer", "reward modeling"]
+            for term in ["reinforcement learning", "rlhf", "simulation engineer"]
         )
 
     def test_queries_include_job_board_domains(self):
-        from scripts.job_posting_scanner import JobPostingScanner
+        from scripts.scanners.job_scanner import JobPostingScanner
 
-        scanner = JobPostingScanner.__new__(JobPostingScanner)
+        scanner = JobPostingScanner(titles=["RL engineer"])
         queries = scanner._build_search_queries(lookback_days=7)
         all_queries = " ".join(queries)
         assert any(
@@ -698,11 +671,10 @@ class TestBuildSearchQueries:
 
 class TestCLI:
     def test_cli_prints_summary(self, capsys):
-        from scripts.job_posting_scanner import main
-        from scripts.models import ScanResult, SignalType
+        from scripts.scanners.job_scanner import main
 
         mock_result = ScanResult(
-            scan_type=SignalType.JOB_POSTING,
+            scan_type="job_posting",
             started_at=datetime.now(UTC),
             completed_at=datetime.now(UTC),
             signals_found=[],
@@ -710,19 +682,24 @@ class TestCLI:
             total_after_dedup=0,
         )
 
-        with patch("scripts.job_posting_scanner.JobPostingScanner") as MockScanner:
-            mock_instance = MockScanner.return_value
-            mock_instance.scan.return_value = mock_result
-            main(["--lookback-days", "7"])
+        with patch("scripts.scanners.job_scanner.scan") as mock_scan:
+            mock_scan.return_value = mock_result
+            with patch("scripts.config_loader.load_config") as mock_load:
+                mock_sf_config = MagicMock()
+                mock_sf_config.scanners.get.return_value = MagicMock(
+                    lookback_days=7, titles=[], skills=[]
+                )
+                mock_load.return_value = mock_sf_config
+                main(["--lookback-days", "7"])
 
         captured = capsys.readouterr()
         assert "0" in captured.out
 
     def test_cli_with_min_strength_filters(self, capsys):
-        from scripts.job_posting_scanner import main
+        from scripts.scanners.job_scanner import main
 
         weak_signal = Signal(
-            signal_type=SignalType.JOB_POSTING,
+            signal_type="job_posting",
             company_name="weak-corp",
             signal_strength=SignalStrength.WEAK,
             source_url="https://jobs.lever.co/weak-corp/abc",
@@ -736,7 +713,7 @@ class TestCLI:
         )
 
         mock_result = ScanResult(
-            scan_type=SignalType.JOB_POSTING,
+            scan_type="job_posting",
             started_at=datetime.now(UTC),
             completed_at=datetime.now(UTC),
             signals_found=[weak_signal],
@@ -744,20 +721,24 @@ class TestCLI:
             total_after_dedup=1,
         )
 
-        with patch("scripts.job_posting_scanner.JobPostingScanner") as MockScanner:
-            mock_instance = MockScanner.return_value
-            mock_instance.scan.return_value = mock_result
-            main(["--lookback-days", "7", "--min-strength", "2"])
+        with patch("scripts.scanners.job_scanner.scan") as mock_scan:
+            mock_scan.return_value = mock_result
+            with patch("scripts.config_loader.load_config") as mock_load:
+                mock_sf_config = MagicMock()
+                mock_sf_config.scanners.get.return_value = MagicMock(
+                    lookback_days=7, titles=[], skills=[]
+                )
+                mock_load.return_value = mock_sf_config
+                main(["--lookback-days", "7", "--min-strength", "2"])
 
         captured = capsys.readouterr()
-        # WEAK signals filtered out → 0 after filter
         assert "0" in captured.out
 
     def test_cli_writes_output_file(self, tmp_path):
-        from scripts.job_posting_scanner import main
+        from scripts.scanners.job_scanner import main
 
         mock_result = ScanResult(
-            scan_type=SignalType.JOB_POSTING,
+            scan_type="job_posting",
             started_at=datetime.now(UTC),
             completed_at=datetime.now(UTC),
             signals_found=[],
@@ -767,10 +748,15 @@ class TestCLI:
 
         output_file = tmp_path / "output.json"
 
-        with patch("scripts.job_posting_scanner.JobPostingScanner") as MockScanner:
-            mock_instance = MockScanner.return_value
-            mock_instance.scan.return_value = mock_result
-            main(["--lookback-days", "7", "--output", str(output_file)])
+        with patch("scripts.scanners.job_scanner.scan") as mock_scan:
+            mock_scan.return_value = mock_result
+            with patch("scripts.config_loader.load_config") as mock_load:
+                mock_sf_config = MagicMock()
+                mock_sf_config.scanners.get.return_value = MagicMock(
+                    lookback_days=7, titles=[], skills=[]
+                )
+                mock_load.return_value = mock_sf_config
+                main(["--lookback-days", "7", "--output", str(output_file)])
 
         assert output_file.exists()
         data = json.loads(output_file.read_text())
