@@ -1,4 +1,4 @@
-"""Unit tests for ArxivRLMonitor — written FIRST (TDD RED phase).
+"""Unit tests for arxiv_scanner — written FIRST (TDD RED phase).
 
 All HTTP calls are mocked at the SemanticScholarClient.search_papers level.
 No real API calls are made.
@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 
-from scripts.models import SignalType, SignalStrength, ScanResult, Signal
+from scripts.models import SignalStrength, ScanResult, Signal
 
 FIXTURES_PATH = Path(__file__).parent.parent / "fixtures" / "semantic_scholar_responses.json"
 
@@ -64,7 +64,7 @@ def make_search_response(papers: list[dict]) -> dict:
 
 class TestSemanticScholarClient:
     def test_search_papers_calls_correct_endpoint(self):
-        from scripts.arxiv_monitor import SemanticScholarClient
+        from scripts.scanners.arxiv_scanner import SemanticScholarClient
 
         client = SemanticScholarClient(api_key="fake-key")
         with patch.object(client, "get", return_value={"total": 0, "data": []}) as mock_get:
@@ -74,7 +74,7 @@ class TestSemanticScholarClient:
             assert "/paper/search" in call_args[0][0]
 
     def test_search_papers_passes_query_param(self):
-        from scripts.arxiv_monitor import SemanticScholarClient
+        from scripts.scanners.arxiv_scanner import SemanticScholarClient
 
         client = SemanticScholarClient(api_key="fake-key")
         with patch.object(client, "get", return_value={"total": 0, "data": []}) as mock_get:
@@ -83,16 +83,14 @@ class TestSemanticScholarClient:
             assert params["query"] == "RLHF"
 
     def test_works_without_api_key(self):
-        from scripts.arxiv_monitor import SemanticScholarClient
+        from scripts.scanners.arxiv_scanner import SemanticScholarClient
 
         client = SemanticScholarClient(api_key=None)
-        # Should not raise; no x-api-key header
         assert client is not None
-        # Verify session does not have x-api-key header
         assert "x-api-key" not in client._session.headers
 
     def test_sets_api_key_header_when_provided(self):
-        from scripts.arxiv_monitor import SemanticScholarClient
+        from scripts.scanners.arxiv_scanner import SemanticScholarClient
 
         client = SemanticScholarClient(api_key="my-secret-key")
         assert client._session.headers.get("x-api-key") == "my-secret-key"
@@ -105,7 +103,7 @@ class TestSemanticScholarClient:
 
 class TestScanReturnsScanResult:
     def test_scan_returns_scan_result(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         monitor._client = MagicMock()
@@ -114,10 +112,10 @@ class TestScanReturnsScanResult:
         result = monitor.scan(lookback_days=7)
 
         assert isinstance(result, ScanResult)
-        assert result.scan_type == SignalType.ARXIV_PAPER
+        assert result.scan_type == "arxiv_paper"
 
     def test_scan_has_started_and_completed_at(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         monitor._client = MagicMock()
@@ -133,7 +131,7 @@ class TestScanReturnsScanResult:
 class TestFiltersUniversityAffiliations:
     def test_filters_university_affiliations(self):
         """Papers from university authors should be excluded."""
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         monitor._client = MagicMock()
@@ -152,28 +150,28 @@ class TestFiltersUniversityAffiliations:
         assert result.signals_found == []
 
     def test_filters_institute_affiliations(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         normalized = monitor._normalize_affiliation("Stanford Institute for AI Research")
         assert normalized is None
 
     def test_filters_college_affiliations(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         normalized = monitor._normalize_affiliation("Carnegie Mellon College of Science")
         assert normalized is None
 
     def test_filters_school_affiliations(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         normalized = monitor._normalize_affiliation("School of Computer Science")
         assert normalized is None
 
     def test_filters_department_of_affiliations(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         normalized = monitor._normalize_affiliation("Department of Computer Science")
@@ -182,61 +180,61 @@ class TestFiltersUniversityAffiliations:
 
 class TestNormalizesKnownCompanies:
     def test_normalizes_google_deepmind(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         assert monitor._normalize_affiliation("Google DeepMind") == "Google"
 
     def test_normalizes_meta_ai(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         assert monitor._normalize_affiliation("Meta AI") == "Meta"
 
     def test_normalizes_meta_ai_research(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         assert monitor._normalize_affiliation("Meta AI Research") == "Meta"
 
     def test_normalizes_microsoft_research(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         assert monitor._normalize_affiliation("Microsoft Research") == "Microsoft"
 
     def test_normalizes_openai(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         assert monitor._normalize_affiliation("OpenAI") == "OpenAI"
 
     def test_normalizes_anthropic(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         assert monitor._normalize_affiliation("Anthropic") == "Anthropic"
 
     def test_normalizes_deepmind(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         assert monitor._normalize_affiliation("DeepMind") == "Google"
 
     def test_normalizes_google_brain(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         assert monitor._normalize_affiliation("Google Brain") == "Google"
 
     def test_normalizes_fair(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         assert monitor._normalize_affiliation("FAIR") == "Meta"
 
     def test_normalizes_case_insensitive(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         assert monitor._normalize_affiliation("google deepmind") == "Google"
@@ -244,49 +242,49 @@ class TestNormalizesKnownCompanies:
 
 class TestNormalizesUnknownCompany:
     def test_strips_inc_suffix(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         result = monitor._normalize_affiliation("Acme Robotics Inc")
         assert result == "Acme Robotics"
 
     def test_strips_ltd_suffix(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         result = monitor._normalize_affiliation("TechCorp Ltd")
         assert result == "TechCorp"
 
     def test_strips_corp_suffix(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         result = monitor._normalize_affiliation("BigCo Corp")
         assert result == "BigCo"
 
     def test_strips_research_suffix(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         result = monitor._normalize_affiliation("Acme Research")
         assert result == "Acme"
 
     def test_strips_ai_lab_suffix(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         result = monitor._normalize_affiliation("StartupCo AI Lab")
         assert result == "StartupCo"
 
     def test_strips_labs_suffix(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         result = monitor._normalize_affiliation("Innovation Labs")
         assert result == "Innovation"
 
     def test_returns_cleaned_name_for_unknown(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         result = monitor._normalize_affiliation("NovaTech AI")
@@ -296,35 +294,35 @@ class TestNormalizesUnknownCompany:
 
 class TestScoringByPaperCount:
     def test_scoring_1_paper_is_weak(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         score = monitor._score_company(1)
         assert score == SignalStrength.WEAK
 
     def test_scoring_2_papers_is_moderate(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         score = monitor._score_company(2)
         assert score == SignalStrength.MODERATE
 
     def test_scoring_3_papers_is_moderate(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         score = monitor._score_company(3)
         assert score == SignalStrength.MODERATE
 
     def test_scoring_4_papers_is_strong(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         score = monitor._score_company(4)
         assert score == SignalStrength.STRONG
 
     def test_scoring_10_papers_is_strong(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         score = monitor._score_company(10)
@@ -334,7 +332,7 @@ class TestScoringByPaperCount:
 class TestDeduplicatesAcrossQueries:
     def test_deduplicates_same_paper_across_queries(self):
         """Same paper appearing in multiple queries is counted only once."""
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         monitor._client = MagicMock()
@@ -345,7 +343,6 @@ class TestDeduplicatesAcrossQueries:
             [["Google DeepMind"]],
             arxiv_id="2401.00001",
         )
-        # Same paper returned by two different queries
         monitor._client.search_papers.side_effect = [
             make_search_response([paper]),
             make_search_response([paper]),
@@ -359,13 +356,12 @@ class TestDeduplicatesAcrossQueries:
             ):
                 result = monitor.scan(lookback_days=7)
 
-        # Google DeepMind → Google; 1 unique paper → WEAK signal
         assert result.total_after_dedup == 1
         assert result.signals_found[0].company_name == "Google"
 
     def test_same_company_multiple_papers_different_queries(self):
         """Same company papers from different queries are grouped and scored together."""
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         monitor._client = MagicMock()
@@ -388,7 +384,6 @@ class TestDeduplicatesAcrossQueries:
             ):
                 result = monitor.scan(lookback_days=7)
 
-        # 4 papers from Meta AI → STRONG
         assert result.total_after_dedup == 1
         assert result.signals_found[0].signal_strength == SignalStrength.STRONG
 
@@ -396,7 +391,7 @@ class TestDeduplicatesAcrossQueries:
 class TestHandlesMissingAffiliations:
     def test_handles_missing_affiliations(self):
         """Papers with no affiliations are skipped."""
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         monitor._client = MagicMock()
@@ -412,7 +407,7 @@ class TestHandlesMissingAffiliations:
 
     def test_handles_authors_without_affiliations_key(self):
         """Authors missing 'affiliations' key entirely are skipped gracefully."""
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         monitor._client = MagicMock()
@@ -430,13 +425,12 @@ class TestHandlesMissingAffiliations:
         with patch.object(monitor, "_is_recent", return_value=True):
             result = monitor.scan(lookback_days=7)
 
-        # Should not raise; paper with no affiliation skipped
         assert result.total_after_dedup == 0
 
 
 class TestMetadataContainsPaperTitles:
     def test_metadata_contains_paper_titles(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         monitor._client = MagicMock()
@@ -445,7 +439,7 @@ class TestMetadataContainsPaperTitles:
         monitor._client.search_papers.return_value = make_search_response([paper])
 
         with patch.object(monitor, "_is_recent", return_value=True):
-            result = monitor.scan(lookback_days=7)
+            result = monitor.scan_with_queries(["test query"], lookback_days=7)
 
         assert len(result.signals_found) == 1
         signal = result.signals_found[0]
@@ -453,7 +447,7 @@ class TestMetadataContainsPaperTitles:
         assert "Deep RL for Games" in signal.metadata["paper_titles"]
 
     def test_metadata_contains_paper_ids(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         monitor._client = MagicMock()
@@ -462,14 +456,14 @@ class TestMetadataContainsPaperTitles:
         monitor._client.search_papers.return_value = make_search_response([paper])
 
         with patch.object(monitor, "_is_recent", return_value=True):
-            result = monitor.scan(lookback_days=7)
+            result = monitor.scan_with_queries(["test query"], lookback_days=7)
 
         signal = result.signals_found[0]
         assert "paper_ids" in signal.metadata
         assert len(signal.metadata["paper_ids"]) > 0
 
     def test_metadata_contains_author_names(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         monitor._client = MagicMock()
@@ -485,14 +479,14 @@ class TestMetadataContainsPaperTitles:
         monitor._client.search_papers.return_value = make_search_response([paper])
 
         with patch.object(monitor, "_is_recent", return_value=True):
-            result = monitor.scan(lookback_days=7)
+            result = monitor.scan_with_queries(["test query"], lookback_days=7)
 
         signal = result.signals_found[0]
         assert "author_names" in signal.metadata
         assert "Alice Smith" in signal.metadata["author_names"]
 
     def test_metadata_contains_paper_count(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         monitor._client = MagicMock()
@@ -501,7 +495,7 @@ class TestMetadataContainsPaperTitles:
         monitor._client.search_papers.return_value = make_search_response([paper])
 
         with patch.object(monitor, "_is_recent", return_value=True):
-            result = monitor.scan(lookback_days=7)
+            result = monitor.scan_with_queries(["test query"], lookback_days=7)
 
         signal = result.signals_found[0]
         assert "paper_count" in signal.metadata
@@ -510,20 +504,18 @@ class TestMetadataContainsPaperTitles:
 
 class TestWorksWithoutApiKey:
     def test_scan_works_without_api_key(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
         from scripts.config import AppConfig
 
         config = AppConfig(semantic_scholar_key=None)
         monitor = ArxivRLMonitor(config=config)
 
-        # No auth headers should be set
         assert "x-api-key" not in monitor._client._session.headers
 
     def test_monitor_initializes_without_config(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
-        # Should not raise even without explicit config
-        with patch("scripts.arxiv_monitor.get_config") as mock_get_config:
+        with patch("scripts.scanners.arxiv_scanner.get_config") as mock_get_config:
             mock_get_config.return_value = MagicMock(semantic_scholar_key=None)
             monitor = ArxivRLMonitor()
             assert monitor is not None
@@ -531,7 +523,7 @@ class TestWorksWithoutApiKey:
 
 class TestHandlesEmptyResults:
     def test_handles_empty_api_response(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         monitor._client = MagicMock()
@@ -543,7 +535,7 @@ class TestHandlesEmptyResults:
         assert result.signals_found == []
 
     def test_handles_missing_data_key(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         monitor._client = MagicMock()
@@ -555,7 +547,7 @@ class TestHandlesEmptyResults:
 
     def test_handles_api_error_gracefully(self):
         """If search_papers raises, the query is skipped, scan continues."""
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
         from scripts.api_client import APIError
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
@@ -577,7 +569,7 @@ class TestHandlesEmptyResults:
 
 class TestIsRecent:
     def test_is_recent_returns_true_for_current_year(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         current_year = datetime.now(UTC).year
@@ -585,14 +577,14 @@ class TestIsRecent:
         assert monitor._is_recent(paper, lookback_days=365) is True
 
     def test_is_recent_returns_false_for_old_paper(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         paper = {"year": 2010, "title": "Old Paper"}
         assert monitor._is_recent(paper, lookback_days=7) is False
 
     def test_is_recent_returns_false_when_year_missing(self):
-        from scripts.arxiv_monitor import ArxivRLMonitor
+        from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
         paper = {"title": "No Year Paper"}
@@ -601,10 +593,10 @@ class TestIsRecent:
 
 class TestCLIOutput:
     def test_cli_output_prints_summary(self, capsys):
-        from scripts.arxiv_monitor import main
+        from scripts.scanners.arxiv_scanner import main
 
         mock_result = ScanResult(
-            scan_type=SignalType.ARXIV_PAPER,
+            scan_type="arxiv_paper",
             started_at=datetime.now(UTC),
             completed_at=datetime.now(UTC),
             signals_found=[],
@@ -612,19 +604,24 @@ class TestCLIOutput:
             total_after_dedup=0,
         )
 
-        with patch("scripts.arxiv_monitor.ArxivRLMonitor") as MockMonitor:
-            mock_instance = MockMonitor.return_value
-            mock_instance.scan.return_value = mock_result
-            main(["--lookback-days", "7"])
+        with patch("scripts.scanners.arxiv_scanner.scan") as mock_scan:
+            mock_scan.return_value = mock_result
+            with patch("scripts.config_loader.load_config") as mock_load:
+                mock_sf_config = MagicMock()
+                mock_sf_config.scanners.get.return_value = MagicMock(
+                    lookback_days=7, queries=[]
+                )
+                mock_load.return_value = mock_sf_config
+                main(["--lookback-days", "7"])
 
         captured = capsys.readouterr()
         assert "0" in captured.out
 
     def test_cli_with_min_strength_filters(self, capsys):
-        from scripts.arxiv_monitor import main
+        from scripts.scanners.arxiv_scanner import main
 
         weak_signal = Signal(
-            signal_type=SignalType.ARXIV_PAPER,
+            signal_type="arxiv_paper",
             company_name="WeakCo",
             signal_strength=SignalStrength.WEAK,
             source_url="https://arxiv.org/abs/2401.00001",
@@ -638,7 +635,7 @@ class TestCLIOutput:
         )
 
         mock_result = ScanResult(
-            scan_type=SignalType.ARXIV_PAPER,
+            scan_type="arxiv_paper",
             started_at=datetime.now(UTC),
             completed_at=datetime.now(UTC),
             signals_found=[weak_signal],
@@ -646,19 +643,24 @@ class TestCLIOutput:
             total_after_dedup=1,
         )
 
-        with patch("scripts.arxiv_monitor.ArxivRLMonitor") as MockMonitor:
-            mock_instance = MockMonitor.return_value
-            mock_instance.scan.return_value = mock_result
-            main(["--lookback-days", "7", "--min-strength", "2"])
+        with patch("scripts.scanners.arxiv_scanner.scan") as mock_scan:
+            mock_scan.return_value = mock_result
+            with patch("scripts.config_loader.load_config") as mock_load:
+                mock_sf_config = MagicMock()
+                mock_sf_config.scanners.get.return_value = MagicMock(
+                    lookback_days=7, queries=[]
+                )
+                mock_load.return_value = mock_sf_config
+                main(["--lookback-days", "7", "--min-strength", "2"])
 
         captured = capsys.readouterr()
         assert "0" in captured.out
 
     def test_cli_with_output_file(self, capsys, tmp_path):
-        from scripts.arxiv_monitor import main
+        from scripts.scanners.arxiv_scanner import main
 
         strong_signal = Signal(
-            signal_type=SignalType.ARXIV_PAPER,
+            signal_type="arxiv_paper",
             company_name="StrongCo",
             signal_strength=SignalStrength.STRONG,
             source_url="https://arxiv.org/abs/2401.00099",
@@ -672,7 +674,7 @@ class TestCLIOutput:
         )
 
         mock_result = ScanResult(
-            scan_type=SignalType.ARXIV_PAPER,
+            scan_type="arxiv_paper",
             started_at=datetime.now(UTC),
             completed_at=datetime.now(UTC),
             signals_found=[strong_signal],
@@ -682,10 +684,15 @@ class TestCLIOutput:
 
         output_file = tmp_path / "output.json"
 
-        with patch("scripts.arxiv_monitor.ArxivRLMonitor") as MockMonitor:
-            mock_instance = MockMonitor.return_value
-            mock_instance.scan.return_value = mock_result
-            main(["--lookback-days", "7", "--output", str(output_file)])
+        with patch("scripts.scanners.arxiv_scanner.scan") as mock_scan:
+            mock_scan.return_value = mock_result
+            with patch("scripts.config_loader.load_config") as mock_load:
+                mock_sf_config = MagicMock()
+                mock_sf_config.scanners.get.return_value = MagicMock(
+                    lookback_days=7, queries=[]
+                )
+                mock_load.return_value = mock_sf_config
+                main(["--lookback-days", "7", "--output", str(output_file)])
 
         assert output_file.exists()
         with open(output_file) as f:
@@ -696,10 +703,10 @@ class TestCLIOutput:
         assert "Results written to" in captured.out
 
     def test_cli_prints_signal_details_for_strong_signals(self, capsys):
-        from scripts.arxiv_monitor import main
+        from scripts.scanners.arxiv_scanner import main
 
         strong_signal = Signal(
-            signal_type=SignalType.ARXIV_PAPER,
+            signal_type="arxiv_paper",
             company_name="MegaCorp",
             signal_strength=SignalStrength.STRONG,
             source_url="https://arxiv.org/abs/2401.00099",
@@ -713,7 +720,7 @@ class TestCLIOutput:
         )
 
         mock_result = ScanResult(
-            scan_type=SignalType.ARXIV_PAPER,
+            scan_type="arxiv_paper",
             started_at=datetime.now(UTC),
             completed_at=datetime.now(UTC),
             signals_found=[strong_signal],
@@ -721,10 +728,15 @@ class TestCLIOutput:
             total_after_dedup=1,
         )
 
-        with patch("scripts.arxiv_monitor.ArxivRLMonitor") as MockMonitor:
-            mock_instance = MockMonitor.return_value
-            mock_instance.scan.return_value = mock_result
-            main(["--lookback-days", "7"])
+        with patch("scripts.scanners.arxiv_scanner.scan") as mock_scan:
+            mock_scan.return_value = mock_result
+            with patch("scripts.config_loader.load_config") as mock_load:
+                mock_sf_config = MagicMock()
+                mock_sf_config.scanners.get.return_value = MagicMock(
+                    lookback_days=7, queries=[]
+                )
+                mock_load.return_value = mock_sf_config
+                main(["--lookback-days", "7"])
 
         captured = capsys.readouterr()
         assert "MegaCorp" in captured.out
