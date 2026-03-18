@@ -1,4 +1,4 @@
-"""Core Pydantic data models for the RL GTM pipeline.
+"""Core Pydantic data models for the SignalForce GTM pipeline.
 
 These models define the shape of data flowing between all pipeline components:
     scanners → researcher → contact finder → email writer → pipeline tracker
@@ -12,21 +12,12 @@ from datetime import datetime, UTC
 from enum import Enum, IntEnum
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator, Field
+from pydantic import BaseModel, ConfigDict, field_validator, Field
 
 
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
-
-
-class SignalType(str, Enum):
-    GITHUB_RL_REPO = "GITHUB_RL_REPO"
-    ARXIV_PAPER = "ARXIV_PAPER"
-    JOB_POSTING = "JOB_POSTING"
-    HUGGINGFACE_MODEL = "HUGGINGFACE_MODEL"
-    FUNDING_EVENT = "FUNDING_EVENT"
-    LINKEDIN_ACTIVITY = "LINKEDIN_ACTIVITY"
 
 
 class SignalStrength(IntEnum):
@@ -35,35 +26,11 @@ class SignalStrength(IntEnum):
     STRONG = 3
 
 
-class ICPTier(str, Enum):
-    TIER_1_AI_LAB = "TIER_1_AI_LAB"
-    TIER_2_AGENT_BUILDER = "TIER_2_AGENT_BUILDER"
-    TIER_3_ROBOTICS = "TIER_3_ROBOTICS"
-    TIER_4_INDUSTRY = "TIER_4_INDUSTRY"
-
-
 class ICPScore(str, Enum):
     A = "A"
     B = "B"
     C = "C"
     D = "D"
-
-
-class RLMaturityStage(str, Enum):
-    EXPLORING = "EXPLORING"
-    BUILDING = "BUILDING"
-    SCALING = "SCALING"
-    PRODUCTIONIZING = "PRODUCTIONIZING"
-
-
-class ContactTitle(str, Enum):
-    HEAD_OF_ML = "HEAD_OF_ML"
-    VP_AI = "VP_AI"
-    PRINCIPAL_ML_ENGINEER = "PRINCIPAL_ML_ENGINEER"
-    VP_ENGINEERING = "VP_ENGINEERING"
-    CTO = "CTO"
-    RL_ENGINEER = "RL_ENGINEER"
-    OTHER = "OTHER"
 
 
 class EnrichmentSource(str, Enum):
@@ -122,12 +89,12 @@ class SequenceStep(BaseModel):
 
 
 class Signal(BaseModel):
-    """A detected market signal indicating RL adoption or intent."""
+    """A detected market signal indicating buyer intent or activity."""
 
     model_config = ConfigDict(frozen=True)
 
     id: str = Field(default_factory=lambda: str(uuid4()))
-    signal_type: SignalType
+    signal_type: str
     company_name: str
     company_domain: str | None = None
     signal_strength: SignalStrength
@@ -135,15 +102,6 @@ class Signal(BaseModel):
     raw_data: dict
     detected_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     metadata: dict = Field(default_factory=dict)
-
-    @model_validator(mode="after")
-    def validate_github_metadata(self) -> "Signal":
-        if self.signal_type == SignalType.GITHUB_RL_REPO:
-            if "repo_name" not in self.metadata:
-                raise ValueError(
-                    "Signal with type GITHUB_RL_REPO must include 'repo_name' in metadata"
-                )
-        return self
 
 
 # ---------------------------------------------------------------------------
@@ -158,9 +116,9 @@ class CompanyProfile(BaseModel):
 
     company_name: str
     domain: str
-    icp_tier: ICPTier | None = None
+    icp_tier: str | None = None
     icp_score: ICPScore | None = None
-    rl_maturity: RLMaturityStage | None = None
+    maturity_stage: str | None = None
     employee_count: int | None = None
     funding_stage: str | None = None
     founded_year: int | None = None
@@ -185,7 +143,7 @@ class Contact(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     full_name: str
     title: str
-    title_category: ContactTitle
+    title_category: str
     email: str | None = None
     email_verified: bool = False
     email_verification_source: str | None = None
@@ -215,7 +173,7 @@ class GeneratedEmail(BaseModel):
 
     id: str = Field(default_factory=lambda: str(uuid4()))
     contact_id: str
-    signal_type: SignalType
+    signal_type: str
     signal_reference: str
     subject_line: str
     body: str
@@ -258,7 +216,7 @@ class ScanResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     scan_id: str = Field(default_factory=lambda: str(uuid4()))
-    scan_type: SignalType
+    scan_type: str
     started_at: datetime
     completed_at: datetime
     signals_found: list[Signal]
