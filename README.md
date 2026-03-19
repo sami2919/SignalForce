@@ -261,6 +261,41 @@ The scanner runner picks it up automatically — works in both Claude Code skill
 
 ---
 
+## Start Free, Scale When Ready
+
+You don't need to pay for anything to start finding target accounts. Add paid tools incrementally as you scale.
+
+**$0/month — Signal detection + account research:**
+| What you get | Tool | Cost |
+|---|---|---|
+| GitHub repo scanning | GitHub API | Free (personal access token) |
+| Research paper tracking | Semantic Scholar | Free (rate-limited) |
+| Model upload detection | HuggingFace Hub | Free (public API) |
+| Intent scoring + ranking | SignalForce engine | Free (open source) |
+| ICP config + skills | Claude Code | Free ([Claude Code](https://docs.anthropic.com/en/docs/claude-code) is free to use) |
+
+This gives you: ranked target accounts with real buying signals, ICP scoring, and the full skill-based research workflow. You can look up contacts manually on LinkedIn and send emails from your own inbox.
+
+**~$60/month — Add email sequencing:**
+| What you add | Tool | Cost |
+|---|---|---|
+| Automated email sequences | Instantly.ai | $37/mo |
+| CRM deal tracking | HubSpot | Free tier |
+| Workflow automation | n8n (self-hosted) | Free |
+| Email copy generation | Claude API | ~$10-20/mo |
+
+**~$200/month — Full automation:**
+| What you add | Tool | Cost |
+|---|---|---|
+| Contact enrichment | Apollo.io | $49/mo (or free tier: 50/mo) |
+| Email verification | ZeroBounce | $16/mo |
+| Backup enrichment | Hunter.io / Prospeo | ~$50/mo |
+| n8n Cloud (no self-hosting) | n8n | $24/mo |
+
+Start with the free tier. Run `/signal-scanner` and `/prospect-researcher` for a week. If the signals are good, add Instantly for sequencing. Add enrichment APIs when manual contact lookup becomes the bottleneck.
+
+---
+
 ## Results
 
 Target metrics at steady state (Month 3):
