@@ -132,7 +132,9 @@ if __name__ == "__main__":  # pragma: no cover
     config = load_config()
     scorer = IntentScorer(config)
     print("IntentScorer — Gojiberry formula demo")
-    print(f"COMBINED = (ICP_Fit × {config.scoring.icp_weight}) + (Intent × {config.scoring.intent_weight})")
+    print(
+        f"COMBINED = (ICP_Fit × {config.scoring.icp_weight}) + (Intent × {config.scoring.intent_weight})"
+    )
     print()
     print("Intent weights:")
     for st, w in config.scoring.intent_weights.items():

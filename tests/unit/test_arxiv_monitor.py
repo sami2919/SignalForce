@@ -608,9 +608,7 @@ class TestCLIOutput:
             mock_scan.return_value = mock_result
             with patch("scripts.config_loader.load_config") as mock_load:
                 mock_sf_config = MagicMock()
-                mock_sf_config.scanners.get.return_value = MagicMock(
-                    lookback_days=7, queries=[]
-                )
+                mock_sf_config.scanners.get.return_value = MagicMock(lookback_days=7, queries=[])
                 mock_load.return_value = mock_sf_config
                 main(["--lookback-days", "7"])
 
@@ -647,9 +645,7 @@ class TestCLIOutput:
             mock_scan.return_value = mock_result
             with patch("scripts.config_loader.load_config") as mock_load:
                 mock_sf_config = MagicMock()
-                mock_sf_config.scanners.get.return_value = MagicMock(
-                    lookback_days=7, queries=[]
-                )
+                mock_sf_config.scanners.get.return_value = MagicMock(lookback_days=7, queries=[])
                 mock_load.return_value = mock_sf_config
                 main(["--lookback-days", "7", "--min-strength", "2"])
 
@@ -688,9 +684,7 @@ class TestCLIOutput:
             mock_scan.return_value = mock_result
             with patch("scripts.config_loader.load_config") as mock_load:
                 mock_sf_config = MagicMock()
-                mock_sf_config.scanners.get.return_value = MagicMock(
-                    lookback_days=7, queries=[]
-                )
+                mock_sf_config.scanners.get.return_value = MagicMock(lookback_days=7, queries=[])
                 mock_load.return_value = mock_sf_config
                 main(["--lookback-days", "7", "--output", str(output_file)])
 
@@ -732,9 +726,7 @@ class TestCLIOutput:
             mock_scan.return_value = mock_result
             with patch("scripts.config_loader.load_config") as mock_load:
                 mock_sf_config = MagicMock()
-                mock_sf_config.scanners.get.return_value = MagicMock(
-                    lookback_days=7, queries=[]
-                )
+                mock_sf_config.scanners.get.return_value = MagicMock(lookback_days=7, queries=[])
                 mock_load.return_value = mock_sf_config
                 main(["--lookback-days", "7"])
 

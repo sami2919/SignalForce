@@ -76,7 +76,9 @@ class TestIntentWeights:
     def test_unknown_signal_type_uses_fallback_weight(self):
         scorer = IntentScorer(_CONFIG)
         now = datetime.now(UTC)
-        signal = make_signal(signal_type="unknown_type", strength=SignalStrength.MODERATE, age_days=0)
+        signal = make_signal(
+            signal_type="unknown_type", strength=SignalStrength.MODERATE, age_days=0
+        )
         score = scorer.calculate_intent_score([signal], now=now)
         # fallback weight = 1.0, MODERATE=2, decay≈1, breadth=1 → 2.0
         assert score == pytest.approx(2.0)
@@ -109,12 +111,8 @@ class TestCalculateIntentScore:
 
     def test_stale_signal_scores_lower_than_fresh(self):
         now = datetime.now(UTC)
-        fresh = make_signal(
-            signal_type="github", strength=SignalStrength.STRONG, age_days=0
-        )
-        stale = make_signal(
-            signal_type="github", strength=SignalStrength.STRONG, age_days=30
-        )
+        fresh = make_signal(signal_type="github", strength=SignalStrength.STRONG, age_days=0)
+        stale = make_signal(signal_type="github", strength=SignalStrength.STRONG, age_days=30)
 
         fresh_score = self.scorer.calculate_intent_score([fresh], now=now)
         stale_score = self.scorer.calculate_intent_score([stale], now=now)
@@ -125,9 +123,7 @@ class TestCalculateIntentScore:
         """Signal at 6× half-life should be < 2% of original strength."""
         now = datetime.now(UTC)
         # github half-life = 5 days (from sample_config); 30 days = 6 half-lives → decay ≈ 2^-6 ≈ 0.0156
-        signal = make_signal(
-            signal_type="github", strength=SignalStrength.STRONG, age_days=30
-        )
+        signal = make_signal(signal_type="github", strength=SignalStrength.STRONG, age_days=30)
         score = self.scorer.calculate_intent_score([signal], now=now)
         max_possible = (
             int(SignalStrength.STRONG) * _CONFIG.scoring.intent_weights["github"] * 1.0
@@ -137,15 +133,9 @@ class TestCalculateIntentScore:
     def test_multi_source_gets_breadth_bonus(self):
         """Two different signal types should score higher than two identical types."""
         now = datetime.now(UTC)
-        signal_a = make_signal(
-            signal_type="github", strength=SignalStrength.MODERATE, age_days=0
-        )
-        signal_b = make_signal(
-            signal_type="arxiv", strength=SignalStrength.MODERATE, age_days=0
-        )
-        signal_dup = make_signal(
-            signal_type="github", strength=SignalStrength.MODERATE, age_days=0
-        )
+        signal_a = make_signal(signal_type="github", strength=SignalStrength.MODERATE, age_days=0)
+        signal_b = make_signal(signal_type="arxiv", strength=SignalStrength.MODERATE, age_days=0)
+        signal_dup = make_signal(signal_type="github", strength=SignalStrength.MODERATE, age_days=0)
 
         multi_source_score = self.scorer.calculate_intent_score([signal_a, signal_b], now=now)
         single_source_score = self.scorer.calculate_intent_score([signal_a, signal_dup], now=now)
@@ -154,15 +144,9 @@ class TestCalculateIntentScore:
 
     def test_three_source_types_higher_than_two(self):
         now = datetime.now(UTC)
-        s1 = make_signal(
-            signal_type="github", strength=SignalStrength.MODERATE, age_days=0
-        )
-        s2 = make_signal(
-            signal_type="arxiv", strength=SignalStrength.MODERATE, age_days=0
-        )
-        s3 = make_signal(
-            signal_type="job_posting", strength=SignalStrength.MODERATE, age_days=0
-        )
+        s1 = make_signal(signal_type="github", strength=SignalStrength.MODERATE, age_days=0)
+        s2 = make_signal(signal_type="arxiv", strength=SignalStrength.MODERATE, age_days=0)
+        s3 = make_signal(signal_type="job_posting", strength=SignalStrength.MODERATE, age_days=0)
 
         three_type_score = self.scorer.calculate_intent_score([s1, s2, s3], now=now)
         two_type_score = self.scorer.calculate_intent_score([s1, s2], now=now)
@@ -240,7 +224,9 @@ class TestCalculateCombinedScore:
         icp_fit = 7.5
         intent_score = 4.2
         expected = (icp_fit * 0.4) + (intent_score * 0.6)
-        assert self.scorer.calculate_combined_score(icp_fit, intent_score) == pytest.approx(expected)
+        assert self.scorer.calculate_combined_score(icp_fit, intent_score) == pytest.approx(
+            expected
+        )
 
 
 # ---------------------------------------------------------------------------

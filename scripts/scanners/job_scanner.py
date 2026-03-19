@@ -20,7 +20,6 @@ from collections import defaultdict
 from datetime import datetime, UTC
 
 from scripts.api_client import BaseAPIClient
-from scripts.config import get_config
 from scripts.scanners.base import ScannerConfig, ScanResult, Signal, SignalStrength
 
 logger = logging.getLogger(__name__)

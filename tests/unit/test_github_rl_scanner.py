@@ -7,12 +7,12 @@ No real API calls are made.
 from __future__ import annotations
 
 import json
-from datetime import datetime, UTC
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 
-from scripts.models import SignalStrength, ScanResult, Signal
+from scripts.models import SignalStrength, ScanResult
 from scripts.scanners.github_scanner import (
     GitHubClient,
     _build_search_queries,
@@ -170,9 +170,7 @@ class TestFiltersPersonalRepos:
             mock_get_config.return_value = MagicMock(github_token="fake")
             with patch("scripts.scanners.github_scanner.GitHubClient") as MockClient:
                 mock_client = MockClient.return_value
-                mock_client.search_repos.return_value = make_search_response(
-                    [org_repo, user_repo]
-                )
+                mock_client.search_repos.return_value = make_search_response([org_repo, user_repo])
                 result = scan(config)
 
         assert result.total_after_dedup == 1
@@ -189,9 +187,7 @@ class TestFiltersPersonalRepos:
 
 class TestDeduplicatesSameOrg:
     def test_deduplicates_same_org_found_via_multiple_queries(self):
-        config = make_scanner_config(
-            topics=["reinforcement-learning", "rlhf"], libraries=[]
-        )
+        config = make_scanner_config(topics=["reinforcement-learning", "rlhf"], libraries=[])
         repo1 = make_org_repo("acme-ai", "rl-agent", repo_id=1)
         repo2 = make_org_repo("acme-ai", "rl-env", repo_id=2)
 
@@ -211,9 +207,7 @@ class TestDeduplicatesSameOrg:
 
     def test_dedup_keeps_highest_score(self):
         """Org found via 2 queries with different repo counts → keep highest score."""
-        config = make_scanner_config(
-            topics=["reinforcement-learning", "rl"], libraries=[]
-        )
+        config = make_scanner_config(topics=["reinforcement-learning", "rl"], libraries=[])
         repo1 = make_org_repo("acme-ai", "rl-agent", repo_id=1)
         repos_strong = [make_org_repo("acme-ai", f"repo-{i}", repo_id=10 + i) for i in range(4)]
 

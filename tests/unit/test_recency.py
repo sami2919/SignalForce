@@ -63,5 +63,3 @@ class TestApplyRecencyWeight:
         now = datetime.now(UTC)
         result = apply_recency_weight(signal_strength=2, signal_time=now, now=now, half_life_days=5)
         assert result == pytest.approx(2.0)
-
-
