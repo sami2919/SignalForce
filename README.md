@@ -1,37 +1,63 @@
 # SignalForce
 
-> Signal-based outbound sales engine — configure for any ICP
+> Signal-based outbound sales engine — configure for any ICP in under 5 minutes
 
-![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue) ![License MIT](https://img.shields.io/badge/license-MIT-green) ![Tests](https://img.shields.io/badge/tests-pytest-brightgreen)
-
----
-
-SignalForce continuously monitors public signal sources — GitHub commits, ArXiv papers, Hugging Face model uploads, job postings, and funding announcements — to identify companies that are actively investing in your target domain right now. When a strong signal is detected, the pipeline enriches contacts, generates technically credible outreach personalized to that specific signal, and enrolls the contact in a sequenced campaign. Every email references the prospect's actual work, sent at the moment they are most likely to be thinking about the problem you solve.
-
-The engine runs autonomously via n8n workflows on a daily schedule. Claude Code skills are available for human-in-the-loop research, review, and copy generation at any step.
+![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue) ![License MIT](https://img.shields.io/badge/license-MIT-green) ![Tests 448 passing](https://img.shields.io/badge/tests-448%20passing-brightgreen) ![Coverage 91%](https://img.shields.io/badge/coverage-91%25-brightgreen)
 
 ---
 
-## 30-Second Quickstart
+**Stop sending cold emails nobody reads.** SignalForce finds companies that are actively investing in your domain *right now* — by monitoring GitHub repos, ArXiv papers, HuggingFace model uploads, job postings, funding announcements, and LinkedIn activity — then generates technically credible outreach that references the prospect's actual work, timed to the moment they're thinking about the problem you solve.
+
+**For any vertical.** Whether you sell RL infrastructure, cybersecurity tools, data pipelines, or developer platforms — configure your ICP once and the engine handles the rest. Ships with 4 ready-to-use example configs.
+
+**Two modes.** Run it hands-on with Claude Code skills (research, review, and refine at every step) or fully autonomous via n8n workflows on a daily schedule.
+
+---
+
+## Get Running in 2 Minutes
 
 ```bash
-git clone https://github.com/your-org/SignalForce.git
+# 1. Clone and install
+git clone https://github.com/sami2919/SignalForce.git
 cd SignalForce
 pip install -e ".[dev]"
 
-# Option 1: Use the setup wizard in Claude Code
-# /setup
-
-# Option 2: Copy an example config for your vertical
+# 2. Configure your ICP (pick one):
+#    Option A — Setup wizard (recommended):
+#    Open Claude Code and run /setup
+#    It asks what you sell and who you sell to, then generates everything.
+#
+#    Option B — Copy an example config for your vertical:
 cp -r examples/rl-infrastructure/ config/
+#    (also available: examples/cybersecurity/, examples/devtools/, examples/data-infra/)
 
-# Fill in your API keys
+# 3. Add your API keys
 cp .env.example .env
-# edit .env with your keys, then:
-pytest --tb=short -q   # verify everything works
+# Edit .env with your GitHub token (required) + other API keys (optional)
+
+# 4. Verify
+pytest --tb=short -q   # 448 tests, should all pass
 ```
 
-Open Claude Code and run `/signal-scanner` to find your first accounts.
+Open Claude Code and run `/signal-scanner` to find your first target accounts.
+
+---
+
+## Your Weekly Workflow
+
+Here's what a typical week looks like using SignalForce:
+
+| When | What | Skill |
+|------|------|-------|
+| **Monday morning** | Scan for new signals across all sources | `/signal-scanner` |
+| **Monday** | Research top 10 A-tier accounts | `/prospect-researcher` |
+| **Tuesday** | Find verified contacts at qualified accounts | `/contact-finder` |
+| **Tuesday** | Generate personalized outreach sequences | `/email-writer` or `/resource-offer` |
+| **Wednesday** | Add LinkedIn touches to high-priority prospects | `/multi-channel-writer` |
+| **Thursday** | Follow up on meetings from the week | `/meeting-followup` |
+| **Friday** | Review pipeline metrics, plan next week | `/pipeline-tracker` |
+
+Or set up the n8n workflows and let it run autonomously — signals detected at 7am, contacts enriched by 8am, sequences launched by 9am, every day.
 
 ---
 
@@ -128,25 +154,46 @@ config/               # gitignored — your active config
 `config.yaml` controls what the scanners look for:
 
 ```yaml
-project:
+company:
   name: "My Company"
-  domain: "mycompany.com"
+  product: "What you sell in one line"
+  category: "Your market category"
 
 icp:
   tiers:
     - name: "Tier 1 — Enterprise"
+      description: "Large orgs with dedicated teams"
       signals: ["large team", "Series B+"]
     - name: "Tier 2 — Mid-Market"
+      description: "Growing companies building capability"
       signals: ["growing team", "Series A"]
+  maturity_stages: ["EXPLORING", "BUILDING", "SCALING", "EMBEDDED"]
+  target_titles: ["Head of Platform", "Staff Engineer", "VP Engineering"]
 
 scanners:
   github:
-    keywords: ["your-domain-keyword", "related-library"]
-    min_stars: 10
+    enabled: true
+    module: scripts.scanners.github_scanner
+    keywords: ["your-domain-keyword"]
+    topics: ["your-github-topic"]
+    libraries: ["key-library-1", "key-library-2"]
   arxiv:
-    keywords: ["your research area"]
+    enabled: true
+    module: scripts.scanners.arxiv_scanner
+    queries: ["your research area", "related technique"]
   jobs:
-    titles: ["Head of Platform", "Staff Engineer"]
+    enabled: true
+    module: scripts.scanners.job_scanner
+    titles: ["Your Target Role 1", "Your Target Role 2"]
+    skills: ["key-skill-1", "key-skill-2"]
+
+scoring:
+  intent_weights:   # higher = stronger buying signal
+    github: 2.5
+    arxiv: 3.0
+    jobs: 2.0
+    funding: 1.5
+    linkedin: 3.0
 ```
 
 `gtm-context.md` is a natural-language file loaded by every skill — it tells Claude about your product, your ICP, your voice rules, and your disqualification criteria.
@@ -165,25 +212,35 @@ SignalForce ships with six built-in scanners. You can add your own by implementi
 
 ```python
 # scripts/scanners/my_scanner.py
-from scripts.models import ScanResult, ScannerConfig
+from datetime import datetime, UTC
+from scripts.scanners.base import ScannerConfig, ScanResult, Signal, SignalStrength
 
 def scan(config: ScannerConfig) -> ScanResult:
     """Fetch signals from your source and return typed results."""
+    started = datetime.now(UTC)
     signals = []
-    # ... your API calls here ...
-    return ScanResult(scanner="my_scanner", signals=signals)
+    # ... your API calls using config.keywords here ...
+    return ScanResult(
+        scan_type="my_signal_type",
+        started_at=started,
+        completed_at=datetime.now(UTC),
+        signals_found=signals,
+        total_raw_results=len(signals),
+        total_after_dedup=len(signals),
+    )
 ```
 
 Then register the module path in `config.yaml`:
 
 ```yaml
 scanners:
-  custom:
-    - module: "scripts.scanners.my_scanner"
-      enabled: true
+  my_source:
+    enabled: true
+    module: scripts.scanners.my_scanner
+    keywords: ["what-to-search-for"]
 ```
 
-The scanner will be picked up by `scanner_runner.py` and included in the daily n8n scan automatically.
+The scanner runner picks it up automatically — works in both Claude Code skills and n8n workflows.
 
 ---
 
