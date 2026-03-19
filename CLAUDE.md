@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-SignalForce is an open-source collection of Claude Code agent skills and n8n workflows for signal-based outbound sales targeting reinforcement learning infrastructure buyers.
+SignalForce is an open-source collection of Claude Code agent skills and n8n workflows for signal-based outbound sales. Configure it for any ICP by editing `config/config.yaml` and `config/gtm-context.md`.
 
 **Three-layer architecture:**
 - **Skills** (`skills/*/SKILL.md`) — Claude Code instruction files. The primary user interface. Each skill tells Claude how to perform a GTM task.
@@ -12,9 +12,12 @@ SignalForce is an open-source collection of Claude Code agent skills and n8n wor
 ## Directory Structure
 
 ```
-.agents/          — Shared context files loaded by all skills (ICP, voice, positioning)
-skills/           — Claude Code SKILL.md files (8 skills)
+config/           — Your active ICP config (gitignored; copy from examples/ or run /setup)
+config.example/   — Annotated reference config (committed; documents all config options)
+examples/         — Pre-built ICP configs for four verticals (rl-infrastructure, cybersecurity, data-infra, devtools)
+skills/           — Claude Code SKILL.md files (13 skills)
 scripts/          — Python modules for API interactions and data processing
+scripts/scanners/ — Per-source scanner modules (github_scanner, arxiv_scanner, etc.)
 n8n-workflows/    — JSON workflow definitions for n8n automation
 templates/        — Reusable email sequences and scoring rubrics
 docs/             — Architecture, setup guide, cost analysis, results framework
@@ -40,7 +43,8 @@ tasks/            — Current work tracking (todo.md, lessons.md)
 ### Environment Variables
 - All API keys loaded via `python-dotenv` from `.env`. Never hardcode secrets.
 - `.env.example` documents all variables (no real values).
-- `scripts/config.py` centralizes all config loading and validation.
+- `scripts/config.py` centralizes API key loading and validation (env vars only).
+- `scripts/config_loader.py` loads the ICP config from `config/config.yaml` (separate from env vars).
 
 ### Skills
 - Follow `superpowers:writing-skills` format. YAML frontmatter with `name` and `description` only.
@@ -65,8 +69,11 @@ ruff format .
 # Lint
 ruff check . --fix
 
-# Run a scanner
-python -m scripts.github_rl_scanner --lookback-days 7 --output /tmp/signals.json
+# Run all configured scanners via runner
+python -m scripts.scanner_runner --lookback-days 7 --output /tmp/signals/
+
+# Run a specific scanner directly
+python -m scripts.scanners.github_scanner --lookback-days 7 --output /tmp/github.json
 
 # Run signal stacker
 python -m scripts.signal_stacker --inputs scan1.json scan2.json --output stacked.json
@@ -74,9 +81,13 @@ python -m scripts.signal_stacker --inputs scan1.json scan2.json --output stacked
 
 ## Key Files
 
-- `.agents/gtm-context.md` — ICP definitions, product positioning, voice/tone rules. Loaded by all skills.
+- `config/gtm-context.md` — Your active ICP definitions, product positioning, voice/tone rules. Loaded by all skills. (gitignored; copy from `config.example/` or `examples/`)
+- `config/config.yaml` — Scanner keywords, ICP tier definitions, scoring thresholds. (gitignored)
+- `config.example/` — Annotated reference showing all available config options.
 - `scripts/models.py` — Pydantic data models (Signal, CompanyProfile, Contact, Deal, etc.)
-- `scripts/config.py` — Environment variable loading and validation
+- `scripts/config.py` — API key env var loading and validation
+- `scripts/config_loader.py` — ICP config loading from `config/config.yaml`
+- `scripts/scanner_runner.py` — Discovers and runs all configured scanners
 - `scripts/api_client.py` — Base API client with retry/rate-limit handling
 - `templates/scoring-rubrics/icp-scoring-model.md` — Weighted ICP scoring criteria
 
@@ -84,9 +95,9 @@ python -m scripts.signal_stacker --inputs scan1.json scan2.json --output stacked
 
 | API | Purpose | Key Required |
 |-----|---------|-------------|
-| GitHub API | RL repo detection | Yes (GITHUB_TOKEN) |
-| Semantic Scholar | RL paper tracking | Optional (rate limited without) |
-| Hugging Face Hub | RL model uploads | No (public API) |
+| GitHub API | Repo detection (keywords from config.yaml) | Yes (GITHUB_TOKEN) |
+| Semantic Scholar | ArXiv paper author affiliation mapping | Optional (rate limited without) |
+| Hugging Face Hub | Model upload detection | No (public API) |
 | Apollo.io | Contact enrichment | Yes |
 | Hunter.io | Email pattern lookup | Yes |
 | Prospeo | LinkedIn email enrichment | Yes |

@@ -2,7 +2,7 @@
 
 ## System Overview
 
-SignalForce is a three-layer signal-based outbound GTM engine targeting reinforcement learning infrastructure buyers (Collinear AI's ICP). The three layers are intentionally decoupled:
+SignalForce is a three-layer signal-based outbound GTM engine that detects buying signals across public data sources and converts them into personalized outreach for your configured ICP. The three layers are intentionally decoupled:
 
 - **Skills** (`skills/*/SKILL.md`) — Claude Code instruction files that define *how* to perform GTM tasks. These are the primary user interface. Claude reads a skill and executes the workflow using the scripts as tools.
 - **Scripts** (`scripts/*.py`) — Python modules that interact with external APIs (GitHub, Semantic Scholar, HuggingFace, enrichment providers, CRM). Skills invoke these via CLI or as importable modules.
@@ -14,6 +14,13 @@ SignalForce is a three-layer signal-based outbound GTM engine targeting reinforc
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
+│                        CONFIG LOADER                             │
+│  config_loader.py reads config/config.yaml                       │
+│  Injects ICP keywords, tier definitions, scanner parameters      │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ ScannerConfig per scanner
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
 │                        SIGNAL SOURCES                            │
 │  GitHub Repos  ArXiv Papers  HF Models  Jobs  Funding  LinkedIn │
 └──────────────────────────┬──────────────────────────────────────┘
@@ -21,8 +28,9 @@ SignalForce is a three-layer signal-based outbound GTM engine targeting reinforc
                            ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                      PYTHON SCANNERS                             │
-│  github_rl_scanner  arxiv_monitor  hf_model_monitor             │
-│  job_posting_scanner  funding_tracker  linkedin_activity         │
+│  scanners.github_scanner  scanners.arxiv_scanner                 │
+│  scanners.hf_scanner  scanners.job_scanner                       │
+│  scanners.funding_scanner  scanners.linkedin_scanner             │
 │                   → Signal objects (JSON)                        │
 └──────────────────────────┬──────────────────────────────────────┘
                            │ ScanResult JSON files
@@ -252,18 +260,20 @@ Re-qualification reminder set if outcome is negative
 
 | Name | Type | Purpose | Inputs | Outputs |
 |------|------|---------|--------|---------|
-| `github_rl_scanner.py` | Scanner | Detect orgs with RL repos via GitHub Search API | `--lookback-days`, `--output` | `ScanResult` JSON |
-| `arxiv_monitor.py` | Scanner | Track RL paper authors and their affiliations | `--lookback-days`, `--output` | `ScanResult` JSON |
-| `hf_model_monitor.py` | Scanner | Find RL model uploads on HuggingFace Hub | `--lookback-days`, `--output` | `ScanResult` JSON |
-| `job_posting_scanner.py` | Scanner | Detect RL job postings at target companies | `--lookback-days`, `--output` | `ScanResult` JSON |
-| `funding_tracker.py` | Scanner | Find funding events at AI/RL companies | `--lookback-days`, `--output` | `ScanResult` JSON |
-| `linkedin_activity.py` | Scanner | Process LinkedIn activity data for RL/ML engagement signals | Activity JSON (data-input mode) | `ScanResult` JSON |
+| `scanners/github_scanner.py` | Scanner | Detect orgs with matching repos via GitHub Search API | `ScannerConfig` | `ScanResult` JSON |
+| `scanners/arxiv_scanner.py` | Scanner | Track paper authors and their affiliations via Semantic Scholar | `ScannerConfig` | `ScanResult` JSON |
+| `scanners/hf_scanner.py` | Scanner | Find model uploads on HuggingFace Hub | `ScannerConfig` | `ScanResult` JSON |
+| `scanners/job_scanner.py` | Scanner | Detect target-role job postings at ICP companies | `ScannerConfig` | `ScanResult` JSON |
+| `scanners/funding_scanner.py` | Scanner | Find funding events at target-space companies | `ScannerConfig` | `ScanResult` JSON |
+| `scanners/linkedin_scanner.py` | Scanner | Process LinkedIn activity data for engagement signals | Activity JSON (data-input mode) | `ScanResult` JSON |
+| `scanner_runner.py` | Orchestrator | Discover and run all configured scanners | `config.yaml`, `--lookback-days` | Multiple `ScanResult` JSON files |
 | `intent_scorer.py` | Scorer | Gojiberry intent-weighted scoring with recency decay | `list[Signal]`, `icp_fit` float | `ScoringResult` (intent, combined, grade) |
 | `recency.py` | Utility | Exponential decay functions for signal freshness | Signal timestamp, half-life | Decay factor (0.0–1.0) |
 | `multi_channel_sequencer.py` | Sequencer | Build staggered Email + LinkedIn outreach sequences | Channels, signal type | `list[SequenceStep]` |
 | `signal_stacker.py` | Aggregator | Group signals by company, score, grade ICP | Multiple `ScanResult` JSON files | Ranked `CompanyProfile` JSON |
 | `models.py` | Data | Pydantic models for all pipeline data structures | — | Type definitions |
-| `config.py` | Config | Load and validate all environment variables | `.env` file | `AppConfig` singleton |
+| `config.py` | Config | Load and validate all environment variables (API keys) | `.env` file | `AppConfig` singleton |
+| `config_loader.py` | Config | Load and validate ICP configuration from `config.yaml` | `config/config.yaml` | `ICPConfig` object |
 | `api_client.py` | Infra | Base HTTP client with retry and rate-limit handling | `base_url`, `auth_headers` | Inheritable `BaseAPIClient` |
 
 ### n8n Workflows
@@ -281,12 +291,12 @@ Re-qualification reminder set if outcome is negative
 
 | Source | Scanner | Signal Type | Data Collection | Half-Life |
 |--------|---------|-------------|-----------------|-----------|
-| GitHub | `github_rl_scanner.py` | `GITHUB_RL_REPO` | GitHub Search API | 5 days |
-| ArXiv / Semantic Scholar | `arxiv_monitor.py` | `ARXIV_PAPER` | Semantic Scholar API | 10 days |
-| HuggingFace Hub | `hf_model_monitor.py` | `HUGGINGFACE_MODEL` | HF Hub public API | 7 days |
-| Job boards | `job_posting_scanner.py` | `JOB_POSTING` | Scraped / API | 10 days |
-| Crunchbase / funding APIs | `funding_tracker.py` | `FUNDING_EVENT` | Funding APIs | 21 days |
-| LinkedIn (data-input) | `linkedin_activity.py` | `LINKEDIN_ACTIVITY` | Sales Navigator / PhantomBuster export | 2 days |
+| GitHub | `scanners.github_scanner` | `github_repo` | GitHub Search API | 5 days |
+| ArXiv / Semantic Scholar | `scanners.arxiv_scanner` | `arxiv_paper` | Semantic Scholar API (affiliation mapping) | 10 days |
+| HuggingFace Hub | `scanners.hf_scanner` | `huggingface_model` | HF Hub public API | 7 days |
+| Job boards | `scanners.job_scanner` | `job_posting` | Scraped / API | 10 days |
+| Crunchbase / funding APIs | `scanners.funding_scanner` | `funding_event` | Funding APIs | 21 days |
+| LinkedIn (data-input) | `scanners.linkedin_scanner` | `linkedin_activity` | Sales Navigator / PhantomBuster export | 2 days |
 
 LinkedIn operates in **data-input mode** — the scanner does not call the LinkedIn API directly. Activity data is pre-collected via Sales Navigator export, PhantomBuster, or manual research, then passed as a JSON array. This avoids LinkedIn's API restrictions while still capturing the highest-intent signal in the pipeline.
 
@@ -297,22 +307,22 @@ LinkedIn operates in **data-input mode** — the scanner does not call the Linke
 ```
 ScanResult
   └─ signals: list[Signal]
-       └─ signal_type: SignalType (GITHUB_RL_REPO | ARXIV_PAPER | LINKEDIN_ACTIVITY | ...)
+       └─ signal_type: str            ← free-form string; scanner sets this (e.g. "github_repo")
        └─ signal_strength: SignalStrength (WEAK | MODERATE | STRONG)
        └─ company_name, company_domain, source_url, raw_data
 
 ScoringResult                          ← produced by IntentScorer
   └─ intent_score: float               ← sum of decay-weighted signal values
   └─ combined_score: float             ← Gojiberry formula output
-  └─ icp_score: ICPScore (A/B/C/D)
+  └─ icp_score: str (A/B/C/D)         ← free-form grade; thresholds in config.yaml
   └─ signal_count: int
   └─ source_types: int                 ← drives breadth multiplier
 
 CompanyProfile
   └─ signals: list[Signal]            ← aggregated from ScanResults by signal_stacker
-  └─ icp_tier: ICPTier               ← assigned by prospect-researcher skill
-  └─ icp_score: ICPScore (A/B/C/D)   ← computed by icp-scoring-model rubric
-  └─ rl_maturity: RLMaturityStage
+  └─ icp_tier: str                    ← free-form tier name from config.yaml
+  └─ icp_score: str (A/B/C/D)        ← computed by icp-scoring-model rubric
+  └─ domain_maturity: str             ← free-form maturity label (e.g. "PRODUCTIONIZING")
   └─ composite_signal_score: float
 
 Contact
@@ -359,9 +369,9 @@ All models use `frozen=True` (Pydantic immutability). Pipeline stages produce ne
 
 | API | Connected Component | Direction | Auth |
 |-----|--------------------|-----------|----|
-| GitHub API v3 | `github_rl_scanner.py` | Read | `GITHUB_TOKEN` bearer |
-| Semantic Scholar | `arxiv_monitor.py` | Read | `SEMANTIC_SCHOLAR_KEY` (optional) |
-| HuggingFace Hub | `hf_model_monitor.py` | Read | None (public API) |
+| GitHub API v3 | `scanners/github_scanner.py` | Read | `GITHUB_TOKEN` bearer |
+| Semantic Scholar | `scanners/arxiv_scanner.py` (affiliation mapping for ArXiv authors) | Read | `SEMANTIC_SCHOLAR_KEY` (optional) |
+| HuggingFace Hub | `scanners/hf_scanner.py` | Read | None (public API) |
 | Apollo.io | Contact enrichment (waterfall step 1) | Read | `APOLLO_API_KEY` |
 | Hunter.io | Contact enrichment (waterfall step 2) | Read | `HUNTER_API_KEY` |
 | Prospeo | Contact enrichment (waterfall step 3) | Read | `PROSPEO_API_KEY` |
@@ -388,9 +398,18 @@ All data flowing between pipeline components is typed using Pydantic models with
 
 Each signal source (GitHub, ArXiv, HuggingFace, job postings, funding, LinkedIn) is a separate script rather than one monolithic scanner. This allows independent scheduling, independent failure handling, and independent rate-limit budgets. A GitHub API rate limit should not block an ArXiv scan. The signal_stacker combines outputs after the fact.
 
+### Config-driven ICP
+
+All ICP definitions — signal keywords, tier names and criteria, target titles, domain maturity labels, and scoring thresholds — live in `config/config.yaml`. A companion `config/gtm-context.md` file provides natural-language context loaded by every skill. This separation means:
+
+- **No code changes required** to retarget the engine for a new ICP. Edit config files, re-run `/validate`, done.
+- **`config/` is gitignored** — your active config never ships in the repo. Use `config.example/` as an annotated reference, or copy one of the vertical configs from `examples/`.
+- **`scripts/config_loader.py`** handles ICP config loading and validation (separate from `scripts/config.py`, which handles API key env vars).
+- **`examples/`** ships four pre-built configs for common verticals (RL infrastructure, cybersecurity, data infrastructure, devtools) so new users can start from a working baseline.
+
 ### Intent-over-ICP scoring
 
-The Gojiberry formula weights intent (60%) higher than ICP fit (40%) because outbound timing is the highest-leverage variable. A prospect that perfectly fits the ICP but shows no current activity is less likely to convert than a slightly weaker ICP fit that is actively publishing RL research and hiring ML engineers. Recency decay ensures stale signals do not accumulate false weight over time.
+The Gojiberry formula weights intent (60%) higher than ICP fit (40%) because outbound timing is the highest-leverage variable. A prospect that perfectly fits the ICP but shows no current activity is less likely to convert than a slightly weaker ICP fit that is actively publishing research and hiring for relevant roles. Recency decay ensures stale signals do not accumulate false weight over time.
 
 ### LinkedIn as data-input signal source
 
