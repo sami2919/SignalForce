@@ -1,6 +1,6 @@
 # SignalForce
 
-> Signal-based outbound sales engine — configure for any ICP in under 5 minutes
+> The open-source GTM engineer toolkit — signal-based prospecting, configurable for any ICP
 
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue) ![License MIT](https://img.shields.io/badge/license-MIT-green) ![Tests 448 passing](https://img.shields.io/badge/tests-448%20passing-brightgreen) ![Coverage 91%](https://img.shields.io/badge/coverage-91%25-brightgreen)
 
