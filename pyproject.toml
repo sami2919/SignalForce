@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.backends.legacy:build"
 
 [project]
-name = "rl-gtm-engine"
+name = "signalforce"
 version = "0.1.0"
-description = "A Signal-Based Outbound Engine for RL Infrastructure"
+description = "Signal-based outbound sales engine — configure for any ICP"
 requires-python = ">=3.11"
 dependencies = [
     "requests",

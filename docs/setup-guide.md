@@ -1,4 +1,4 @@
-# Setup Guide — rl-gtm-engine
+# Setup Guide — SignalForce
 
 End-to-end setup from a fresh machine to a running signal pipeline. This guide covers local Python setup, all API accounts, n8n workflow configuration, HubSpot, and Instantly.ai. Budget ~2 hours for a full first-time setup.
 
@@ -19,8 +19,8 @@ End-to-end setup from a fresh machine to a running signal pipeline. This guide c
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/rl-gtm-engine.git
-cd rl-gtm-engine
+git clone https://github.com/your-org/SignalForce.git
+cd SignalForce
 
 # Create a virtual environment
 python3.11 -m venv .venv

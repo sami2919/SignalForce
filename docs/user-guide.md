@@ -1,4 +1,4 @@
-# User Guide: How to Use rl-gtm-engine Day-to-Day
+# User Guide: How to Use SignalForce Day-to-Day
 
 > This guide assumes you've completed [setup-guide.md](setup-guide.md) and have API keys configured.
 

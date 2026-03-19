@@ -1,8 +1,8 @@
-# rl-gtm-engine
+# SignalForce
 
 ## Project Overview
 
-rl-gtm-engine is an open-source collection of Claude Code agent skills and n8n workflows for signal-based outbound sales targeting reinforcement learning infrastructure buyers.
+SignalForce is an open-source collection of Claude Code agent skills and n8n workflows for signal-based outbound sales targeting reinforcement learning infrastructure buyers.
 
 **Three-layer architecture:**
 - **Skills** (`skills/*/SKILL.md`) — Claude Code instruction files. The primary user interface. Each skill tells Claude how to perform a GTM task.

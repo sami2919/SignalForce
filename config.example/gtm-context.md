@@ -1,6 +1,6 @@
 # GTM Context: Collinear AI
 
-Shared context loaded by all rl-gtm-engine skills. Reference this file for company positioning, ICP definitions, messaging guidelines, and qualification criteria.
+Shared context loaded by all SignalForce skills. Reference this file for company positioning, ICP definitions, messaging guidelines, and qualification criteria.
 
 ---
 

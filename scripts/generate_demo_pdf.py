@@ -1,4 +1,4 @@
-"""Generate a PDF report from rl-gtm-engine demo results."""
+"""Generate a PDF report from SignalForce demo results."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ _DEFAULT_OUTPUT = Path(__file__).resolve().parent.parent / "docs" / "demo-report
 
 
 class DemoReport(FPDF):
-    """Custom PDF report for rl-gtm-engine demo results."""
+    """Custom PDF report for SignalForce demo results."""
 
     def __init__(self):
         super().__init__()
@@ -19,7 +19,7 @@ class DemoReport(FPDF):
     def header(self):
         self.set_font("Helvetica", "B", 10)
         self.set_text_color(100, 100, 100)
-        self.cell(0, 8, "rl-gtm-engine Demo Report", align="R", new_x="LMARGIN", new_y="NEXT")
+        self.cell(0, 8, "SignalForce Demo Report", align="R", new_x="LMARGIN", new_y="NEXT")
         self.line(10, self.get_y(), 200, self.get_y())
         self.ln(4)
 
@@ -34,7 +34,7 @@ class DemoReport(FPDF):
         self.ln(40)
         self.set_font("Helvetica", "B", 28)
         self.set_text_color(30, 30, 30)
-        self.cell(0, 15, "rl-gtm-engine", align="C", new_x="LMARGIN", new_y="NEXT")
+        self.cell(0, 15, "SignalForce", align="C", new_x="LMARGIN", new_y="NEXT")
         self.ln(4)
         self.set_font("Helvetica", "", 14)
         self.set_text_color(80, 80, 80)

@@ -1,4 +1,4 @@
-# Results Framework — rl-gtm-engine
+# Results Framework — SignalForce
 
 Metrics definitions, targets, reporting cadence, and diagnostic playbooks for the signal-based outbound pipeline.
 
@@ -163,11 +163,11 @@ First Monday of each month:
 
 Use these industry benchmarks to contextualize your results:
 
-| Metric | Industry Median | Top Quartile | rl-gtm-engine Target |
+| Metric | Industry Median | Top Quartile | SignalForce Target |
 |--------|----------------|-------------|---------------------|
 | Open rate | 30–40% | 50–60% | 45–65% |
 | Reply rate | 3–5% | 8–12% | 12–20% |
 | Positive reply rate | 1–2% | 3–5% | 5–8% |
 | Meeting-from-sequence rate | 0.5–1% | 2–3% | 3–5% |
 
-rl-gtm-engine targets above-median reply rates because outreach is triggered by real, specific signals rather than static list pulls. The benchmark gap is the core value proposition of signal-based outbound.
+SignalForce targets above-median reply rates because outreach is triggered by real, specific signals rather than static list pulls. The benchmark gap is the core value proposition of signal-based outbound.

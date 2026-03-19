@@ -1,4 +1,4 @@
-# rl-gtm-engine
+# SignalForce
 
 > A Signal-Based Outbound Engine for Technical Products — Built with Claude Code Skills, n8n, and Python
 
@@ -14,7 +14,7 @@ The result: low reply rates, wasted enrichment spend, and SDRs who cannot hold a
 
 ## The Solution
 
-rl-gtm-engine continuously monitors public signal sources — GitHub commits, ArXiv papers, Hugging Face model uploads, job postings, and funding announcements — to identify companies that are actively investing in a technical domain right now. When a strong signal is detected, the pipeline enriches contacts, generates technically credible outreach personalized to that specific signal, and enrolls the contact in a sequenced campaign. The result is outreach that references the prospect's actual work, sent at the moment they are most likely to be thinking about the problem you solve.
+SignalForce continuously monitors public signal sources — GitHub commits, ArXiv papers, Hugging Face model uploads, job postings, and funding announcements — to identify companies that are actively investing in a technical domain right now. When a strong signal is detected, the pipeline enriches contacts, generates technically credible outreach personalized to that specific signal, and enrolls the contact in a sequenced campaign. The result is outreach that references the prospect's actual work, sent at the moment they are most likely to be thinking about the problem you solve.
 
 The engine runs autonomously via n8n workflows on a daily schedule, with Claude Code skills available for human-in-the-loop review, research, and copy generation at any step.
 
@@ -116,8 +116,8 @@ Three decoupled layers move data from raw public signals to enrolled email seque
 ### 1. Clone
 
 ```bash
-git clone https://github.com/your-org/rl-gtm-engine.git
-cd rl-gtm-engine
+git clone https://github.com/your-org/SignalForce.git
+cd SignalForce
 ```
 
 ### 2. Install
@@ -262,7 +262,7 @@ Three budget tiers. All figures in USD/month.
 
 | Alternative | Annual Cost |
 |-------------|-------------|
-| rl-gtm-engine (Standard) | ~$2,500–3,900/yr |
+| SignalForce (Standard) | ~$2,500–3,900/yr |
 | AI SDR tool (Artisan, 11x) | $40,000–60,000/yr |
 | Full-time junior SDR | $80,000–120,000/yr |
 
@@ -274,7 +274,7 @@ See [`docs/cost-analysis.md`](docs/cost-analysis.md) for the full tool-by-tool b
 
 ## Customization
 
-rl-gtm-engine is domain-agnostic. The target market, ICP definitions, signal keywords, and voice rules live entirely in one file: `.agents/gtm-context.md`.
+SignalForce is domain-agnostic. The target market, ICP definitions, signal keywords, and voice rules live entirely in one file: `.agents/gtm-context.md`.
 
 To adapt this engine for your product:
 

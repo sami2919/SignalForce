@@ -1,4 +1,4 @@
-# Cost Analysis — rl-gtm-engine
+# Cost Analysis — SignalForce
 
 Monthly cost breakdown for running the full signal-based outbound pipeline. All figures are in USD and reflect list pricing as of early 2026.
 
@@ -99,13 +99,13 @@ At Standard tier with the pipeline running at target capacity (Month 3):
 
 | Alternative | Annual Cost | Notes |
 |-------------|-------------|-------|
-| rl-gtm-engine (Standard) | ~$2,500–3,900/year | Fully automated, runs 24/7 |
-| rl-gtm-engine (Premium) | ~$8,000–9,000/year | High-touch with Clay |
+| SignalForce (Standard) | ~$2,500–3,900/year | Fully automated, runs 24/7 |
+| SignalForce (Premium) | ~$8,000–9,000/year | High-touch with Clay |
 | AI SDR tool (e.g., Artisan, 11x) | $40,000–60,000/year | Less customizable for technical ICPs |
 | Full-time junior SDR | $80,000–120,000/year | Salary + benefits + ramp time |
 | Full-time senior SDR | $120,000–160,000/year | With commission at quota |
 
-rl-gtm-engine targets a technical ICP (RL researchers and engineers) where generic AI SDR tools produce poor results. The skills-based approach allows personalization at a level that off-the-shelf tools cannot match for this segment.
+SignalForce targets a technical ICP (RL researchers and engineers) where generic AI SDR tools produce poor results. The skills-based approach allows personalization at a level that off-the-shelf tools cannot match for this segment.
 
 ---
 

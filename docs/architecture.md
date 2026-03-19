@@ -1,8 +1,8 @@
-# Architecture — rl-gtm-engine
+# Architecture — SignalForce
 
 ## System Overview
 
-rl-gtm-engine is a three-layer signal-based outbound GTM engine targeting reinforcement learning infrastructure buyers (Collinear AI's ICP). The three layers are intentionally decoupled:
+SignalForce is a three-layer signal-based outbound GTM engine targeting reinforcement learning infrastructure buyers (Collinear AI's ICP). The three layers are intentionally decoupled:
 
 - **Skills** (`skills/*/SKILL.md`) — Claude Code instruction files that define *how* to perform GTM tasks. These are the primary user interface. Claude reads a skill and executes the workflow using the scripts as tools.
 - **Scripts** (`scripts/*.py`) — Python modules that interact with external APIs (GitHub, Semantic Scholar, HuggingFace, enrichment providers, CRM). Skills invoke these via CLI or as importable modules.
