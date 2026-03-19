@@ -86,8 +86,9 @@ Three decoupled layers move data from raw public signals to enrolled sequences a
 │                    CLAUDE CODE SKILLS                             │
 │  signal-scanner  prospect-researcher  contact-finder             │
 │  email-writer  resource-offer  multi-channel-writer              │
-│  meeting-followup  pipeline-tracker  champion-tracker            │
-│  deliverability-manager  compliance-manager  setup  validate     │
+│  linkedin-content  meeting-followup  pipeline-tracker            │
+│  champion-tracker  deliverability-manager  compliance-manager    │
+│  setup  validate                                                 │
 │                   → Human-in-the-loop GTM workflow               │
 └──────────────────────────┬──────────────────────────────────────┘
                            │ contacts + email copy + deal events
@@ -118,6 +119,7 @@ Invoke skills in Claude Code with `/skill-name`.
 | `/email-writer` | After enrichment: generate 3-variant signal-based outreach sequences |
 | `/resource-offer` | Blueprint-first alternative: offer a resource before asking for a meeting |
 | `/multi-channel-writer` | Staggered Email + LinkedIn sequences for dual-channel outreach |
+| `/linkedin-content` | Organic LinkedIn posts to build credibility before cold outreach lands |
 | `/meeting-followup` | After a call: extract outcome, generate follow-up emails, update CRM |
 | `/pipeline-tracker` | Weekly: funnel metrics, HubSpot sync, Slack analytics digest |
 | `/champion-tracker` | Weekly: monitor job changes, route warm re-engagement |

@@ -27,14 +27,26 @@ Identify one specific, non-obvious takeaway from the resource that applies to th
 **Step 3 — Generate the sequence.**
 Use `config/templates/email-sequences/resource-offer-signal.md`. Write all three variants (Problem-Focused, Outcome-Focused, Social-Proof-Focused). Fill every placeholder with signal-specific content — no generic substitutions.
 
-**Step 4 — Verify.**
+**Step 4 — Seven Sweeps copy review.**
+Run each email through these passes before output:
+
+1. **Clarity** — Can the reader understand every sentence? Flag jargon, buried points.
+2. **Voice** — Does it sound like a peer, not a vendor? Read it aloud.
+3. **So What?** — Does every claim answer "why should I care?" Add "which means..." bridges from features to benefits.
+4. **Prove It** — Is every claim substantiated? No vague social proof ("trusted by thousands"). Use specific numbers.
+5. **Specificity** — Replace vague language with numbers and timeframes. "Save time" → "Save 4 hours/week."
+6. **Emotion** — Does the copy make the reader feel something? Paint the "before" state vividly.
+7. **Zero Risk** — Have we removed every barrier? Near CTAs, check for unanswered objections.
+
+**Step 5 — Final verify.**
 Before output, check each email:
 - [ ] Email 1 and 2 contain zero meeting asks
 - [ ] Email 3 offers only a resource walkthrough, not a demo
 - [ ] First sentence references the exact signal
 - [ ] No banned phrases (see `config/gtm-context.md`)
 - [ ] 4 sentences max per email
-- [ ] Subject line under 50 characters
+- [ ] Subject line is 2-4 words, lowercase, no punctuation
+- [ ] Passed all seven sweeps
 
 ## Output
 
