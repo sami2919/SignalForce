@@ -11,6 +11,7 @@ dependencies = [
     "requests",
     "pydantic",
     "python-dotenv",
+    "sqlalchemy>=1.4",
 ]
 
 [project.optional-dependencies]

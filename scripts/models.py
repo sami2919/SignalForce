@@ -247,3 +247,25 @@ class MeetingOutcome(BaseModel):
     follow_up_resources: list[str] = Field(default_factory=list)
     notes: str = ""
     recorded_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+# ---------------------------------------------------------------------------
+# Playbook entry model
+# ---------------------------------------------------------------------------
+
+
+class PlaybookEntry(BaseModel):
+    """A signal-to-angle mapping that drives outreach personalization.
+
+    Each entry connects a signal type + trigger pattern to a specific outreach
+    angle, complete with email opener and proof point templates.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    signal_type: str
+    trigger_pattern: str
+    angle_name: str
+    angle_description: str
+    email_opener: str
+    proof_point_template: str

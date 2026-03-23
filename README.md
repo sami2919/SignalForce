@@ -6,9 +6,18 @@
 
 ---
 
-**Stop sending cold emails nobody reads.** SignalForce finds companies that are actively investing in your domain *right now* — by monitoring GitHub repos, ArXiv papers, HuggingFace model uploads, job postings, funding announcements, and LinkedIn activity — then generates technically credible outreach that references the prospect's actual work, timed to the moment they're thinking about the problem you solve.
+**Stop sending cold emails nobody reads.** SignalForce monitors public activity — GitHub repos, job postings, funding rounds, research papers, LinkedIn — to find companies actively investing in the problem you solve, then generates outreach that references their actual work.
 
-**For any vertical.** Whether you sell RL infrastructure, cybersecurity tools, data pipelines, or developer platforms — configure your ICP once and the engine handles the rest. Ships with 4 ready-to-use example configs.
+**Config-driven, not hardcoded.** Every keyword, ICP tier, scoring weight, and signal source is defined in YAML you control. The Python scripts are a dumb signal collection layer — they fetch and filter based on your config. The intelligence lives in the Claude Code skills layer, which does intent scoring (recency-weighted, multi-source breadth multipliers) and writes contextual outreach. Ships with 4 ready-to-use verticals to prove the point:
+
+| Vertical | Example signals |
+|----------|----------------|
+| **Cybersecurity** — API security, DAST, PCI-DSS, OWASP | `examples/cybersecurity/` |
+| **Data Infrastructure** — dbt, Spark, Airflow, data mesh | `examples/data-infra/` |
+| **Developer Tools** — DevEx hiring, SDK repos, Series A | `examples/devtools/` |
+| **RL Infrastructure** — RLHF, sim-to-real, reward modeling | `examples/rl-infrastructure/` |
+
+Copy any example to `config/`, edit the keywords, and you're targeting a completely different market.
 
 **Two modes.** Run it hands-on with Claude Code skills (research, review, and refine at every step) or fully autonomous via n8n workflows on a daily schedule.
 
@@ -101,7 +110,7 @@ Three decoupled layers move data from raw public signals to enrolled sequences a
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Skills** are the primary interface. Each `SKILL.md` tells Claude how to perform a GTM task using the Python scripts as tools. The same scripts also power the n8n workflows — no code duplication between human-driven and automated paths.
+**The Python scripts don't make decisions** — they collect raw signals from public APIs based on whatever keywords you configure. The Claude Code skills layer does the reasoning: intent scoring with configurable weights and recency decay, ICP fit grading, multi-source signal stacking, and contextual copywriting. Same scripts also power the n8n workflows — no code duplication between human-driven and automated paths.
 
 ---
 
@@ -128,24 +137,9 @@ Invoke skills in Claude Code with `/skill-name`.
 
 ---
 
-## Examples
-
-`examples/` contains complete, ready-to-use ICP configurations for four verticals. Copy any one to `config/` as your starting point.
-
-| Example | Target Market | Signal Focus |
-|---------|--------------|--------------|
-| `rl-infrastructure/` | Reinforcement learning research teams and AI labs | GitHub RL repos, ArXiv RLHF papers, HF model uploads |
-| `cybersecurity/` | Security engineering teams at mid-market companies | GitHub security tooling, job postings for SecEng roles |
-| `data-infra/` | Data engineering and platform teams | GitHub data pipeline repos, dbt/Spark job postings |
-| `devtools/` | Developer tooling buyers at high-growth startups | GitHub activity, funding events, DevEx hiring signals |
-
-Each example contains `config.yaml`, `gtm-context.md`, and a scoring rubric pre-tuned for that vertical.
-
----
-
 ## Configuration
 
-SignalForce is ICP-agnostic. Your target market, signal keywords, ICP tiers, and voice rules live in `config/`:
+Your target market, signal keywords, ICP tiers, and voice rules live in `config/`:
 
 ```
 config/               # gitignored — your active config

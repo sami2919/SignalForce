@@ -12,9 +12,12 @@ from typing import Any
 import yaml
 from pydantic import BaseModel, ConfigDict
 
+from scripts.models import PlaybookEntry
+
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _CONFIG_DIR = _PROJECT_ROOT / "config"
 _CONFIG_FILE = _CONFIG_DIR / "config.yaml"
+_PLAYBOOKS_FILE = _CONFIG_DIR / "playbooks.yaml"
 
 
 class CompanyConfig(BaseModel):
@@ -123,3 +126,34 @@ def load_config(config_path: Path = _CONFIG_FILE) -> SignalForceConfig:
         )
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     return SignalForceConfig.model_validate(raw)
+
+
+def load_playbooks(
+    playbooks_path: Path = _PLAYBOOKS_FILE,
+) -> list[PlaybookEntry]:
+    """Load and validate signal-to-angle playbook entries from YAML.
+
+    Returns a list of validated PlaybookEntry models.
+
+    Raises:
+        FileNotFoundError: playbooks file does not exist.
+        yaml.YAMLError: YAML syntax error.
+        pydantic.ValidationError: schema validation failure.
+    """
+    if not playbooks_path.exists():
+        raise FileNotFoundError(
+            f"No playbooks found at {playbooks_path}. "
+            "Copy config.example/playbooks.yaml to config/playbooks.yaml "
+            "and customize for your product."
+        )
+    raw = yaml.safe_load(playbooks_path.read_text(encoding="utf-8"))
+    entries = raw.get("playbooks", [])
+    return [PlaybookEntry.model_validate(entry) for entry in entries]
+
+
+def lookup_playbooks_by_signal_type(
+    playbooks: list[PlaybookEntry],
+    signal_type: str,
+) -> list[PlaybookEntry]:
+    """Return all playbook entries matching a given signal type."""
+    return [p for p in playbooks if p.signal_type == signal_type]

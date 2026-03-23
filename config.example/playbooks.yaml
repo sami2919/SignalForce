@@ -1,0 +1,276 @@
+# Signal-to-Angle Playbooks — domain-agnostic mappings
+# Each entry maps a signal type + trigger pattern to an outreach angle.
+# Copy to config/playbooks.yaml and customize for your product.
+
+playbooks:
+
+  # ---------------------------------------------------------------------------
+  # GitHub Repo signals
+  # ---------------------------------------------------------------------------
+
+  - signal_type: github_repo
+    trigger_pattern: "New repo using a competitor or adjacent open-source library"
+    angle_name: "build-vs-buy"
+    angle_description: >
+      The prospect is investing engineering time building on raw open-source tooling.
+      Position your product as the managed alternative that eliminates maintenance overhead.
+    email_opener: >
+      Noticed your team just published {{repo_name}} — looks like you're building
+      {{capability}} from scratch on top of {{library}}.
+    proof_point_template: >
+      {{customer_name}} was doing the same thing until they switched to us and
+      cut their infrastructure maintenance time by {{percentage}}.
+
+  - signal_type: github_repo
+    trigger_pattern: "Rapid commit velocity on a repo in a relevant problem space"
+    angle_name: "velocity-bottleneck"
+    angle_description: >
+      High commit frequency suggests the team is actively iterating on a hard problem.
+      Offer a way to accelerate their velocity.
+    email_opener: >
+      Your team has been shipping fast on {{repo_name}} — {{commit_count}} commits
+      in the last {{days}} days. That's serious momentum.
+    proof_point_template: >
+      Teams like {{customer_name}} found they could move {{multiplier}}x faster
+      on {{problem_area}} after plugging in {{product}}.
+
+  - signal_type: github_repo
+    trigger_pattern: "Repo with extensive custom tooling around observability, testing, or deployment"
+    angle_name: "analytics-debt"
+    angle_description: >
+      Custom-built internal tooling signals unmet needs in the ecosystem.
+      Position your product as purpose-built to replace their homegrown scripts.
+    email_opener: >
+      Saw your team built custom {{tooling_type}} tooling in {{repo_name}} —
+      that's a problem we hear about a lot.
+    proof_point_template: >
+      {{customer_name}} replaced their internal {{tooling_type}} scripts with
+      {{product}} and reclaimed {{hours}} engineering hours per month.
+
+  - signal_type: github_repo
+    trigger_pattern: "Repo README or issues mention scaling challenges"
+    angle_name: "scale-wall"
+    angle_description: >
+      Explicit scaling pain in public repos indicates the team is outgrowing
+      their current approach. Offer a path past the bottleneck.
+    email_opener: >
+      Came across {{repo_name}} and noticed some open issues around scaling
+      {{workload_type}} — that's a challenge we specialize in.
+    proof_point_template: >
+      {{customer_name}} hit the same wall at {{scale_metric}} and used {{product}}
+      to get past it without re-architecting.
+
+  # ---------------------------------------------------------------------------
+  # ArXiv Paper signals
+  # ---------------------------------------------------------------------------
+
+  - signal_type: arxiv_paper
+    trigger_pattern: "Paper describes a novel method but acknowledges infrastructure limitations"
+    angle_name: "infra-gap"
+    angle_description: >
+      Researchers publishing cutting-edge work often lack production-grade infrastructure.
+      Position your product as the bridge from research to production.
+    email_opener: >
+      Read your paper on {{paper_topic}} — impressive results. Noticed you mentioned
+      {{limitation}} as a constraint.
+    proof_point_template: >
+      Researchers at {{customer_name}} used {{product}} to go from paper to
+      production deployment in {{timeframe}}.
+
+  - signal_type: arxiv_paper
+    trigger_pattern: "Paper from a corporate research lab (not purely academic)"
+    angle_name: "research-to-product"
+    angle_description: >
+      Corporate lab publications signal R&D investment heading toward productization.
+      Offer tooling that accelerates the path from paper to shipped feature.
+    email_opener: >
+      Congrats on the {{paper_topic}} publication from the {{company_name}} team.
+      Are you exploring ways to bring this into production?
+    proof_point_template: >
+      {{customer_name}}'s research team used {{product}} to ship their
+      {{research_area}} work into production {{percentage}} faster.
+
+  - signal_type: arxiv_paper
+    trigger_pattern: "Paper proposes a new benchmark or evaluation framework"
+    angle_name: "evaluation-tooling"
+    angle_description: >
+      Benchmark papers signal a team that cares deeply about measurement and rigor.
+      Position your product's evaluation capabilities as complementary.
+    email_opener: >
+      Your new benchmark for {{domain}} caught my eye — rigorous evaluation is
+      something we think about a lot at {{company}}.
+    proof_point_template: >
+      {{customer_name}} integrated {{product}} into their evaluation pipeline
+      and reduced benchmark iteration cycles by {{percentage}}.
+
+  # ---------------------------------------------------------------------------
+  # HuggingFace Model Upload signals
+  # ---------------------------------------------------------------------------
+
+  - signal_type: hf_model_upload
+    trigger_pattern: "Model uploaded with custom training pipeline tags"
+    angle_name: "training-ops"
+    angle_description: >
+      Custom training pipelines indicate growing operational complexity.
+      Offer managed tooling to simplify their training workflow.
+    email_opener: >
+      Saw you just published {{model_name}} on HuggingFace — looks like you're
+      running a serious training pipeline for {{model_type}}.
+    proof_point_template: >
+      {{customer_name}} was managing {{count}} training runs manually before
+      using {{product}} to automate their pipeline.
+
+  - signal_type: hf_model_upload
+    trigger_pattern: "Multiple models uploaded in short succession"
+    angle_name: "experiment-velocity"
+    angle_description: >
+      Rapid model publishing suggests a team running many experiments.
+      Position your product as the system of record for experiment management.
+    email_opener: >
+      Your team has published {{count}} models on HuggingFace in the last
+      {{days}} days — that's a lot of experimentation.
+    proof_point_template: >
+      {{customer_name}} was running experiments at a similar pace and used
+      {{product}} to track, compare, and ship the best ones {{multiplier}}x faster.
+
+  - signal_type: hf_model_upload
+    trigger_pattern: "Model card mentions fine-tuning on domain-specific data"
+    angle_name: "domain-specialization"
+    angle_description: >
+      Domain-specific fine-tuning signals serious production intent.
+      Offer tooling that supports the unique needs of domain specialization.
+    email_opener: >
+      Noticed {{model_name}} is fine-tuned on {{domain}} data — domain
+      specialization is where things get interesting (and hard).
+    proof_point_template: >
+      {{customer_name}} used {{product}} to streamline their domain fine-tuning
+      workflow and cut data preparation time by {{percentage}}.
+
+  # ---------------------------------------------------------------------------
+  # Job Posting signals
+  # ---------------------------------------------------------------------------
+
+  - signal_type: job_posting
+    trigger_pattern: "Hiring for a role that your product could partially automate"
+    angle_name: "hire-or-buy"
+    angle_description: >
+      A new headcount request signals budget and urgency. Position your product
+      as a force multiplier that makes the new hire more productive from day one.
+    email_opener: >
+      Saw you're hiring a {{job_title}} — sounds like {{problem_area}} is
+      becoming a priority for the team.
+    proof_point_template: >
+      {{customer_name}} was about to hire for the same role, then realized
+      {{product}} could handle {{percentage}} of the workload.
+
+  - signal_type: job_posting
+    trigger_pattern: "Job posting lists a tech stack that your product integrates with"
+    angle_name: "stack-fit"
+    angle_description: >
+      When a company's required tech stack aligns with your integration surface,
+      adoption friction drops. Lead with compatibility.
+    email_opener: >
+      Your {{job_title}} posting mentions {{tech_stack}} — that's exactly the
+      stack {{product}} plugs into.
+    proof_point_template: >
+      {{customer_name}} runs the same {{tech_stack}} stack and had {{product}}
+      integrated in under {{timeframe}}.
+
+  - signal_type: job_posting
+    trigger_pattern: "Multiple related roles posted simultaneously"
+    angle_name: "team-build"
+    angle_description: >
+      Hiring a cluster of related roles signals a new initiative or team expansion.
+      Offer tooling that accelerates the new team's ramp-up.
+    email_opener: >
+      Noticed you're building out a {{team_area}} team — {{count}} related roles
+      posted recently. Sounds like a big push.
+    proof_point_template: >
+      When {{customer_name}} stood up their {{team_area}} team, {{product}} cut
+      their ramp-up time from {{old_time}} to {{new_time}}.
+
+  # ---------------------------------------------------------------------------
+  # Funding Round signals
+  # ---------------------------------------------------------------------------
+
+  - signal_type: funding_round
+    trigger_pattern: "Series A or B with stated plans to invest in engineering/product"
+    angle_name: "growth-investment"
+    angle_description: >
+      Fresh funding earmarked for engineering means new budget and urgency to show ROI.
+      Position your product as a high-leverage investment for the newly funded roadmap.
+    email_opener: >
+      Congrats on the {{round_type}} — saw you're planning to invest in
+      {{investment_area}}. That's a big milestone.
+    proof_point_template: >
+      {{customer_name}} adopted {{product}} right after their {{round_type}} and
+      shipped their first {{deliverable}} {{timeframe}} ahead of schedule.
+
+  - signal_type: funding_round
+    trigger_pattern: "Seed or pre-seed with a technical founding team"
+    angle_name: "early-foundation"
+    angle_description: >
+      Technical founders at seed stage make fast tooling decisions. Catch them
+      before they build in-house and lock in early.
+    email_opener: >
+      Congrats on the seed round. Building {{product_area}} from scratch is
+      exciting — and choosing the right foundation early saves months later.
+    proof_point_template: >
+      {{customer_name}} started with {{product}} at seed stage and avoided
+      {{months}} months of rebuilding when they hit scale.
+
+  - signal_type: funding_round
+    trigger_pattern: "Growth round with expansion into new markets or verticals"
+    angle_name: "expansion-enabler"
+    angle_description: >
+      Market expansion funding signals a need for tooling that scales across
+      segments. Position your product as the infrastructure for multi-market growth.
+    email_opener: >
+      Saw the {{round_type}} and the expansion plans into {{new_market}} —
+      that's a big surface area to cover.
+    proof_point_template: >
+      {{customer_name}} used {{product}} to expand into {{count}} new markets
+      without adding headcount to their {{team_area}} team.
+
+  # ---------------------------------------------------------------------------
+  # LinkedIn Activity signals
+  # ---------------------------------------------------------------------------
+
+  - signal_type: linkedin_activity
+    trigger_pattern: "Prospect posts or comments about a pain point your product solves"
+    angle_name: "pain-signal"
+    angle_description: >
+      A public post about a specific challenge is the strongest buying signal.
+      Reference their exact words and offer a direct solution.
+    email_opener: >
+      Your recent post about {{pain_point}} resonated — we hear this from
+      {{persona}} leaders every week.
+    proof_point_template: >
+      {{customer_name}}'s {{persona}} had the same frustration and resolved it
+      with {{product}} in {{timeframe}}.
+
+  - signal_type: linkedin_activity
+    trigger_pattern: "Prospect shares or engages with competitor content"
+    angle_name: "competitive-awareness"
+    angle_description: >
+      Engaging with competitor content signals active evaluation. Position
+      your product as the alternative worth considering.
+    email_opener: >
+      Saw you engaging with content about {{competitor_topic}} — sounds like
+      you're evaluating options in this space.
+    proof_point_template: >
+      {{customer_name}} evaluated {{competitor}} alongside {{product}} and chose
+      us for {{differentiator}}.
+
+  - signal_type: linkedin_activity
+    trigger_pattern: "Prospect announces a new role or promotion into a decision-making position"
+    angle_name: "new-leader"
+    angle_description: >
+      New leaders in decision-making roles often re-evaluate tooling in their
+      first 90 days. Catch them during the review window.
+    email_opener: >
+      Congrats on the new role as {{new_title}} at {{company_name}} — the first
+      90 days are a great time to re-evaluate the stack.
+    proof_point_template: >
+      When {{customer_name}}'s new {{title}} joined, they brought in {{product}}
+      as one of their first initiatives — saw results within {{timeframe}}.

@@ -1,0 +1,21 @@
+playbooks:
+  - signal_type: github_repo
+    trigger_pattern: "New repo using a competitor library"
+    angle_name: "build-vs-buy"
+    angle_description: "Prospect is building on raw OSS. Position as the managed alternative."
+    email_opener: "Noticed your team just published {{repo_name}} — looks like you're building from scratch."
+    proof_point_template: "{{customer_name}} made the same switch and cut maintenance time by {{percentage}}."
+
+  - signal_type: arxiv_paper
+    trigger_pattern: "Paper from a corporate research lab"
+    angle_name: "research-to-product"
+    angle_description: "Corporate lab publication signals R&D heading toward productization."
+    email_opener: "Congrats on the {{paper_topic}} publication — are you exploring production paths?"
+    proof_point_template: "{{customer_name}} shipped their research into production {{percentage}} faster."
+
+  - signal_type: job_posting
+    trigger_pattern: "Hiring for a role your product could augment"
+    angle_name: "hire-or-buy"
+    angle_description: "New headcount signals budget and urgency. Position as a force multiplier."
+    email_opener: "Saw you're hiring a {{job_title}} — sounds like {{problem_area}} is a priority."
+    proof_point_template: "{{customer_name}} realized {{product}} could handle {{percentage}} of the workload."
