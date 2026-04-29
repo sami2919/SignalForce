@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Lifecycle Campaign Brief — {{ prospect.name }}</title>
+  <style>
+    @page { size: A4; margin: 18mm 16mm 16mm 16mm; }
+    :root {
+      --ink: #0B0B0B;
+      --muted: #6B6B6B;
+      --rule: #E6E6E6;
+      --accent: #2952E3;
+      --accent-soft: #EEF2FF;
+      --bg-soft: #FAFAFA;
+      --code-bg: #F4F4F5;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      color: var(--ink);
+      font-size: 10.25pt;
+      line-height: 1.45;
+      margin: 0;
+    }
+    code, .mono {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 9pt;
+      background: var(--code-bg);
+      padding: 1px 4px;
+      border-radius: 2px;
+    }
+    .doc-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding-bottom: 10px;
+      border-bottom: 2px solid var(--ink);
+      margin-bottom: 16px;
+    }
+    .doc-header .title { font-size: 20pt; font-weight: 700; letter-spacing: -0.02em; }
+    .doc-header .subtitle { font-size: 11pt; color: var(--muted); margin-top: 2px; }
+    .doc-header .meta { text-align: right; font-size: 9pt; color: var(--muted); }
+    .campaign-block {
+      background: var(--accent-soft);
+      border-left: 3px solid var(--accent);
+      padding: 10px 14px;
+      margin-bottom: 16px;
+    }
+    .campaign-block .name { font-size: 12pt; font-weight: 600; }
+    .campaign-block .obj { font-size: 10pt; margin-top: 4px; color: var(--ink); }
+    .campaign-block .stage {
+      font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--accent); font-weight: 600; margin-top: 6px;
+    }
+    .section-h {
+      font-size: 9pt; text-transform: uppercase; letter-spacing: 0.14em;
+      color: var(--muted); font-weight: 600;
+      border-bottom: 1px solid var(--rule);
+      padding-bottom: 4px; margin: 18px 0 10px 0;
+    }
+    .segment-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 16px;
+      font-size: 9.5pt;
+    }
+    .segment-grid .col-h {
+      font-size: 8.5pt; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 4px;
+    }
+    .segment-grid ul {
+      margin: 0; padding-left: 14px;
+      font-size: 9pt;
+    }
+    .segment-grid li {
+      margin-bottom: 2px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 8.75pt;
+      line-height: 1.35;
+    }
+    .segment-name {
+      font-size: 10pt; font-weight: 600; margin-bottom: 6px;
+    }
+    .segment-size {
+      font-size: 9pt; color: var(--muted); margin-top: 8px;
+      font-style: italic;
+    }
+    .touch {
+      page-break-inside: avoid;
+      border-top: 1px solid var(--rule);
+      padding: 12px 0 10px 0;
+    }
+    .touch:first-of-type { border-top: none; padding-top: 4px; }
+    .touch-h {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 4px;
+    }
+    .touch-step {
+      font-size: 9pt; color: var(--muted); letter-spacing: 0.08em;
+      text-transform: uppercase; font-weight: 600;
+    }
+    .touch-step .num {
+      display: inline-block; background: var(--ink); color: #fff;
+      padding: 1px 6px; border-radius: 2px; margin-right: 6px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .touch-channel {
+      font-size: 9pt; color: var(--ink); background: var(--bg-soft);
+      padding: 2px 8px; border-radius: 2px; font-weight: 500;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .touch-agent {
+      font-size: 8.5pt; color: var(--accent);
+      text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;
+      margin-left: 8px;
+    }
+    .touch-subject {
+      font-size: 11pt; font-weight: 600; line-height: 1.35;
+      margin: 4px 0 4px 0;
+    }
+    .touch-timing {
+      font-size: 8.5pt; color: var(--muted);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      margin-bottom: 6px;
+    }
+    .touch-body {
+      font-size: 9.5pt; margin: 4px 0 6px 0;
+    }
+    .qa-list, .opt-list {
+      margin: 4px 0; padding-left: 16px;
+      font-size: 8.75pt; color: var(--ink);
+    }
+    .qa-list li, .opt-list li { margin-bottom: 2px; line-height: 1.4; }
+    .qa-list code { background: transparent; padding: 0; }
+    .kv {
+      font-size: 8.5pt; color: var(--muted);
+      margin-top: 4px;
+    }
+    .kv .k { text-transform: uppercase; letter-spacing: 0.08em; }
+    .kv .v {
+      color: var(--ink);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .metric {
+      font-size: 8.75pt; color: var(--ink);
+      background: var(--bg-soft); padding: 4px 8px;
+      border-left: 2px solid var(--accent);
+      margin-top: 6px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .triggers {
+      background: var(--bg-soft);
+      padding: 10px 14px;
+      border-radius: 3px;
+    }
+    .projection-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 14px;
+      font-size: 9pt;
+    }
+    .projection-grid .pk {
+      font-size: 8.5pt; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 2px;
+    }
+    .projection-grid .pv {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 9pt;
+    }
+    .footer {
+      margin-top: 22px; padding-top: 10px;
+      border-top: 1px solid var(--rule);
+      font-size: 8pt; color: var(--muted);
+      display: flex; justify-content: space-between;
+    }
+    .footer .brand { letter-spacing: 0.1em; text-transform: uppercase; }
+    .platform-fit {
+      font-size: 9pt; color: var(--ink);
+      background: var(--accent-soft);
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+    .platform-fit .pf-h {
+      font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.12em;
+      color: var(--accent); font-weight: 600; margin-bottom: 4px;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="doc-header">
+    <div>
+      <div class="title">Lifecycle Campaign Brief</div>
+      <div class="subtitle">{{ prospect.name }} &middot; {{ prospect.url }}</div>
+    </div>
+    <div class="meta">
+      Generated {{ generated_at }}<br>
+      Vertical: {{ vertical }}<br>
+      Touches: {{ touches|length }}
+    </div>
+  </div>
+
+  <div class="campaign-block">
+    <div class="name">{{ campaign_name }}</div>
+    <div class="obj">{{ objective }}</div>
+    <div class="stage">{{ lifecycle_stage }}</div>
+  </div>
+
+  <div class="section-h">Segment</div>
+  <div class="segment-name">{{ segment.name }}</div>
+  <div class="segment-grid">
+    <div>
+      <div class="col-h">Salesforce filters</div>
+      <ul>
+        {% for f in segment.salesforce_filters %}<li>{{ f }}</li>{% endfor %}
+      </ul>
+    </div>
+    <div>
+      <div class="col-h">Warehouse traits</div>
+      <ul>
+        {% for t in segment.warehouse_traits %}<li>{{ t }}</li>{% endfor %}
+      </ul>
+      <div class="col-h" style="margin-top: 10px;">Exclusions</div>
+      <ul>
+        {% for e in segment.exclusions %}<li>{{ e }}</li>{% endfor %}
+      </ul>
+    </div>
+  </div>
+  <div class="segment-size">{{ segment.estimated_size }}</div>
+
+  <div class="section-h">Touch sequence</div>
+  {% for t in touches %}
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">{{ t.step }}</span>{{ t.timing }}</span>
+      <span>
+        <span class="touch-channel">{{ t.channel }}</span>
+        <span class="touch-agent">{{ t.agent }} agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">{{ t.subject }}</div>
+    <div class="touch-body">{{ t.body_brief }}</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      {% for token in t.personalization_tokens %}<span class="v">{{ "{{" }}{{ token }}{{ "}}" }}</span>{% if not loop.last %} &middot; {% endif %}{% endfor %}
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      {% for r in t.qa_rules %}<li>{{ r }}</li>{% endfor %}
+    </ul>
+
+    <div class="metric">{{ t.success_metric }}</div>
+  </div>
+  {% endfor %}
+
+  <div class="section-h">Optimization triggers</div>
+  <div class="triggers">
+    <ul class="opt-list">
+      {% for trig in optimization_triggers %}<li>{{ trig }}</li>{% endfor %}
+    </ul>
+  </div>
+
+  <div class="section-h">Pipeline projection</div>
+  <div class="projection-grid">
+    <div>
+      <div class="pk">Expected renewals</div>
+      <div class="pv">{{ pipeline_projection.expected_renewals }}</div>
+    </div>
+    <div>
+      <div class="pk">AE efficiency</div>
+      <div class="pv">{{ pipeline_projection.ae_efficiency }}</div>
+    </div>
+    <div>
+      <div class="pk">Runtime</div>
+      <div class="pv">{{ pipeline_projection.campaign_runtime }}</div>
+    </div>
+    <div>
+      <div class="pk">Downside scenario</div>
+      <div class="pv">{{ pipeline_projection.downside }}</div>
+    </div>
+  </div>
+
+  <div class="platform-fit">
+    <span class="pf-h">Why this is a Conversion-shaped artifact</span>
+    {{ meta.platform_fit }}<br><br>
+    <strong>Build time on the platform:</strong> {{ meta.build_time_on_conversion_platform }}<br><br>
+    <strong>What this proves:</strong> {{ meta.what_this_proves }}
+  </div>
+
+  <div class="footer">
+    <span class="brand">SignalForce &middot; MarOps branch</span>
+    <span>Built by Sami Rahman &middot; github.com/sami2919</span>
+  </div>
+
+</body>
+</html>

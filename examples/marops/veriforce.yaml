@@ -1,0 +1,15 @@
+prospect: Veriforce
+prospect_url: https://www.veriforce.com
+vertical: "Supplier compliance & contractor safety SaaS — industrial enterprise (oil & gas, utilities, construction)"
+campaign_name: "Tier-2 Supplier Re-Engagement — Compliance Lapse → Renewal"
+lifecycle_stage: "Customer · Re-engagement (post-lapse, pre-churn)"
+objective: >
+  Reactivate Tier-2 supplier accounts whose compliance verification lapsed in the last
+  90 days, route engaged accounts to AE-qualified pipeline, and recover ~12% of dormant
+  ARR within one quarter.
+segment_description: >
+  Tier-2 suppliers with expired or pending-renewal compliance status, no login in 90+
+  days, but whose hiring clients still have active contracts requiring verified suppliers.
+  Exclude accounts with open critical/high support cases, active AE pipeline, or
+  marketing opt-outs. Estimated ~2,400 contacts across ~840 accounts.
+num_touches: 5

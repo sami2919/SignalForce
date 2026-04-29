@@ -1,0 +1,129 @@
+{
+  "prospect": "Veriforce",
+  "prospect_url": "https://www.veriforce.com",
+  "vertical": "Supplier compliance & contractor safety SaaS — industrial enterprise (oil & gas, utilities, construction)",
+  "generated_at": "2026-04-26T17:50:00-07:00",
+  "campaign_name": "Tier-2 Supplier Re-Engagement — Compliance Lapse → Renewal",
+  "objective": "Reactivate Tier-2 supplier accounts whose compliance verification lapsed in the last 90 days, route engaged accounts to AE-qualified pipeline, and recover ~12% of dormant ARR within one quarter.",
+  "lifecycle_stage": "Customer · Re-engagement (post-lapse, pre-churn)",
+  "segment": {
+    "name": "Lapsed Tier-2 Suppliers · No Login 90d · Active Hiring Client",
+    "salesforce_filters": [
+      "Account.Tier__c = 'Tier 2'",
+      "Account.ComplianceStatus__c IN ('Expired', 'Pending Renewal')",
+      "Account.LastVerification__c < TODAY - 90",
+      "Account.HiringClient_ActiveContracts__c > 0",
+      "Contact.Role IN ('EHS Manager', 'Safety Director', 'Procurement Lead', 'Compliance Officer')",
+      "Contact.EmailOptIn__c = TRUE",
+      "Account.Industry IN ('Oil & Gas', 'Utilities', 'Construction', 'Mining')"
+    ],
+    "warehouse_traits": [
+      "product.last_login_at < now() - interval '90 days'",
+      "product.compliance_doc_uploads_l30d = 0",
+      "product.invoices_l180d.paid_ratio >= 0.9",
+      "intent.g2_review_visits_l30d >= 1 OR intent.competitor_page_visits_l30d >= 2"
+    ],
+    "exclusions": [
+      "Account.OptOut_AllMarketing__c = TRUE",
+      "Account.OpenSupportCase_Severity__c IN ('Critical', 'High')",
+      "Contact.Bounced_l30d = TRUE",
+      "Account on AE-active pipeline within last 14 days (suppression: pipeline conflict)"
+    ],
+    "estimated_size": "~2,400 contacts across ~840 accounts (38% of total Tier-2 lapsed cohort, post-suppression)"
+  },
+  "touches": [
+    {
+      "step": 1,
+      "channel": "email",
+      "agent": "execution",
+      "timing": "T+0 (campaign start, send between 9–11am account-local)",
+      "subject": "Your {{Account.Industry}} clients are still requiring verified suppliers",
+      "body_brief": "Plain-text feel, no graphics. Lead with the contractual reality: their hiring clients (named via Salesforce relationship) require verified suppliers per active contracts. Soft CTA: 'See what's expired' → deep link to their compliance dashboard with auto-login token. No discount language. Sign from named CSM, not generic.",
+      "personalization_tokens": ["Contact.FirstName", "Account.Name", "Account.Industry", "Account.HiringClient_TopName__c", "Account.ComplianceStatus__c"],
+      "qa_rules": [
+        "Reject if any token is null or 'N/A' (re-route to fallback variant without tokens)",
+        "Reject if subject line >65 chars (mobile preview truncation)",
+        "Reject if body contains regulated terms ('guarantee', 'warranty', 'OSHA-approved') — legal-flagged in past audit",
+        "Spam-score gate: SpamAssassin <2.5"
+      ],
+      "success_metric": "Open rate >38%; auto-login click >9%; unsub <0.4%"
+    },
+    {
+      "step": 2,
+      "channel": "in_app_banner",
+      "agent": "execution",
+      "timing": "T+0 (fires on next login, persists 7 days)",
+      "subject": "Compliance status: action required",
+      "body_brief": "Sticky banner on dashboard load. Shows: number of expired docs, named hiring clients affected, single CTA 'Renew now (3 min)'. Dismissible but re-fires after 48h if not actioned. Never fires for users with active support cases.",
+      "personalization_tokens": ["Account.ExpiredDocs_Count__c", "Account.HiringClient_AffectedList__c"],
+      "qa_rules": [
+        "Suppress if banner_dismissals_l30d >= 2 (banner fatigue threshold)",
+        "Suppress if user.role = 'Read-Only' (cannot action renewal)",
+        "Render fallback static text if hiring-client list >5 entries (UI overflow)"
+      ],
+      "success_metric": "Banner CTR >18%; renewal-flow entry >12%"
+    },
+    {
+      "step": 3,
+      "channel": "email",
+      "agent": "optimization",
+      "timing": "T+5 days (skip if step 1 or 2 converted)",
+      "subject": "Variant A: '{{Account.HiringClient_TopName}} flagged your account' / Variant B: 'Quick renewal — 3 minutes, no calls'",
+      "body_brief": "Optimization agent owns variant selection: bandit allocation across two subject lines and two body framings (consequence-led vs effort-led). Body cites the specific hiring-client contract clause requiring active verification. Includes one 30-sec Loom from a CSM if account.ARR >$25K (deterministic threshold, not LLM-decided).",
+      "personalization_tokens": ["Account.HiringClient_TopName__c", "Account.ARR__c", "CSM.LoomUrl__c"],
+      "qa_rules": [
+        "Reject if account in active opportunity stage 'Negotiation' or later (sales conflict)",
+        "Reject Variant A if hiring-client name not legally permissible to disclose in marketing (legal-list check)",
+        "Bandit floor: minimum 200 sends per variant before reallocation (avoid early bias)"
+      ],
+      "success_metric": "Open rate >42% (post-segmentation effect); reply rate >2.5% (proxy for AE handoff signal)"
+    },
+    {
+      "step": 4,
+      "channel": "ae_task",
+      "agent": "qa",
+      "timing": "T+7 days (fires only if engagement score >= threshold)",
+      "subject": "AE task: account {{Account.Name}} qualified for outbound",
+      "body_brief": "QA agent inspects engagement signals across steps 1–3 (opens, banner CTR, page visits, in-app actions). If composite score >= 0.62, creates Salesforce task for AE assigned to the territory with: engagement timeline, hiring-client contract context, suggested talk track. AE accepts or rejects task within 48h or it auto-routes to pooled queue. QA agent never sends outbound itself — only flags.",
+      "personalization_tokens": ["Account.Owner.Name", "Account.HiringClient_AffectedList__c", "engagement.composite_score"],
+      "qa_rules": [
+        "Score threshold (0.62) is feature-flagged — adjust via campaign config, not code",
+        "Suppress if AE.OOO__c = TRUE → route to backup AE in same territory",
+        "Reject task creation if account already has open task <14 days old (deduplication)"
+      ],
+      "success_metric": "Task acceptance rate >70%; AE-touched accounts → renewal close rate +18% vs control"
+    },
+    {
+      "step": 5,
+      "channel": "email",
+      "agent": "execution",
+      "timing": "T+14 days (final touch, suppressed for any prior conversion or AE-claimed account)",
+      "subject": "Last note before we pause outreach — {{Account.Name}}",
+      "body_brief": "Permission-based exit. Three options inline: (1) renew now, (2) tell us why you paused, (3) opt out of compliance reminders. Option 2 routes to a 1-question form (not a 'book a meeting' link — friction kills the signal). The exit framing measurably outperforms 'final reminder' framing in our A/B history (cite internal benchmark in agent prompt, not in email body).",
+      "personalization_tokens": ["Contact.FirstName", "Account.Name"],
+      "qa_rules": [
+        "Hard suppression if any conversion event in last 14 days",
+        "Hard suppression if AE has logged a 'Do Not Email' note in the last 30 days",
+        "Reject if subject line A/B variants haven't been pre-approved by brand QA queue"
+      ],
+      "success_metric": "Reply rate >4% (Option 2 is the highest-value response); unsub <1.2% (acceptable; this is the exit touch)"
+    }
+  ],
+  "optimization_triggers": [
+    "Intent spike: if account.intent.g2_review_visits_l7d >= 3 → accelerate to step 4 (skip steps 2–3)",
+    "Negative signal: if support.csat_score <= 2 in l30d → suppress entire campaign and route to CSM (not AE)",
+    "Renewal-window match: if subscription.renews_in_days <= 30 → CSM owns motion, marketing fully suppressed",
+    "Cohort underperformance: if Industry='Construction' segment open rate <25% after 14 days → optimization agent re-segments by sub-vertical (residential vs commercial vs civil)"
+  ],
+  "pipeline_projection": {
+    "expected_renewals": "~$1.4M ARR recovered (12% of $11.6M lapsed Tier-2 cohort, blended close rate 14% on AE-touched, 4% on self-serve renewal)",
+    "ae_efficiency": "~70% of created tasks expected to convert vs ~22% on cold outbound — CAC reduction proxy",
+    "campaign_runtime": "21 days end-to-end; reporting deck auto-generated by optimization agent at T+30",
+    "downside": "If hiring-client name disclosure fails legal review for >40% of segment, pipeline projection drops ~30% (Variant B fallback compresses lift)"
+  },
+  "meta": {
+    "platform_fit": "Salesforce two-way sync (account/contact filters, AE task creation), warehouse sync (product engagement, intent), real-time segmentation (suppression rules, dedup), three AI agents (execution, QA, optimization) with non-overlapping responsibilities, no-code orchestration of touch sequencing and triggers.",
+    "build_time_on_conversion_platform": "~3 hours from blank canvas, assuming Salesforce + Snowflake already connected. The brief shape mirrors what the platform consumes — segment, sequence, agent assignments, QA rules, triggers — so this document is a config, not a doc.",
+    "what_this_proves": "I've shipped multi-agent orchestration in production at 0–2 YOE. The shape of the work is identical: signals → segmentation → agent assignment → execution with QA → optimization. The funnel stage is different (prospecting vs MarOps), the engine is the same."
+  }
+}

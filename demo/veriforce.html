@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Lifecycle Campaign Brief — Veriforce</title>
+  <style>
+    @page { size: A4; margin: 18mm 16mm 16mm 16mm; }
+    :root {
+      --ink: #0B0B0B;
+      --muted: #6B6B6B;
+      --rule: #E6E6E6;
+      --accent: #2952E3;
+      --accent-soft: #EEF2FF;
+      --bg-soft: #FAFAFA;
+      --code-bg: #F4F4F5;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      color: var(--ink);
+      font-size: 10.25pt;
+      line-height: 1.45;
+      margin: 0;
+    }
+    code, .mono {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 9pt;
+      background: var(--code-bg);
+      padding: 1px 4px;
+      border-radius: 2px;
+    }
+    .doc-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding-bottom: 10px;
+      border-bottom: 2px solid var(--ink);
+      margin-bottom: 16px;
+    }
+    .doc-header .title { font-size: 20pt; font-weight: 700; letter-spacing: -0.02em; }
+    .doc-header .subtitle { font-size: 11pt; color: var(--muted); margin-top: 2px; }
+    .doc-header .meta { text-align: right; font-size: 9pt; color: var(--muted); }
+    .campaign-block {
+      background: var(--accent-soft);
+      border-left: 3px solid var(--accent);
+      padding: 10px 14px;
+      margin-bottom: 16px;
+    }
+    .campaign-block .name { font-size: 12pt; font-weight: 600; }
+    .campaign-block .obj { font-size: 10pt; margin-top: 4px; color: var(--ink); }
+    .campaign-block .stage {
+      font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--accent); font-weight: 600; margin-top: 6px;
+    }
+    .section-h {
+      font-size: 9pt; text-transform: uppercase; letter-spacing: 0.14em;
+      color: var(--muted); font-weight: 600;
+      border-bottom: 1px solid var(--rule);
+      padding-bottom: 4px; margin: 18px 0 10px 0;
+    }
+    .segment-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 16px;
+      font-size: 9.5pt;
+    }
+    .segment-grid .col-h {
+      font-size: 8.5pt; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 4px;
+    }
+    .segment-grid ul {
+      margin: 0; padding-left: 14px;
+      font-size: 9pt;
+    }
+    .segment-grid li {
+      margin-bottom: 2px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 8.75pt;
+      line-height: 1.35;
+    }
+    .segment-name {
+      font-size: 10pt; font-weight: 600; margin-bottom: 6px;
+    }
+    .segment-size {
+      font-size: 9pt; color: var(--muted); margin-top: 8px;
+      font-style: italic;
+    }
+    .touch {
+      page-break-inside: avoid;
+      border-top: 1px solid var(--rule);
+      padding: 12px 0 10px 0;
+    }
+    .touch:first-of-type { border-top: none; padding-top: 4px; }
+    .touch-h {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 4px;
+    }
+    .touch-step {
+      font-size: 9pt; color: var(--muted); letter-spacing: 0.08em;
+      text-transform: uppercase; font-weight: 600;
+    }
+    .touch-step .num {
+      display: inline-block; background: var(--ink); color: #fff;
+      padding: 1px 6px; border-radius: 2px; margin-right: 6px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .touch-channel {
+      font-size: 9pt; color: var(--ink); background: var(--bg-soft);
+      padding: 2px 8px; border-radius: 2px; font-weight: 500;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .touch-agent {
+      font-size: 8.5pt; color: var(--accent);
+      text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;
+      margin-left: 8px;
+    }
+    .touch-subject {
+      font-size: 11pt; font-weight: 600; line-height: 1.35;
+      margin: 4px 0 4px 0;
+    }
+    .touch-timing {
+      font-size: 8.5pt; color: var(--muted);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      margin-bottom: 6px;
+    }
+    .touch-body {
+      font-size: 9.5pt; margin: 4px 0 6px 0;
+    }
+    .qa-list, .opt-list {
+      margin: 4px 0; padding-left: 16px;
+      font-size: 8.75pt; color: var(--ink);
+    }
+    .qa-list li, .opt-list li { margin-bottom: 2px; line-height: 1.4; }
+    .qa-list code { background: transparent; padding: 0; }
+    .kv {
+      font-size: 8.5pt; color: var(--muted);
+      margin-top: 4px;
+    }
+    .kv .k { text-transform: uppercase; letter-spacing: 0.08em; }
+    .kv .v {
+      color: var(--ink);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .metric {
+      font-size: 8.75pt; color: var(--ink);
+      background: var(--bg-soft); padding: 4px 8px;
+      border-left: 2px solid var(--accent);
+      margin-top: 6px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .triggers {
+      background: var(--bg-soft);
+      padding: 10px 14px;
+      border-radius: 3px;
+    }
+    .projection-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 14px;
+      font-size: 9pt;
+    }
+    .projection-grid .pk {
+      font-size: 8.5pt; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 2px;
+    }
+    .projection-grid .pv {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 9pt;
+    }
+    .footer {
+      margin-top: 22px; padding-top: 10px;
+      border-top: 1px solid var(--rule);
+      font-size: 8pt; color: var(--muted);
+      display: flex; justify-content: space-between;
+    }
+    .footer .brand { letter-spacing: 0.1em; text-transform: uppercase; }
+    .platform-fit {
+      font-size: 9pt; color: var(--ink);
+      background: var(--accent-soft);
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+    .platform-fit .pf-h {
+      font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.12em;
+      color: var(--accent); font-weight: 600; margin-bottom: 4px;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="doc-header">
+    <div>
+      <div class="title">Lifecycle Campaign Brief</div>
+      <div class="subtitle">Veriforce &middot; https://www.veriforce.com</div>
+    </div>
+    <div class="meta">
+      Generated 2026-04-26T17:50:00-07:00<br>
+      Vertical: Supplier compliance &amp; contractor safety SaaS — industrial enterprise (oil &amp; gas, utilities, construction)<br>
+      Touches: 5
+    </div>
+  </div>
+
+  <div class="campaign-block">
+    <div class="name">Tier-2 Supplier Re-Engagement — Compliance Lapse → Renewal</div>
+    <div class="obj">Reactivate Tier-2 supplier accounts whose compliance verification lapsed in the last 90 days, route engaged accounts to AE-qualified pipeline, and recover ~12% of dormant ARR within one quarter.</div>
+    <div class="stage">Customer · Re-engagement (post-lapse, pre-churn)</div>
+  </div>
+
+  <div class="section-h">Segment</div>
+  <div class="segment-name">Lapsed Tier-2 Suppliers · No Login 90d · Active Hiring Client</div>
+  <div class="segment-grid">
+    <div>
+      <div class="col-h">Salesforce filters</div>
+      <ul>
+        <li>Account.Tier__c = &#39;Tier 2&#39;</li><li>Account.ComplianceStatus__c IN (&#39;Expired&#39;, &#39;Pending Renewal&#39;)</li><li>Account.LastVerification__c &lt; TODAY - 90</li><li>Account.HiringClient_ActiveContracts__c &gt; 0</li><li>Contact.Role IN (&#39;EHS Manager&#39;, &#39;Safety Director&#39;, &#39;Procurement Lead&#39;, &#39;Compliance Officer&#39;)</li><li>Contact.EmailOptIn__c = TRUE</li><li>Account.Industry IN (&#39;Oil &amp; Gas&#39;, &#39;Utilities&#39;, &#39;Construction&#39;, &#39;Mining&#39;)</li>
+      </ul>
+    </div>
+    <div>
+      <div class="col-h">Warehouse traits</div>
+      <ul>
+        <li>product.last_login_at &lt; now() - interval &#39;90 days&#39;</li><li>product.compliance_doc_uploads_l30d = 0</li><li>product.invoices_l180d.paid_ratio &gt;= 0.9</li><li>intent.g2_review_visits_l30d &gt;= 1 OR intent.competitor_page_visits_l30d &gt;= 2</li>
+      </ul>
+      <div class="col-h" style="margin-top: 10px;">Exclusions</div>
+      <ul>
+        <li>Account.OptOut_AllMarketing__c = TRUE</li><li>Account.OpenSupportCase_Severity__c IN (&#39;Critical&#39;, &#39;High&#39;)</li><li>Contact.Bounced_l30d = TRUE</li><li>Account on AE-active pipeline within last 14 days (suppression: pipeline conflict)</li>
+      </ul>
+    </div>
+  </div>
+  <div class="segment-size">~2,400 contacts across ~840 accounts (38% of total Tier-2 lapsed cohort, post-suppression)</div>
+
+  <div class="section-h">Touch sequence</div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">1</span>T+0 (campaign start, send between 9–11am account-local)</span>
+      <span>
+        <span class="touch-channel">email</span>
+        <span class="touch-agent">execution agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">Your {{Account.Industry}} clients are still requiring verified suppliers</div>
+    <div class="touch-body">Plain-text feel, no graphics. Lead with the contractual reality: their hiring clients (named via Salesforce relationship) require verified suppliers per active contracts. Soft CTA: &#39;See what&#39;s expired&#39; → deep link to their compliance dashboard with auto-login token. No discount language. Sign from named CSM, not generic.</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{Contact.FirstName}}</span> &middot; <span class="v">{{Account.Name}}</span> &middot; <span class="v">{{Account.Industry}}</span> &middot; <span class="v">{{Account.HiringClient_TopName__c}}</span> &middot; <span class="v">{{Account.ComplianceStatus__c}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>Reject if any token is null or &#39;N/A&#39; (re-route to fallback variant without tokens)</li><li>Reject if subject line &gt;65 chars (mobile preview truncation)</li><li>Reject if body contains regulated terms (&#39;guarantee&#39;, &#39;warranty&#39;, &#39;OSHA-approved&#39;) — legal-flagged in past audit</li><li>Spam-score gate: SpamAssassin &lt;2.5</li>
+    </ul>
+
+    <div class="metric">Open rate &gt;38%; auto-login click &gt;9%; unsub &lt;0.4%</div>
+  </div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">2</span>T+0 (fires on next login, persists 7 days)</span>
+      <span>
+        <span class="touch-channel">in_app_banner</span>
+        <span class="touch-agent">execution agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">Compliance status: action required</div>
+    <div class="touch-body">Sticky banner on dashboard load. Shows: number of expired docs, named hiring clients affected, single CTA &#39;Renew now (3 min)&#39;. Dismissible but re-fires after 48h if not actioned. Never fires for users with active support cases.</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{Account.ExpiredDocs_Count__c}}</span> &middot; <span class="v">{{Account.HiringClient_AffectedList__c}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>Suppress if banner_dismissals_l30d &gt;= 2 (banner fatigue threshold)</li><li>Suppress if user.role = &#39;Read-Only&#39; (cannot action renewal)</li><li>Render fallback static text if hiring-client list &gt;5 entries (UI overflow)</li>
+    </ul>
+
+    <div class="metric">Banner CTR &gt;18%; renewal-flow entry &gt;12%</div>
+  </div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">3</span>T+5 days (skip if step 1 or 2 converted)</span>
+      <span>
+        <span class="touch-channel">email</span>
+        <span class="touch-agent">optimization agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">Variant A: &#39;{{Account.HiringClient_TopName}} flagged your account&#39; / Variant B: &#39;Quick renewal — 3 minutes, no calls&#39;</div>
+    <div class="touch-body">Optimization agent owns variant selection: bandit allocation across two subject lines and two body framings (consequence-led vs effort-led). Body cites the specific hiring-client contract clause requiring active verification. Includes one 30-sec Loom from a CSM if account.ARR &gt;$25K (deterministic threshold, not LLM-decided).</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{Account.HiringClient_TopName__c}}</span> &middot; <span class="v">{{Account.ARR__c}}</span> &middot; <span class="v">{{CSM.LoomUrl__c}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>Reject if account in active opportunity stage &#39;Negotiation&#39; or later (sales conflict)</li><li>Reject Variant A if hiring-client name not legally permissible to disclose in marketing (legal-list check)</li><li>Bandit floor: minimum 200 sends per variant before reallocation (avoid early bias)</li>
+    </ul>
+
+    <div class="metric">Open rate &gt;42% (post-segmentation effect); reply rate &gt;2.5% (proxy for AE handoff signal)</div>
+  </div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">4</span>T+7 days (fires only if engagement score &gt;= threshold)</span>
+      <span>
+        <span class="touch-channel">ae_task</span>
+        <span class="touch-agent">qa agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">AE task: account {{Account.Name}} qualified for outbound</div>
+    <div class="touch-body">QA agent inspects engagement signals across steps 1–3 (opens, banner CTR, page visits, in-app actions). If composite score &gt;= 0.62, creates Salesforce task for AE assigned to the territory with: engagement timeline, hiring-client contract context, suggested talk track. AE accepts or rejects task within 48h or it auto-routes to pooled queue. QA agent never sends outbound itself — only flags.</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{Account.Owner.Name}}</span> &middot; <span class="v">{{Account.HiringClient_AffectedList__c}}</span> &middot; <span class="v">{{engagement.composite_score}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>Score threshold (0.62) is feature-flagged — adjust via campaign config, not code</li><li>Suppress if AE.OOO__c = TRUE → route to backup AE in same territory</li><li>Reject task creation if account already has open task &lt;14 days old (deduplication)</li>
+    </ul>
+
+    <div class="metric">Task acceptance rate &gt;70%; AE-touched accounts → renewal close rate +18% vs control</div>
+  </div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">5</span>T+14 days (final touch, suppressed for any prior conversion or AE-claimed account)</span>
+      <span>
+        <span class="touch-channel">email</span>
+        <span class="touch-agent">execution agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">Last note before we pause outreach — {{Account.Name}}</div>
+    <div class="touch-body">Permission-based exit. Three options inline: (1) renew now, (2) tell us why you paused, (3) opt out of compliance reminders. Option 2 routes to a 1-question form (not a &#39;book a meeting&#39; link — friction kills the signal). The exit framing measurably outperforms &#39;final reminder&#39; framing in our A/B history (cite internal benchmark in agent prompt, not in email body).</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{Contact.FirstName}}</span> &middot; <span class="v">{{Account.Name}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>Hard suppression if any conversion event in last 14 days</li><li>Hard suppression if AE has logged a &#39;Do Not Email&#39; note in the last 30 days</li><li>Reject if subject line A/B variants haven&#39;t been pre-approved by brand QA queue</li>
+    </ul>
+
+    <div class="metric">Reply rate &gt;4% (Option 2 is the highest-value response); unsub &lt;1.2% (acceptable; this is the exit touch)</div>
+  </div>
+  
+
+  <div class="section-h">Optimization triggers</div>
+  <div class="triggers">
+    <ul class="opt-list">
+      <li>Intent spike: if account.intent.g2_review_visits_l7d &gt;= 3 → accelerate to step 4 (skip steps 2–3)</li><li>Negative signal: if support.csat_score &lt;= 2 in l30d → suppress entire campaign and route to CSM (not AE)</li><li>Renewal-window match: if subscription.renews_in_days &lt;= 30 → CSM owns motion, marketing fully suppressed</li><li>Cohort underperformance: if Industry=&#39;Construction&#39; segment open rate &lt;25% after 14 days → optimization agent re-segments by sub-vertical (residential vs commercial vs civil)</li>
+    </ul>
+  </div>
+
+  <div class="section-h">Pipeline projection</div>
+  <div class="projection-grid">
+    <div>
+      <div class="pk">Expected renewals</div>
+      <div class="pv">~$1.4M ARR recovered (12% of $11.6M lapsed Tier-2 cohort, blended close rate 14% on AE-touched, 4% on self-serve renewal)</div>
+    </div>
+    <div>
+      <div class="pk">AE efficiency</div>
+      <div class="pv">~70% of created tasks expected to convert vs ~22% on cold outbound — CAC reduction proxy</div>
+    </div>
+    <div>
+      <div class="pk">Runtime</div>
+      <div class="pv">21 days end-to-end; reporting deck auto-generated by optimization agent at T+30</div>
+    </div>
+    <div>
+      <div class="pk">Downside scenario</div>
+      <div class="pv">If hiring-client name disclosure fails legal review for &gt;40% of segment, pipeline projection drops ~30% (Variant B fallback compresses lift)</div>
+    </div>
+  </div>
+
+  <div class="platform-fit">
+    <span class="pf-h">Why this is a Conversion-shaped artifact</span>
+    Salesforce two-way sync (account/contact filters, AE task creation), warehouse sync (product engagement, intent), real-time segmentation (suppression rules, dedup), three AI agents (execution, QA, optimization) with non-overlapping responsibilities, no-code orchestration of touch sequencing and triggers.<br><br>
+    <strong>Build time on the platform:</strong> ~3 hours from blank canvas, assuming Salesforce + Snowflake already connected. The brief shape mirrors what the platform consumes — segment, sequence, agent assignments, QA rules, triggers — so this document is a config, not a doc.<br><br>
+    <strong>What this proves:</strong> I&#39;ve shipped multi-agent orchestration in production at 0–2 YOE. The shape of the work is identical: signals → segmentation → agent assignment → execution with QA → optimization. The funnel stage is different (prospecting vs MarOps), the engine is the same.
+  </div>
+
+  <div class="footer">
+    <span class="brand">SignalForce &middot; MarOps branch</span>
+    <span>Built by Sami Rahman &middot; github.com/sami2919</span>
+  </div>
+
+</body>
+</html>
