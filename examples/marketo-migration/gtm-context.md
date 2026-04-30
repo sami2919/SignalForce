@@ -98,6 +98,49 @@ no batch-sync lag, no custom object constraints.
 
 ---
 
+## Confirmed Customer Profiles (Signal Validation)
+
+These are actual Conversion customers. Use them to calibrate signal accuracy — if your config
+would have surfaced them, the signals are correct.
+
+| Customer | What they replaced | Key signal | Tier |
+|----------|--------------------|------------|------|
+| People Data Labs | Marketo + Pardot + 3 scoring tools | Reverse ETL (Hightouch) + MOPs hire | Tier 1 |
+| GovWell | 5 tools, went live in 6 weeks | MAP consolidation initiative + data warehouse | Tier 3 |
+| Hostfully | Pardot, 200K+ contacts | Large contact DB + Pardot pain | Tier 3 |
+| HockeyStack | Product analytics (Mixpanel-adjacent) + HubSpot | PLG + MAP event gap | Tier 5 (PLG) |
+| Clay | GTM-native, warehouse-first from the start | Snowflake + Segment + growth engineer hire | Tier 5 (PLG) |
+| Warmly | Series A, PLG motion + lifecycle gap | Product analytics + reverse ETL need | Tier 5 (PLG) |
+
+**Pattern:** All top customers have a PLG motion + a warehouse + a MAP that can't consume product
+events natively. The PLG tier (Tier 5 in config) is the highest-signal pattern in the confirmed
+customer base.
+
+---
+
+## Real Trigger Events (Four Patterns That Predict a Migration Window)
+
+These are the four events that reliably precede a MAP migration decision:
+
+1. **Adobe Marketo price shock at renewal** — Post-Jan 2023, Adobe increased Marketo pricing
+   40–60% at renewal for many mid-market accounts. The renewal window is a concentrated decision
+   point. Signal: companies 12–18 months post-Series A who've been on Marketo 2+ years.
+
+2. **Second MOPs hire (not the first)** — Moving from 1 to 2 MOPs engineers signals the first
+   one is overwhelmed. The bottleneck is the MAP, not headcount. Score higher than first MOPs hire.
+
+3. **Marketing Data Engineer hire** — This is the clearest tell. They're hiring a data engineer
+   for the marketing team because HubSpot or Marketo can't consume warehouse data natively.
+   They're papering over the MAP's limitations with SQL. That engineer's first quarter will
+   convince them the MAP itself is the problem.
+
+4. **PLG motion collides with campaign-led motion** — When a company's product-led growth motion
+   (free tier, activation sequences, feature adoption campaigns) hits the wall of their MAP's
+   inability to consume product events, they start the evaluation. The signal is Mixpanel or
+   Amplitude in the stack alongside Marketo/HubSpot.
+
+---
+
 ## Key Signals to Score (Priority Order)
 
 1. **MOPs job posting** — highest intent signal. An open MOPs engineer role means the

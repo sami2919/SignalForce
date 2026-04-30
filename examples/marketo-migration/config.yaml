@@ -74,6 +74,27 @@ icp:
         - "lifecycle email"
         - "customer data platform"
 
+    - name: "PLG Companies with MAP-Product Event Gap"
+      description: >
+        B2B SaaS teams (30–300 employees, Series A–C) running a product-led growth motion
+        with Mixpanel, Amplitude, or PostHog for product analytics — and trying to trigger
+        lifecycle campaigns from product events via Marketo or HubSpot. The gap: legacy MAPs
+        can't natively consume product events without a reverse ETL hop. These teams are either
+        building custom integrations or tolerating 24–48h latency between event and campaign.
+        The tell is: Mixpanel/Amplitude in their stack AND a MAP AND a reverse ETL tool.
+        All confirmed Conversion customers (PDL, HockeyStack, Clay, Warmly) show this pattern.
+      signals:
+        - "Mixpanel"
+        - "Amplitude"
+        - "PostHog"
+        - "product analytics"
+        - "product-led growth"
+        - "PLG"
+        - "product events"
+        - "behavioral email"
+        - "activation campaign"
+        - "feature adoption"
+
   maturity_stages:
     - EVALUATING    # Researching alternatives, no active project
     - SCOPING       # Running an internal project to replace the MAP
@@ -141,6 +162,13 @@ scanners:
       - "lifecycle email"
       - "campaign orchestration"
       - "Salesforce marketing"
+      # Friction artifact keywords — actual code that signals MAP limitations
+      - "marketo_client"
+      - "hubspot-api wrapper"
+      - "HubSpot REST API"
+      - "marketo python"
+      - "marketo soap"
+      - "pardot python"
 
   arxiv:
     enabled: false   # Not applicable for B2B SaaS martech buyers
@@ -164,6 +192,11 @@ scanners:
       - "CRM marketing manager"
       - "lifecycle marketing manager"
       - "revenue operations engineer"
+      # PLG motion titles — product event gap signal
+      - "growth engineer"
+      - "lifecycle growth manager"
+      - "product marketing engineer"
+      - "PLG engineer"
     skills:
       # Legacy MAP skills = friction signal (they have it, we can replace it)
       - "Marketo"
