@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from pathlib import Path
 
 import yaml
@@ -33,11 +34,13 @@ def run(slug: str) -> Path:
     raw = yaml.safe_load(config_path.read_text())
     config = MarOpsCampaignConfig.model_validate(raw)
 
+    t0 = time.time()
     print(f"[1/2] generating brief for {config.prospect} (Claude API) ...", flush=True)
     brief = generate_brief(config)
+    t1 = time.time()
     print(
         f"      tokens: in={brief.meta['input_tokens']} out={brief.meta['output_tokens']} "
-        f"cache_read={brief.meta['cache_read_input_tokens']}"
+        f"cache_read={brief.meta['cache_read_input_tokens']}  [{t1 - t0:.1f}s]"
     )
 
     OUT.mkdir(exist_ok=True)
@@ -47,6 +50,8 @@ def run(slug: str) -> Path:
     print(f"[2/2] rendering {slug}.html ...", flush=True)
     render_html(brief, OUT / f"{slug}.pdf")
 
+    t2 = time.time()
+    print(f"\nDone. Open: {OUT / slug}.html  (total: {t2 - t0:.1f}s)")
     return OUT / f"{slug}.html"
 
 
@@ -56,5 +61,4 @@ if __name__ == "__main__":
         print("example: python -m scripts.marops.cli veriforce", file=sys.stderr)
         sys.exit(1)
 
-    out = run(sys.argv[1])
-    print(f"\nDone. Open: {out}")
+    run(sys.argv[1])

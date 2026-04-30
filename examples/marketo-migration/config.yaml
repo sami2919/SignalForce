@@ -1,0 +1,249 @@
+# SignalForce configuration — Marketo/HubSpot migration ICP
+# Use case: find mid-market B2B SaaS teams hitting the limits of their legacy MAP
+# and signaling readiness to migrate to a warehouse-native alternative.
+#
+# This config demonstrates SignalForce's configurable architecture:
+# same engine, different ICP — swap the YAML, get a completely different prospect list.
+#
+# Copy to config/ to activate: cp -r examples/marketo-migration/ config/
+
+company:
+  name: "Conversion"
+  product: "AI-native lifecycle campaign orchestration — warehouse-native, Salesforce-native"
+  category: "Marketing automation platform"
+  website: "https://conversion.com"
+
+icp:
+  tiers:
+    - name: "Warehouse-Ready B2B SaaS — Active Migration Signal"
+      description: >
+        Mid-market B2B SaaS (50–500 employees, Series A–C) already running Snowflake,
+        BigQuery, or Databricks alongside Salesforce, AND showing signs of MAP friction:
+        hiring MOPs engineers, using reverse ETL middleware (Hightouch, Census), or
+        building custom data pipelines around their current MAP. This is the 72-hour
+        window — they've invested in the warehouse but haven't migrated the MAP yet.
+      signals:
+        - "marketing operations"
+        - "reverse ETL"
+        - "Hightouch"
+        - "Census"
+        - "warehouse-native"
+        - "Snowflake + Salesforce"
+        - "dbt marketing"
+
+    - name: "HubSpot Enterprise Ceiling Hitters"
+      description: >
+        B2B SaaS teams on HubSpot Enterprise (30–300 employees, post-Series A) showing
+        scaling pain: hiring data engineers for marketing, building custom SQL audiences,
+        adding BI tooling on top of HubSpot exports. The tell is a marketing team that
+        now has a "Marketing Data" or "Marketing Analytics" engineer — the ceiling is real
+        and someone internal is papering over it.
+      signals:
+        - "HubSpot Enterprise"
+        - "marketing analytics engineer"
+        - "marketing data engineer"
+        - "CRM analytics"
+        - "Looker marketing"
+        - "marketing SQL"
+
+    - name: "Pardot / Eloqua Enterprise Migration"
+      description: >
+        Larger B2B companies (200–2000 employees) on Pardot or Eloqua evaluating
+        replacements. Slower sales cycle but larger ACV. Signal is hiring a "Marketing
+        Technology Architect" or "Martech Modernization" initiative showing up in
+        job postings or LinkedIn content.
+      signals:
+        - "Pardot migration"
+        - "Eloqua replacement"
+        - "marketing technology architect"
+        - "martech modernization"
+        - "MAP consolidation"
+        - "Salesforce Marketing Cloud"
+
+    - name: "Data-First Startups — Pre-MAP"
+      description: >
+        Series A B2B SaaS teams (20–100 employees) that have already built on Snowflake
+        or BigQuery but haven't yet chosen a MAP — they're running lifecycle on HubSpot
+        free or Mailchimp with a warehouse behind it. These teams will choose a MAP in
+        the next 6–12 months; getting in early wins the category decision.
+      signals:
+        - "dbt models"
+        - "data warehouse"
+        - "segment.io"
+        - "mParticle"
+        - "lifecycle email"
+        - "customer data platform"
+
+  maturity_stages:
+    - EVALUATING    # Researching alternatives, no active project
+    - SCOPING       # Running an internal project to replace the MAP
+    - MIGRATING     # Active migration underway
+    - OPTIMIZING    # Already migrated, expanding use cases
+
+  target_titles:
+    # Champions — feel the pain directly
+    - "VP of Marketing Operations"
+    - "Director of Marketing Operations"
+    - "Marketing Operations Manager"
+    - "Head of Marketing Operations"
+    - "Demand Generation Engineer"
+    - "Marketing Analytics Engineer"
+    - "Marketing Data Engineer"
+    - "Marketing Technology Manager"
+    - "Martech Manager"
+    # Approvers — own the budget
+    - "VP of Marketing"
+    - "CMO"
+    - "Chief Marketing Officer"
+    - "VP of Demand Generation"
+    - "VP of Growth"
+    # Influencers — own the warehouse
+    - "Head of Data"
+    - "VP of Data"
+    - "Director of Data Engineering"
+    - "Analytics Engineering Manager"
+
+  disqualifiers:
+    - "Fewer than 20 employees or pre-revenue"
+    - "B2C — consumer product with no enterprise sales motion"
+    - "Already contracted with a competing warehouse-native MAP"
+    - "Marketing team of one (no ops function yet)"
+    - "No data warehouse — running everything in the CRM alone"
+
+scanners:
+  github:
+    enabled: true
+    module: "scripts.scanners.github_scanner"
+    lookback_days: 14
+    topics:
+      - "marketing-automation"
+      - "email-automation"
+      - "campaign-management"
+      - "dbt"
+      - "data-pipeline"
+      - "crm-integration"
+      - "salesforce-integration"
+      - "customer-data-platform"
+    libraries:
+      - "hightouch"
+      - "census"
+      - "segment"
+      - "airbyte"
+      - "fivetran"
+      - "dbt"
+      - "snowflake-connector-python"
+      - "google-cloud-bigquery"
+    keywords:
+      - "Marketo alternative"
+      - "HubSpot migration"
+      - "warehouse-native"
+      - "reverse ETL"
+      - "lifecycle email"
+      - "campaign orchestration"
+      - "Salesforce marketing"
+
+  arxiv:
+    enabled: false   # Not applicable for B2B SaaS martech buyers
+
+  huggingface:
+    enabled: false   # Not applicable for this vertical
+
+  jobs:
+    enabled: true
+    module: "scripts.scanners.job_scanner"
+    lookback_days: 14
+    titles:
+      - "marketing operations engineer"
+      - "marketing operations manager"
+      - "demand generation engineer"
+      - "marketing analytics engineer"
+      - "marketing data engineer"
+      - "marketing technology manager"
+      - "martech engineer"
+      - "marketing automation manager"
+      - "CRM marketing manager"
+      - "lifecycle marketing manager"
+      - "revenue operations engineer"
+    skills:
+      # Legacy MAP skills = friction signal (they have it, we can replace it)
+      - "Marketo"
+      - "HubSpot"
+      - "Pardot"
+      - "Salesforce Marketing Cloud"
+      - "Eloqua"
+      # Warehouse skills = readiness signal (they can adopt warehouse-native)
+      - "Snowflake"
+      - "BigQuery"
+      - "Databricks"
+      - "dbt"
+      - "SQL"
+      # Middleware = pain signal (they're papering over their MAP's limitations)
+      - "Hightouch"
+      - "Census"
+      - "Segment"
+      - "mParticle"
+      - "Fivetran"
+      - "Airbyte"
+
+  funding:
+    enabled: true
+    module: "scripts.scanners.funding_scanner"
+    lookback_days: 30
+    keywords:
+      - "B2B SaaS"
+      - "marketing technology"
+      - "martech"
+      - "revenue operations"
+      - "sales automation"
+      - "growth platform"
+      - "customer engagement"
+      - "lifecycle marketing"
+      - "enterprise software"
+      - "go-to-market"
+
+  linkedin:
+    enabled: true
+    module: "scripts.scanners.linkedin_scanner"
+    lookback_days: 3
+    keywords:
+      - "marketing operations"
+      - "demand generation"
+      - "marketing automation"
+      - "MOPs"
+      - "martech stack"
+      - "HubSpot"
+      - "Marketo"
+      - "Pardot"
+      - "campaign orchestration"
+      - "lifecycle marketing"
+      - "revenue operations"
+      - "marketing data"
+      - "warehouse-native"
+      - "CDP"
+      - "customer data platform"
+
+scoring:
+  intent_weights:
+    # Job posting is the strongest signal — MOPs hire means the pain is real and budgeted
+    github_repo: 2.0
+    arxiv_paper: 0.0    # Disabled
+    huggingface_model: 0.0    # Disabled
+    job_posting: 3.0
+    funding_event: 2.5
+    linkedin_activity: 2.0
+
+  half_lives_days:
+    github_repo: 14.0    # Longer half-life — data infra repos stay relevant
+    arxiv_paper: 10.0
+    huggingface_model: 7.0
+    job_posting: 14.0    # MOPs job open for 2 weeks = active project
+    funding_event: 30.0  # Funding buys a longer window than RL signals
+    linkedin_activity: 3.0
+
+  icp_weight: 0.45      # ICP fit slightly higher weight than RL vertical
+  intent_weight: 0.55   # Intent still dominant — a perfect-fit company with no MOPs hire is not ready
+
+  grade_thresholds:
+    A: 7.0    # Lower bar than RL vertical — migration signals are less dramatic
+    B: 4.0
+    C: 2.0

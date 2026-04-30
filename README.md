@@ -23,6 +23,25 @@ Copy any example to `config/`, edit the keywords, and you're targeting a complet
 
 ---
 
+## `marops` branch — Lifecycle Campaign Brief Generator
+
+The `marops` branch repoints the SignalForce engine at marketing operations: same config-driven pipeline, same Pydantic models, same Claude API integration — swap the renderer and the prompt, get a lifecycle campaign brief instead of a prospect list.
+
+```bash
+# Generate a Conversion-platform-shaped lifecycle brief (30 seconds, no warmup)
+export ANTHROPIC_API_KEY=...
+python3.11 -m scripts.marops.cli veriforce
+
+# Or open the pre-generated fallback (no API key needed)
+open demo/veriforce.html
+```
+
+The output (`demo/veriforce.html`) is a campaign brief in Conversion's schema: Salesforce SOQL segment filters joined to warehouse traits, five touches with three non-overlapping agent roles (execution / QA / optimization), QA suppression rules, and a pipeline projection with downside scenarios. Config lives in `examples/marops/veriforce.yaml`. Pipeline is `briefer.py` (Claude `tool_use` with schema enforcement) → `renderer.py` (Jinja2) → HTML. Seven tests, all passing.
+
+**The point:** same principle as the prospecting system — define the output crisply, build the pipeline that produces it deterministically, iterate on the config not the code. A different config produces a different campaign brief in the same 30 seconds.
+
+---
+
 ## Get Running in 2 Minutes
 
 ```bash
