@@ -1,99 +1,26 @@
-# SignalForce · `marops` branch
+# SignalForce
 
-> **A lifecycle campaign brief in the exact shape Conversion's platform consumes — generated from a YAML config by Claude, schema-enforced, in ~30 seconds for ~$0.002 a brief.**
+> The open-source GTM engineer toolkit — signal-based prospecting, configurable for any ICP
 
-![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue) ![License MIT](https://img.shields.io/badge/license-MIT-green) ![Tests 547 passing](https://img.shields.io/badge/tests-547%20passing-brightgreen) ![MarOps module 85%](https://img.shields.io/badge/marops%20coverage-85%25-brightgreen) ![Claude tool_use](https://img.shields.io/badge/Claude-tool__use%20schema-8A2BE2)
-
-> 👋 **You're looking at the `marops` branch.** It repoints the open-source [SignalForce](#built-on-signalforce--the-same-engine-repointed) signal engine at marketing operations. The `main` branch is the original signal-based prospecting toolkit. Everything below is why this branch exists — read it top to bottom, it's a five-minute story.
+![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue) ![License MIT](https://img.shields.io/badge/license-MIT-green) ![Tests 567 passing](https://img.shields.io/badge/tests-567%20passing-brightgreen) ![Coverage 77%](https://img.shields.io/badge/coverage-77%25-brightgreen) ![Claude tool_use](https://img.shields.io/badge/Claude-tool__use%20schema-8A2BE2)
 
 ---
 
-## The 30-second version
+**Stop sending cold emails nobody reads.** SignalForce monitors public activity — GitHub repos, job postings, funding rounds, research papers, LinkedIn — to find companies actively investing in the problem you solve, then generates outreach that references their actual work.
 
-I forked SignalForce — a working, 547-test, config-driven GTM engine — into this `marops` branch and pointed it at **Conversion's platform**. Instead of a ranked list of prospects, the same pipeline now emits a **lifecycle campaign brief in Conversion's own data shape**: Salesforce + warehouse segmentation → a multi-touch sequence with non-overlapping execution / QA / optimization agents → optimization triggers → a pipeline projection with a downside scenario.
+**Config-driven, not hardcoded.** Every keyword, ICP tier, scoring weight, and signal source is defined in YAML you control. The Python scripts are a dumb signal collection layer — they fetch and filter based on your config. The intelligence lives in the Claude Code skills layer, which does intent scoring (recency-weighted, multi-source breadth multipliers) and writes contextual outreach. Ships with 5 ready-to-use verticals to prove the point:
 
-It is not a mockup. It is a deterministic generator: **YAML config in, schema-validated brief out.** Swap the config, get a different real-company brief in the same 30 seconds. There are five already built — including one for **Veriforce, an actual Conversion customer**.
+| Vertical | Example signals |
+|----------|----------------|
+| **Cybersecurity** — API security, DAST, PCI-DSS, OWASP | `examples/cybersecurity/` |
+| **Data Infrastructure** — dbt, Spark, Airflow, data mesh | `examples/data-infra/` |
+| **Developer Tools** — DevEx hiring, SDK repos, Series A | `examples/devtools/` |
+| **RL Infrastructure** — RLHF, sim-to-real, reward modeling | `examples/rl-infrastructure/` |
+| **MAP Migration** — Marketo/HubSpot ceiling, warehouse-native readiness | `examples/map-migration/` |
 
-```bash
-git clone -b marops https://github.com/sami2919/SignalForce.git
-cd SignalForce && pip install -e ".[dev]"
+Copy any example to `config/`, edit the keywords, and you're targeting a completely different market.
 
-# Option A — generate live (needs an Anthropic key, ~$0.002, ~30s):
-export ANTHROPIC_API_KEY=...
-python3.11 -m scripts.marops.cli veriforce      # → out/veriforce.html
-
-# Option B — no key, no wait: open a pre-generated brief in your browser:
-open demo/veriforce.html
-```
-
----
-
-## What comes out
-
-Every brief is generated to the **exact schema Conversion's platform consumes** — not approximated, encoded as a Claude `tool_use` JSON schema in [`scripts/marops/briefer.py`](scripts/marops/briefer.py) so the model physically cannot return an off-shape object:
-
-| Conversion platform concept | What `marops` generates | Where it's enforced |
-|---|---|---|
-| **Segmentation** (SFDC + warehouse) | `salesforce_filters` in `SObject.Field__c` SOQL syntax, joined to `warehouse_traits`, with `exclusions` + `estimated_size` | schema `required`, validated by Pydantic |
-| **Three-agent orchestration** | Each touch assigned to exactly one of `execution` / `qa` / `optimization` — *non-overlapping by construction* (execution owns sends, QA owns scoring/suppression, optimization owns variant selection) | `enum` constraint + system-prompt quality bar |
-| **Multi-touch sequence** | 5 ordered touches, each with channel, timing, subject, body brief, personalization tokens, QA rules, success metric | schema `minItems`, per-touch `required` |
-| **Optimization triggers** | `event → action` rules (intent spike, negative signal, renewal window) — actionable conditions, not observations | system-prompt quality bar #4 |
-| **Pipeline projection** | Expected renewals, AE efficiency, runtime — **and a mandatory downside scenario** | system-prompt quality bar #5 |
-| **"Why now" timing** | Signals decayed by recency → `HIGH` / `MEDIUM` / `LOW` timing tier + a **shelf-life-in-days** buying-window countdown | computed in `models.py`, not guessed by the model |
-
-Open [`demo/veriforce.html`](demo/veriforce.html) to see one rendered. It reads like something a senior MarOps architect handed off — because the system prompt makes Claude *be* one, and the schema makes it prove the work.
-
----
-
-## How it's built
-
-```
-examples/marops/<slug>.yaml          # ← the only thing you edit per prospect
-        │  (Pydantic: MarOpsCampaignConfig.model_validate)
-        ▼
-scripts/marops/briefer.py            # Claude API call — claude-sonnet-4-6
-        │  • tool_use with a strict JSON schema (output can't drift off-shape)
-        │  • cached system block of "Conversion platform priors"
-        │    → pay the cache-write once, read it on every later brief
-        │    → steady-state cost ≈ $0.002 / brief
-        ▼
-scripts/marops/models.py             # LifecycleBrief — frozen Pydantic, re-validates
-        │  • signal recency decay → timing tier + shelf-life days (deterministic)
-        ▼
-scripts/marops/renderer.py           # Jinja2 → out/<slug>.html  +  out/<slug>.json
-```
-
-Four small modules, one Jinja2 template, **zero new infrastructure** — it reuses SignalForce's Pydantic-everything, immutable-models, mock-every-HTTP-call discipline. Covered by **13 tests at ~85%** (`pytest tests/marops/`), part of the repo's **547 passing**.
-
-**The design principle, stated plainly:** define the output shape crisply, let a schema enforce it, and iterate on *config* — never code. That's the same thesis the prospecting engine runs on, which is the whole point of the fork: it's not a one-off demo, it's a reusable architecture pointed at a new target.
-
----
-
-## The example gallery
-
-Five real-company briefs ship in [`examples/marops/`](examples/marops/) — each a different lifecycle motion, all from the same generator:
-
-| Run | Company | Lifecycle motion | Why it's interesting |
-|---|---|---|---|
-| `veriforce` | **Veriforce** | Tier-2 supplier re-engagement (post-lapse → renewal) | An *actual Conversion customer*; dormant-ARR recovery play |
-| `axonius` | **Axonius** | Pardot replacement → warehouse-native MAP | 3 stacked signals (Series E + Pardot G2 pain + live MOPs hire) |
-| `vanta` | **Vanta** | HubSpot segmentation ceiling → warehouse-native MAP | Series D budget window + Snowflake-native audience pain |
-| `hubspot-ceiling` | **Meridian Analytics** | Net-new acquisition before a conference window | ~6-day shelf life; buying committee modeled explicitly |
-| `dbt-labs` | **dbt Labs** | Warehouse-native MAP adoption | PLG-to-enterprise lifecycle |
-
-```bash
-python3.11 -m scripts.marops.cli axonius      # or vanta, hubspot-ceiling, dbt-labs, veriforce
-```
-
-Want a sixth? Copy any YAML, change the prospect and the `why_now_signals`, run the CLI. No code touched.
-
----
-
-## Built on SignalForce — the same engine, repointed
-
-The reason this branch is credible is the engine underneath it. **SignalForce** (the `main` branch) is an open-source, config-driven GTM toolkit: it monitors public activity — GitHub repos, job postings, funding rounds, research papers, LinkedIn, G2 reviews — to find companies *actively* investing in a problem, then writes outreach referencing their real work. Every keyword, ICP tier, and scoring weight is YAML you control; the Python is a dumb collection layer; the reasoning lives in Claude.
-
-`marops` keeps the spine — Pydantic models, immutable data, Claude integration, mock-every-HTTP testing — and swaps the renderer and the prompt. Same thrift, same discipline, new output. The rest of this README documents that parent engine; it's what makes the fork a five-minute exercise instead of a five-week one.
+**Two modes.** Run it hands-on with Claude Code skills (research, review, and refine at every step) or fully autonomous via n8n workflows on a daily schedule.
 
 ---
 
@@ -119,7 +46,7 @@ cp .env.example .env
 # Edit .env with your GitHub token (required) + other API keys (optional)
 
 # 4. Verify
-pytest --tb=short -q   # 547 tests, should all pass
+pytest --tb=short -q   # 567 tests, should all pass
 ```
 
 Open Claude Code and run `/signal-scanner` to find your first target accounts.
@@ -185,6 +112,35 @@ Three decoupled layers move data from raw public signals to enrolled sequences a
 ```
 
 **The Python scripts don't make decisions** — they collect raw signals from public APIs based on whatever keywords you configure. The Claude Code skills layer does the reasoning: intent scoring with configurable weights and recency decay, ICP fit grading, multi-source signal stacking, and contextual copywriting. Same scripts also power the n8n workflows — no code duplication between human-driven and automated paths.
+
+---
+
+## Beyond Prospecting: Lifecycle Campaign Briefs
+
+The same signal engine can point at marketing operations instead of sales prospecting.
+The `marops` module turns a YAML campaign config into a complete **lifecycle campaign
+brief** — Salesforce + warehouse segmentation, a multi-touch sequence with non-overlapping
+agent assignments (execution / QA / optimization), optimization triggers, and a pipeline
+projection with a downside scenario.
+
+It is a deterministic generator, not a mockup: the brief shape is encoded as a Claude
+`tool_use` JSON schema in [`scripts/marops/briefer.py`](scripts/marops/briefer.py), so the
+model physically cannot return an off-shape object. Pydantic validates the result, and a
+Jinja2 template renders it as a self-contained HTML artifact. ~30 seconds and ~$0.002 per
+brief with prompt caching.
+
+```bash
+# Option A — generate live (needs an Anthropic key):
+export ANTHROPIC_API_KEY=...
+python -m scripts.marops.cli hubspot-ceiling   # → out/hubspot-ceiling.html
+
+# Option B — no key, no wait: open a pre-generated brief:
+open demo/hubspot-ceiling.html
+```
+
+The example configs in `examples/marops/` target a fictional warehouse-native MAP vendor
+("Lumera") and a fictional prospect ("Meridian Analytics") so you can see the full shape
+end-to-end. Swap in your own platform's segment and channel model to make it yours.
 
 ---
 
