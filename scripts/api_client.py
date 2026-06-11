@@ -69,9 +69,7 @@ def _scrub_url(url: str) -> str:
     if not parts.query:
         return url
     qs = parse_qs(parts.query, keep_blank_values=True)
-    redacted = {
-        k: ["<redacted>"] if k.lower() in _SENSITIVE_PARAMS else v for k, v in qs.items()
-    }
+    redacted = {k: ["<redacted>"] if k.lower() in _SENSITIVE_PARAMS else v for k, v in qs.items()}
     new_query = urlencode(redacted, doseq=True)
     return urlunsplit(parts._replace(query=new_query))
 
