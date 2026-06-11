@@ -1,11 +1,20 @@
+from pathlib import Path
 from unittest.mock import patch
+
+from scripts.config_loader import load_config
 from scripts.models import Signal, SignalStrength, ICPScore
 from scripts.demo_scan import run_demo_scan, format_grade_table
 from scripts.signal_aggregator import ScoredCompany
 from scripts.intent_scorer import ScoringResult
 
+_EXAMPLE_CONFIG = load_config(
+    Path(__file__).parent.parent / "examples" / "map-migration" / "config.yaml"
+)
 
-def _make_signal(company: str, skills: list[str], strength: SignalStrength = SignalStrength.STRONG) -> Signal:
+
+def _make_signal(
+    company: str, skills: list[str], strength: SignalStrength = SignalStrength.STRONG
+) -> Signal:
     return Signal(
         signal_type="job_posting",
         company_name=company,
@@ -22,7 +31,10 @@ def test_run_demo_scan_returns_scored_companies():
         _make_signal("Acme Corp", ["Marketo", "Salesforce", "Hightouch"]),
         _make_signal("Beta Inc", ["HubSpot", "Salesforce"]),
     ]
-    with patch("scripts.demo_scan.run_all_scanners", return_value=fake_signals):
+    with (
+        patch("scripts.demo_scan.load_config", return_value=_EXAMPLE_CONFIG),
+        patch("scripts.demo_scan.run_all_scanners", return_value=fake_signals),
+    ):
         results = run_demo_scan()
     assert len(results) == 2
     scores = [r.scoring_result.combined_score for r in results]
@@ -31,7 +43,10 @@ def test_run_demo_scan_returns_scored_companies():
 
 def test_run_demo_scan_empty_signals_returns_empty():
     """run_demo_scan with no scanner output should return empty list."""
-    with patch("scripts.demo_scan.run_all_scanners", return_value=[]):
+    with (
+        patch("scripts.demo_scan.load_config", return_value=_EXAMPLE_CONFIG),
+        patch("scripts.demo_scan.run_all_scanners", return_value=[]),
+    ):
         results = run_demo_scan()
     assert results == []
 
@@ -39,7 +54,10 @@ def test_run_demo_scan_empty_signals_returns_empty():
 def test_format_grade_table_contains_company_name():
     """format_grade_table should include company names in output."""
     fake_signals = [_make_signal("Acme Corp", ["Marketo", "Salesforce"])]
-    with patch("scripts.demo_scan.run_all_scanners", return_value=fake_signals):
+    with (
+        patch("scripts.demo_scan.load_config", return_value=_EXAMPLE_CONFIG),
+        patch("scripts.demo_scan.run_all_scanners", return_value=fake_signals),
+    ):
         results = run_demo_scan()
     table = format_grade_table(results)
     assert "Acme Corp" in table
@@ -48,7 +66,10 @@ def test_format_grade_table_contains_company_name():
 def test_format_grade_table_contains_grade_letter():
     """format_grade_table should show A, B, C, or D grade."""
     fake_signals = [_make_signal("Acme Corp", ["Marketo", "Salesforce", "Hightouch"])]
-    with patch("scripts.demo_scan.run_all_scanners", return_value=fake_signals):
+    with (
+        patch("scripts.demo_scan.load_config", return_value=_EXAMPLE_CONFIG),
+        patch("scripts.demo_scan.run_all_scanners", return_value=fake_signals),
+    ):
         results = run_demo_scan()
     table = format_grade_table(results)
     assert any(f"[{g}]" in table for g in ["A", "B", "C", "D"])

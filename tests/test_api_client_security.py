@@ -48,7 +48,9 @@ def make_response(
     return resp
 
 
-def make_json_response(status_code: int, body: dict | list, headers: dict | None = None) -> MagicMock:
+def make_json_response(
+    status_code: int, body: dict | list, headers: dict | None = None
+) -> MagicMock:
     resp = MagicMock(spec=requests.Response)
     resp.status_code = status_code
     resp.headers = headers or {}
@@ -314,9 +316,7 @@ class TestTimeoutAlwaysSet:
             client.get("/resource")
 
         _, kwargs = mock_req.call_args
-        assert kwargs.get("timeout") == 30, (
-            f"Expected timeout=30 in request kwargs, got: {kwargs}"
-        )
+        assert kwargs.get("timeout") == 30, f"Expected timeout=30 in request kwargs, got: {kwargs}"
 
     def test_custom_timeout_is_passed(self):
         """A custom timeout set on the client is forwarded to every request."""
@@ -346,10 +346,13 @@ class TestTimeoutAlwaysSet:
         """G2AuthenticatedScanner._fetch_reviews must pass timeout to its raw Session.get."""
         scanner = G2AuthenticatedScanner(cookie="session=abc123")
 
-        page1 = make_json_response(200, {
-            "reviews": [],
-            "meta": {"total_pages": 1},
-        })
+        page1 = make_json_response(
+            200,
+            {
+                "reviews": [],
+                "meta": {"total_pages": 1},
+            },
+        )
 
         with patch.object(scanner._session, "get", return_value=page1) as mock_get:
             list(scanner._fetch_reviews({"slug": "hubspot", "display": "HubSpot"}, stars=2))

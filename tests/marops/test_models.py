@@ -1,4 +1,5 @@
 """Tests for MarOps Pydantic models."""
+
 import pytest
 
 from scripts.marops.models import (
@@ -51,8 +52,8 @@ def test_segment_is_immutable():
 
 def test_lifecycle_brief_round_trips_json():
     brief = LifecycleBrief(
-        prospect="Veriforce",
-        prospect_url="https://www.veriforce.com",
+        prospect="Meridian Analytics",
+        prospect_url="https://www.meridian-analytics.example",
         vertical="Supplier compliance SaaS",
         campaign_name="Tier-2 Re-Engagement",
         objective="Reactivate lapsed accounts.",
@@ -71,15 +72,15 @@ def test_lifecycle_brief_round_trips_json():
         meta={},
     )
     data = brief.model_dump()
-    assert data["prospect"] == "Veriforce"
+    assert data["prospect"] == "Meridian Analytics"
     assert data["segment"]["name"] == "Lapsed Tier-2"
     assert data["touches"][0]["channel"] == "email"
 
 
 def test_campaign_config_validates():
     config = MarOpsCampaignConfig(
-        prospect="Veriforce",
-        prospect_url="https://www.veriforce.com",
+        prospect="Meridian Analytics",
+        prospect_url="https://www.meridian-analytics.example",
         vertical="SaaS",
         campaign_name="Re-engagement",
         lifecycle_stage="Customer",

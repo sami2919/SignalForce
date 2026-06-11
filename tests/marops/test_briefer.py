@@ -1,4 +1,5 @@
 """Tests for briefer.py — Claude API call mocked."""
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -7,8 +8,8 @@ from scripts.marops.briefer import generate_brief
 from scripts.marops.models import LifecycleBrief, MarOpsCampaignConfig
 
 _CONFIG = MarOpsCampaignConfig(
-    prospect="Veriforce",
-    prospect_url="https://www.veriforce.com",
+    prospect="Meridian Analytics",
+    prospect_url="https://www.meridian-analytics.example",
     vertical="Supplier compliance SaaS",
     campaign_name="Tier-2 Re-Engagement",
     lifecycle_stage="Customer · Re-engagement",
@@ -37,7 +38,9 @@ _TOOL_INPUT = {
             "success_metric": "Open rate >38%",
         }
     ],
-    "optimization_triggers": [{"condition": "intent spike detected", "action": "accelerate to step 4"}],
+    "optimization_triggers": [
+        {"condition": "intent spike detected", "action": "accelerate to step 4"}
+    ],
     "pipeline_projection": {
         "expected_renewals": "~$1.4M ARR",
         "ae_efficiency": "70% task acceptance",
@@ -72,7 +75,7 @@ def test_generate_brief_returns_lifecycle_brief(monkeypatch):
         brief = generate_brief(_CONFIG)
 
     assert isinstance(brief, LifecycleBrief)
-    assert brief.prospect == "Veriforce"
+    assert brief.prospect == "Meridian Analytics"
     assert brief.segment.name == "Lapsed Tier-2"
     assert len(brief.touches) == 1
     assert brief.meta["input_tokens"] == 1000
