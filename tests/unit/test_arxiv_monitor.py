@@ -7,7 +7,7 @@ No real API calls are made.
 from __future__ import annotations
 
 import json
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -572,7 +572,7 @@ class TestIsRecent:
         from scripts.scanners.arxiv_scanner import ArxivRLMonitor
 
         monitor = ArxivRLMonitor.__new__(ArxivRLMonitor)
-        current_year = datetime.now(UTC).year
+        current_year = datetime.now(timezone.utc).year
         paper = {"year": current_year, "title": "Test"}
         assert monitor._is_recent(paper, lookback_days=365) is True
 
@@ -597,8 +597,8 @@ class TestCLIOutput:
 
         mock_result = ScanResult(
             scan_type="arxiv_paper",
-            started_at=datetime.now(UTC),
-            completed_at=datetime.now(UTC),
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
             signals_found=[],
             total_raw_results=0,
             total_after_dedup=0,
@@ -634,8 +634,8 @@ class TestCLIOutput:
 
         mock_result = ScanResult(
             scan_type="arxiv_paper",
-            started_at=datetime.now(UTC),
-            completed_at=datetime.now(UTC),
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
             signals_found=[weak_signal],
             total_raw_results=1,
             total_after_dedup=1,
@@ -671,8 +671,8 @@ class TestCLIOutput:
 
         mock_result = ScanResult(
             scan_type="arxiv_paper",
-            started_at=datetime.now(UTC),
-            completed_at=datetime.now(UTC),
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
             signals_found=[strong_signal],
             total_raw_results=4,
             total_after_dedup=1,
@@ -715,8 +715,8 @@ class TestCLIOutput:
 
         mock_result = ScanResult(
             scan_type="arxiv_paper",
-            started_at=datetime.now(UTC),
-            completed_at=datetime.now(UTC),
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
             signals_found=[strong_signal],
             total_raw_results=4,
             total_after_dedup=1,

@@ -11,7 +11,7 @@ import argparse
 import json
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
 
 from scripts.api_client import BaseAPIClient
 from scripts.config import get_config
@@ -92,7 +92,7 @@ def _build_search_queries(config: ScannerConfig, lookback_days: int) -> list[str
     Returns:
         List of search query strings.
     """
-    since_date = (datetime.now(UTC) - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
+    since_date = (datetime.now(timezone.utc) - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
     queries: list[str] = []
 
     for topic in config.topics:
@@ -196,7 +196,7 @@ def scan(config: ScannerConfig) -> ScanResult:
     app_config = get_config()
     client = GitHubClient(token=app_config.github_token)
 
-    started_at = datetime.now(UTC)
+    started_at = datetime.now(timezone.utc)
     lookback_days = config.lookback_days
     queries = _build_search_queries(config, lookback_days)
 
@@ -230,7 +230,7 @@ def scan(config: ScannerConfig) -> ScanResult:
         signal = _create_signal(org_name, repos, score)
         signals.append(signal)
 
-    completed_at = datetime.now(UTC)
+    completed_at = datetime.now(timezone.utc)
 
     return ScanResult(
         scan_type="github_repo",
@@ -304,23 +304,9 @@ def main(argv: list[str] | None = None) -> None:
         print(f"  [{strength_label:8s}] {signal.company_name} — {signal.source_url}")
 
     if args.output:
-        output_data = {
-            "scan_id": result.scan_id,
-            "scan_type": result.scan_type,
-            "started_at": result.started_at.isoformat(),
-            "completed_at": result.completed_at.isoformat(),
-            "total_raw_results": result.total_raw_results,
-            "total_after_dedup": result.total_after_dedup,
-            "signals": [
-                {
-                    "company_name": s.company_name,
-                    "signal_strength": s.signal_strength,
-                    "source_url": s.source_url,
-                    "metadata": s.metadata,
-                }
-                for s in filtered_signals
-            ],
-        }
+        output_data = result.model_copy(
+            update={"signals_found": filtered_signals}
+        ).model_dump(mode="json")
         with open(args.output, "w") as f:
             json.dump(output_data, f, indent=2, default=str)
         print(f"\nResults written to {args.output}")

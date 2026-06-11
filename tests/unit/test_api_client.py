@@ -4,6 +4,8 @@ Tests are written first (TDD RED phase) before implementation.
 All HTTP calls are mocked — no real network requests.
 """
 
+from __future__ import annotations
+
 import pytest
 import requests
 from unittest.mock import patch, MagicMock, call

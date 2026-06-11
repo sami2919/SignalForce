@@ -6,7 +6,7 @@ TDD: Tests written before implementation.
 from __future__ import annotations
 
 import tempfile
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -61,7 +61,7 @@ def make_signal(
 
 def make_scan_result(signals: list[Signal], scan_type: str = "arxiv_paper") -> ScanResult:
     """Factory for ScanResult objects."""
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     return ScanResult(
         scan_type=scan_type,
         started_at=now,
@@ -486,8 +486,8 @@ class TestIntentScoringIntegration:
         ]
         scan_result = ScanResult(
             scan_type="arxiv_paper",
-            started_at=datetime.now(UTC),
-            completed_at=datetime.now(UTC),
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
             signals_found=signals,
             total_raw_results=2,
             total_after_dedup=2,
@@ -506,8 +506,8 @@ class TestIntentScoringIntegration:
         signals = [make_signal(company_name="LegacyCo", signal_type="github_repo")]
         scan_result = ScanResult(
             scan_type="github_repo",
-            started_at=datetime.now(UTC),
-            completed_at=datetime.now(UTC),
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
             signals_found=signals,
             total_raw_results=1,
             total_after_dedup=1,

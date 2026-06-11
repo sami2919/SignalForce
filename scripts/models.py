@@ -8,7 +8,7 @@ All models are immutable (frozen=True) to prevent hidden side effects.
 
 from __future__ import annotations
 
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from enum import Enum, IntEnum
 from uuid import uuid4
 
@@ -100,7 +100,7 @@ class Signal(BaseModel):
     signal_strength: SignalStrength
     source_url: str
     raw_data: dict
-    detected_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    detected_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: dict = Field(default_factory=dict)
 
 
@@ -180,7 +180,7 @@ class GeneratedEmail(BaseModel):
     cta: str
     variant: EmailVariant
     template_name: str
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 # ---------------------------------------------------------------------------
@@ -200,8 +200,8 @@ class Deal(BaseModel):
     stage: DealStage = DealStage.SIGNAL_DETECTED
     hubspot_deal_id: str | None = None
     instantly_campaign_id: str | None = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     notes: str = ""
 
 
@@ -246,7 +246,7 @@ class MeetingOutcome(BaseModel):
     stakeholders_needed: list[str] = Field(default_factory=list)
     follow_up_resources: list[str] = Field(default_factory=list)
     notes: str = ""
-    recorded_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    recorded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 # ---------------------------------------------------------------------------

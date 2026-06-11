@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import inspect, text
 
-from scripts.db import Base, Campaign, TrackedSignal, OutreachEvent, OutcomeEvent
+from scripts.db import Campaign
 from scripts.db import create_db_engine, init_db, get_session
 
 

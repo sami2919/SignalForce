@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -14,37 +14,37 @@ from scripts.recency import (
 
 class TestCalculateDecayFactor:
     def test_zero_age_returns_1(self):
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         assert calculate_decay_factor(now, now, half_life_days=5) == pytest.approx(1.0)
 
     def test_one_half_life_returns_0_5(self):
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         signal_time = now - timedelta(days=5)
         assert calculate_decay_factor(signal_time, now, half_life_days=5) == pytest.approx(0.5)
 
     def test_two_half_lives_returns_0_25(self):
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         signal_time = now - timedelta(days=10)
         assert calculate_decay_factor(signal_time, now, half_life_days=5) == pytest.approx(0.25)
 
     def test_48_hours_fast_decay(self):
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         signal_time = now - timedelta(hours=48)
         factor = calculate_decay_factor(signal_time, now, half_life_days=5)
         assert 0.7 < factor < 0.8
 
     def test_14_day_slow_decay(self):
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         signal_time = now - timedelta(days=14)
         assert calculate_decay_factor(signal_time, now, half_life_days=14) == pytest.approx(0.5)
 
     def test_negative_age_clamps_to_1(self):
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         future = now + timedelta(hours=1)
         assert calculate_decay_factor(future, now, half_life_days=5) == pytest.approx(1.0)
 
     def test_very_old_signal_near_zero(self):
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         signal_time = now - timedelta(days=30)
         factor = calculate_decay_factor(signal_time, now, half_life_days=5)
         assert factor < 0.02
@@ -52,7 +52,7 @@ class TestCalculateDecayFactor:
 
 class TestApplyRecencyWeight:
     def test_applies_decay_to_strength(self):
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         signal_time = now - timedelta(days=5)
         result = apply_recency_weight(
             signal_strength=3, signal_time=signal_time, now=now, half_life_days=5
@@ -60,6 +60,6 @@ class TestApplyRecencyWeight:
         assert result == pytest.approx(1.5)
 
     def test_fresh_signal_full_strength(self):
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         result = apply_recency_weight(signal_strength=2, signal_time=now, now=now, half_life_days=5)
         assert result == pytest.approx(2.0)

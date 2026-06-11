@@ -4,7 +4,7 @@ Tests are written first (TDD RED phase) before implementation.
 """
 
 import pytest
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from pydantic import ValidationError
 
 from scripts.models import (
@@ -85,7 +85,7 @@ def test_signal_auto_generates_uuid():
 
 
 def test_signal_default_detected_at():
-    before = datetime.now(UTC)
+    before = datetime.now(timezone.utc)
     signal = Signal(
         signal_type="arxiv_paper",
         company_name="MIT",
@@ -93,7 +93,7 @@ def test_signal_default_detected_at():
         source_url="https://arxiv.org/abs/9999.0000",
         raw_data={},
     )
-    after = datetime.now(UTC)
+    after = datetime.now(timezone.utc)
     assert before <= signal.detected_at <= after
 
 
@@ -244,7 +244,7 @@ def test_deal_default_stage_is_signal_detected():
 
 
 def test_scan_result_creation():
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     signal = Signal(
         signal_type="arxiv_paper",
         company_name="Stanford",

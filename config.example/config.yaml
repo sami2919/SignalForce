@@ -239,3 +239,11 @@ scoring:
     A: 8.0
     B: 5.0
     C: 2.0
+
+# Optional: companies to exclude from scoring regardless of signal strength.
+# Useful for filtering out enterprise/large-cap companies that appear in job
+# scanner results but are not realistic outbound targets for your ICP.
+# filters:
+#   company_blocklist:
+#     - "My Own Company"
+#     - "Known Partner Inc"

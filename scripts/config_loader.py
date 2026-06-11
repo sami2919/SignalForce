@@ -83,6 +83,14 @@ class ScoringConfig(BaseModel):
     grade_thresholds: dict[str, float] = {"A": 8.0, "B": 5.0, "C": 2.0}
 
 
+class FiltersConfig(BaseModel):
+    """Optional post-scan filters applied before scoring."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    company_blocklist: list[str] = []
+
+
 class SignalForceConfig(BaseModel):
     """Top-level SignalForce configuration."""
 
@@ -92,6 +100,7 @@ class SignalForceConfig(BaseModel):
     icp: ICPConfig
     scanners: dict[str, ScannerConfig]
     scoring: ScoringConfig
+    filters: FiltersConfig = FiltersConfig()
 
 
 def check_config_exists(config_dir: Path = _CONFIG_DIR) -> None:

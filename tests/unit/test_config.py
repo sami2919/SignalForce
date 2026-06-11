@@ -18,7 +18,7 @@ from scripts.config import AppConfig, get_config, validate_keys_for_scanner
 def test_config_loads_defaults():
     """With no env vars, all keys are None and numeric defaults are correct."""
     with patch.dict("os.environ", {}, clear=True):
-        config = AppConfig()
+        config = AppConfig(_env_file=None)
         assert config.github_token is None
         assert config.semantic_scholar_key is None
         assert config.apollo_api_key is None
@@ -84,7 +84,7 @@ def test_config_is_frozen():
 def test_validate_github_scanner_missing_key():
     """validate_keys_for_scanner('github') raises ValueError when token is absent."""
     with patch.dict("os.environ", {}, clear=True):
-        config = AppConfig()
+        config = AppConfig(_env_file=None)
         with pytest.raises(ValueError, match="github_token"):
             validate_keys_for_scanner("github", config)
 
@@ -113,7 +113,9 @@ def test_validate_arxiv_no_key_needed():
 def test_validate_enrichment_needs_at_least_one():
     """enrichment scanner raises ValueError when none of the three keys are set."""
     with patch.dict("os.environ", {}, clear=True):
-        config = AppConfig()
+        # _env_file=None disables the .env file source so the test stays hermetic
+        # even on a machine whose .env defines the enrichment keys.
+        config = AppConfig(_env_file=None)
         with pytest.raises(ValueError, match="apollo|hunter|prospeo"):
             validate_keys_for_scanner("enrichment", config)
 

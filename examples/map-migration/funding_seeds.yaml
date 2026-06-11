@@ -1,0 +1,27 @@
+# Funding event seeds for the demo — fictional examples; in real use, source
+# these from Crunchbase/TechCrunch.
+# Companies with recent funding rounds are prime outbound targets:
+# new budget, fresh stack evaluation cycle, CMO with mandate to modernize.
+#
+# The scanner emits these as funding_event signals (weight 2.5) in the scoring engine.
+# Companies that ALSO appear in the job scanner and g2_seeds get 3 unique signal types
+# → 2.0× breadth multiplier → A grade.
+
+events:
+  - company: "Helixguard"
+    amount_usd: 150000000
+    stage: "Series D"
+    snippet: >
+      Helixguard raises $150M Series D to expand its enterprise security compliance
+      platform. With fresh capital and aggressive hiring plans, their MOPs team will need
+      to scale lifecycle campaigns significantly.
+    source_url: "https://news.example.com/helixguard-series-d"
+
+  - company: "Gridframe"
+    amount_usd: 200000000
+    stage: "Series E"
+    snippet: >
+      Gridframe closes $200M Series E at $2.6B valuation. Cybersecurity asset management
+      company expanding into new enterprise verticals — marketing automation investment
+      expected to scale with headcount.
+    source_url: "https://news.example.com/gridframe-series-e"

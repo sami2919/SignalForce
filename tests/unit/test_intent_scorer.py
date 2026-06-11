@@ -6,7 +6,7 @@ before any implementation exists.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -42,7 +42,7 @@ def make_signal(
         signal_strength=strength,
         source_url="https://example.com",
         raw_data={},
-        detected_at=datetime.now(UTC) - timedelta(days=age_days),
+        detected_at=datetime.now(timezone.utc) - timedelta(days=age_days),
         metadata=metadata,
     )
 
@@ -75,7 +75,7 @@ class TestIntentWeights:
 
     def test_unknown_signal_type_uses_fallback_weight(self):
         scorer = IntentScorer(_CONFIG)
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         signal = make_signal(
             signal_type="unknown_type", strength=SignalStrength.MODERATE, age_days=0
         )
@@ -99,7 +99,7 @@ class TestCalculateIntentScore:
         assert self.scorer.calculate_intent_score([]) == 0.0
 
     def test_fresh_strong_signal_scores_high(self):
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         signal = make_signal(
             signal_type="arxiv",
             strength=SignalStrength.STRONG,
@@ -110,7 +110,7 @@ class TestCalculateIntentScore:
         assert score > 8.0
 
     def test_stale_signal_scores_lower_than_fresh(self):
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         fresh = make_signal(signal_type="github", strength=SignalStrength.STRONG, age_days=0)
         stale = make_signal(signal_type="github", strength=SignalStrength.STRONG, age_days=30)
 
@@ -121,7 +121,7 @@ class TestCalculateIntentScore:
 
     def test_stale_signal_decay_significant(self):
         """Signal at 6× half-life should be < 2% of original strength."""
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         # github half-life = 5 days (from sample_config); 30 days = 6 half-lives → decay ≈ 2^-6 ≈ 0.0156
         signal = make_signal(signal_type="github", strength=SignalStrength.STRONG, age_days=30)
         score = self.scorer.calculate_intent_score([signal], now=now)
@@ -132,7 +132,7 @@ class TestCalculateIntentScore:
 
     def test_multi_source_gets_breadth_bonus(self):
         """Two different signal types should score higher than two identical types."""
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         signal_a = make_signal(signal_type="github", strength=SignalStrength.MODERATE, age_days=0)
         signal_b = make_signal(signal_type="arxiv", strength=SignalStrength.MODERATE, age_days=0)
         signal_dup = make_signal(signal_type="github", strength=SignalStrength.MODERATE, age_days=0)
@@ -143,7 +143,7 @@ class TestCalculateIntentScore:
         assert multi_source_score > single_source_score
 
     def test_three_source_types_higher_than_two(self):
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         s1 = make_signal(signal_type="github", strength=SignalStrength.MODERATE, age_days=0)
         s2 = make_signal(signal_type="arxiv", strength=SignalStrength.MODERATE, age_days=0)
         s3 = make_signal(signal_type="job_posting", strength=SignalStrength.MODERATE, age_days=0)
@@ -161,7 +161,7 @@ class TestCalculateIntentScore:
 
     def test_breadth_multiplier_4_plus_types_uses_fallback(self):
         """4 unique source types should use the 3.0 fallback multiplier."""
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         signals = [
             make_signal(signal_type="github", strength=SignalStrength.WEAK, age_days=0),
             make_signal(signal_type="arxiv", strength=SignalStrength.WEAK, age_days=0),
@@ -238,7 +238,7 @@ class TestIntentScorer:
     """IntentScorer.score_signals returns correct ScoringResult objects."""
 
     def test_fresh_multi_source_yields_a_tier(self):
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         signals = [
             make_signal(signal_type="arxiv", strength=SignalStrength.STRONG, age_days=0),
             make_signal(signal_type="github", strength=SignalStrength.STRONG, age_days=0),
@@ -249,7 +249,7 @@ class TestIntentScorer:
         assert result.icp_score == ICPScore.A
 
     def test_stale_single_source_yields_c_or_d_tier(self):
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         signals = [
             make_signal(signal_type="funding_event", strength=SignalStrength.WEAK, age_days=90),
         ]
@@ -258,7 +258,7 @@ class TestIntentScorer:
         assert result.icp_score in (ICPScore.C, ICPScore.D)
 
     def test_result_has_intent_score(self):
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         signal = make_signal(age_days=0)
         scorer = IntentScorer(_CONFIG)
         result = scorer.score_signals([signal], icp_fit=5.0, now=now)
@@ -266,7 +266,7 @@ class TestIntentScorer:
         assert result.intent_score >= 0.0
 
     def test_result_has_combined_score(self):
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         signal = make_signal(age_days=0)
         scorer = IntentScorer(_CONFIG)
         result = scorer.score_signals([signal], icp_fit=5.0, now=now)
@@ -280,14 +280,14 @@ class TestIntentScorer:
             result.intent_score = 99.0  # type: ignore[misc]
 
     def test_signal_count_matches_input(self):
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         signals = [make_signal(age_days=i) for i in range(4)]
         scorer = IntentScorer(_CONFIG)
         result = scorer.score_signals(signals, icp_fit=5.0, now=now)
         assert result.signal_count == 4
 
     def test_source_types_counts_unique_types(self):
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         signals = [
             make_signal(signal_type="github", age_days=0),
             make_signal(signal_type="github", age_days=1),
@@ -313,7 +313,7 @@ class TestIntentScorer:
 
     def test_now_parameter_propagated_to_intent(self):
         """Passing a fixed `now` should give deterministic results."""
-        fixed_now = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
+        fixed_now = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
         signal = make_signal(
             signal_type="github",
             strength=SignalStrength.MODERATE,

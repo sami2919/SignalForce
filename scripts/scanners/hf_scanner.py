@@ -12,7 +12,7 @@ import json
 import logging
 import sys
 from collections import defaultdict
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from scripts.api_client import BaseAPIClient
@@ -131,7 +131,7 @@ class HuggingFaceRLMonitor:
         Returns:
             ScanResult with Signal objects for each qualifying organization.
         """
-        started_at = datetime.now(UTC)
+        started_at = datetime.now(timezone.utc)
 
         org_models: dict[str, set[str]] = defaultdict(set)
         org_model_details: dict[str, list[dict]] = defaultdict(list)
@@ -168,7 +168,7 @@ class HuggingFaceRLMonitor:
             signal = self._create_signal(org, model_list, score)
             signals.append(signal)
 
-        completed_at = datetime.now(UTC)
+        completed_at = datetime.now(timezone.utc)
 
         return ScanResult(
             scan_type="huggingface_model",
@@ -208,7 +208,7 @@ class HuggingFaceRLMonitor:
             logger.warning("Could not parse lastModified '%s': %s", last_modified_raw, exc)
             return False
 
-        cutoff = datetime.now(UTC) - timedelta(days=lookback_days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
         return last_modified > cutoff
 
     def _score_org(self, model_count: int) -> SignalStrength:

@@ -14,7 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from scripts.api_client import BaseAPIClient
@@ -150,9 +150,9 @@ class FundingTracker:
         Returns:
             ScanResult with Signal objects for each qualifying funding event.
         """
-        started_at = datetime.now(UTC)
+        started_at = datetime.now(timezone.utc)
         queries = self._build_search_queries(lookback_days)
-        min_date = (datetime.now(UTC) - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
+        min_date = (datetime.now(timezone.utc) - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
 
         seen_companies: dict[str, dict] = {}
         total_raw = 0
@@ -188,7 +188,7 @@ class FundingTracker:
             signal = self._create_signal(company_name, funding_data, score)
             signals.append(signal)
 
-        completed_at = datetime.now(UTC)
+        completed_at = datetime.now(timezone.utc)
 
         return ScanResult(
             scan_type="funding_event",
@@ -348,23 +348,9 @@ def main(argv: list[str] | None = None) -> None:
         print(f"  [{strength_label:8s}] {signal.company_name} — {round_type} ({amount_str})")
 
     if args.output:
-        output_data = {
-            "scan_id": result.scan_id,
-            "scan_type": result.scan_type,
-            "started_at": result.started_at.isoformat(),
-            "completed_at": result.completed_at.isoformat(),
-            "total_raw_results": result.total_raw_results,
-            "total_after_dedup": result.total_after_dedup,
-            "signals": [
-                {
-                    "company_name": s.company_name,
-                    "signal_strength": s.signal_strength,
-                    "source_url": s.source_url,
-                    "metadata": s.metadata,
-                }
-                for s in filtered_signals
-            ],
-        }
+        output_data = result.model_copy(
+            update={"signals_found": filtered_signals}
+        ).model_dump(mode="json")
         with open(args.output, "w") as f:
             json.dump(output_data, f, indent=2, default=str)
         print(f"\nResults written to {args.output}")

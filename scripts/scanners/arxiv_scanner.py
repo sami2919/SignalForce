@@ -12,7 +12,7 @@ import json
 import logging
 import re
 from collections import defaultdict
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from scripts.api_client import BaseAPIClient
@@ -135,7 +135,7 @@ class ArxivMonitor:
         Returns:
             ScanResult with Signal objects for each qualifying company.
         """
-        started_at = datetime.now(UTC)
+        started_at = datetime.now(timezone.utc)
 
         # company_name → set of paper dicts (deduped by paperId)
         company_papers: dict[str, dict[str, dict]] = defaultdict(dict)
@@ -170,7 +170,7 @@ class ArxivMonitor:
             signal = self._create_signal(company, papers_list, score)
             signals.append(signal)
 
-        completed_at = datetime.now(UTC)
+        completed_at = datetime.now(timezone.utc)
 
         return ScanResult(
             scan_type="arxiv_paper",
@@ -195,8 +195,8 @@ class ArxivMonitor:
         year = paper.get("year")
         if year is None:
             return False
-        cutoff = datetime.now(UTC) - timedelta(days=lookback_days)
-        paper_date = datetime(year, 1, 1, tzinfo=UTC)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+        paper_date = datetime(year, 1, 1, tzinfo=timezone.utc)
         return paper_date >= cutoff
 
     def _extract_companies(self, paper: dict) -> list[str]:

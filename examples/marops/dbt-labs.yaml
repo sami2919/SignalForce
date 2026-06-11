@@ -1,0 +1,32 @@
+prospect: dbt Labs
+prospect_url: https://www.getdbt.com
+vertical: "Data transformation SaaS — open-source dbt Core + dbt Cloud, ~300 employees, Series D"
+campaign_name: "Warehouse-Native MAP Adoption — Data Team as Champion"
+lifecycle_stage: evaluation
+objective: >
+  Convert dbt Labs from a MAP-adjacent prospect to a Lumera platform trial.
+  Their data team already lives in the warehouse — they have Snowflake, BigQuery,
+  and dbt natively. The gap is their marketing team is almost certainly running
+  HubSpot or Marketo on top of that warehouse without a native connection.
+  The champion is their Marketing Data Engineer (active Greenhouse posting) —
+  the person hired to paper over that exact gap.
+segment_description: >
+  Marketing Data Engineer hire + active dbt ecosystem GitHub presence (dbt-mcp,
+  dbt-duckdb repos pushed in last 7 days). Data-first culture means the MOPs
+  buyer speaks SQL and will immediately understand warehouse-native segmentation.
+  Likely 2 champions: the new Marketing Data Engineer + VP Marketing who approved
+  the hire. AE task should target both.
+num_touches: 6
+why_now_signals:
+  - signal_type: hiring
+    description: "Marketing Data Engineer role posted on Greenhouse — JD requires dbt, Snowflake, and 'building attribution from scratch outside of HubSpot'. Direct MAP ceiling signal."
+    days_ago: 5
+    source: Greenhouse
+  - signal_type: github_repo
+    description: "dbt-labs/dbt-mcp repo pushed 3 days ago — they're building an MCP server for dbt, signaling active investment in agent-native tooling. Lumera's agent model is a natural fit."
+    days_ago: 3
+    source: GitHub
+  - signal_type: github_repo
+    description: "dbt-labs/dbt-duckdb repo active — DuckDB integration signals interest in embedded/local warehouse execution, consistent with warehouse-native MAP interest."
+    days_ago: 6
+    source: GitHub

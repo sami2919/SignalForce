@@ -36,6 +36,8 @@ class AppConfig(BaseSettings):
     openai_api_key: str | None = None
     clay_api_key: str | None = None
     zerobounce_api_key: str | None = None
+    serpapi_key: str | None = None
+    anthropic_api_key: str | None = None
 
     # Pipeline behaviour
     scan_lookback_days: int = 7

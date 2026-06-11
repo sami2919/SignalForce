@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import time
+from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
 import requests
 
@@ -47,6 +48,30 @@ _SERVER_ERROR_CODES = {500, 502, 503}
 _CLIENT_ERROR_NO_RETRY = {400, 401, 404}
 _MAX_RETRIES = 3
 _BACKOFF_BASE = 1  # seconds
+
+# Maximum number of seconds we will sleep on a server-supplied Retry-After or
+# X-RateLimit-Reset header.  Without a cap a hostile/compromised endpoint can
+# instruct the client to sleep for days (e.g. Retry-After: 86400).
+_MAX_RETRY_SLEEP = 300  # 5 minutes
+
+# Query-string parameter names that carry credentials and must be scrubbed from
+# URLs before they appear in log messages or exception strings.
+_SENSITIVE_PARAMS = frozenset({"api_key", "apikey", "key", "token", "secret", "access_token"})
+
+
+def _scrub_url(url: str) -> str:
+    """Return url with credential query-string parameters replaced by <redacted>.
+
+    Only parameters whose names are in _SENSITIVE_PARAMS are affected.
+    The path, host, and non-sensitive query params are preserved unchanged.
+    """
+    parts = urlsplit(url)
+    if not parts.query:
+        return url
+    qs = parse_qs(parts.query, keep_blank_values=True)
+    redacted = {k: ["<redacted>"] if k.lower() in _SENSITIVE_PARAMS else v for k, v in qs.items()}
+    new_query = urlencode(redacted, doseq=True)
+    return urlunsplit(parts._replace(query=new_query))
 
 
 class BaseAPIClient:
@@ -108,7 +133,9 @@ class BaseAPIClient:
         server_error_retries = 0
 
         while True:
-            logger.debug("%s %s", method, url)
+            # Log only the scrubbed URL so credentials in query params never reach logs.
+            safe_url = _scrub_url(url)
+            logger.debug("%s %s", method, safe_url)
 
             try:
                 response = self._session.request(
@@ -120,7 +147,7 @@ class BaseAPIClient:
                 )
             except requests.Timeout:
                 logger.warning(
-                    "Request timed out: %s %s — retrying with doubled timeout", method, url
+                    "Request timed out: %s %s — retrying with doubled timeout", method, safe_url
                 )
                 current_timeout *= 2
                 # Only retry once for timeout
@@ -133,7 +160,7 @@ class BaseAPIClient:
                 )
 
             status = response.status_code
-            logger.debug("Response status: %d for %s %s", status, method, url)
+            logger.debug("Response status: %d for %s %s", status, method, safe_url)
 
             if status == 200:
                 return response.json()
@@ -142,10 +169,10 @@ class BaseAPIClient:
             if status == 429:
                 retry_after_raw = response.headers.get("Retry-After", "1")
                 try:
-                    retry_after = int(retry_after_raw)
+                    retry_after = max(0, min(int(retry_after_raw), _MAX_RETRY_SLEEP))
                 except (ValueError, TypeError):
                     retry_after = 1
-                logger.warning("429 rate limited on %s — sleeping %ds", url, retry_after)
+                logger.warning("429 rate limited on %s — sleeping %ds", safe_url, retry_after)
                 time.sleep(retry_after)
                 continue  # retry without counting against backoff limit
 
@@ -153,19 +180,24 @@ class BaseAPIClient:
             if status == 403 and response.headers.get("X-RateLimit-Remaining") == "0":
                 reset_raw = response.headers.get("X-RateLimit-Reset", "1")
                 try:
-                    sleep_for = int(reset_raw)
+                    sleep_for = max(0, min(int(reset_raw), _MAX_RETRY_SLEEP))
                 except (ValueError, TypeError):
                     sleep_for = 1
-                logger.warning("403 quota exhausted on %s — sleeping %ds", url, sleep_for)
+                logger.warning("403 quota exhausted on %s — sleeping %ds", safe_url, sleep_for)
                 time.sleep(sleep_for)
                 continue  # retry without counting against backoff limit
 
             # --- Client errors: raise immediately ---
             if status in _CLIENT_ERROR_NO_RETRY:
+                try:
+                    body = response.json()
+                    body_str = str(body)
+                except Exception:
+                    body_str = response.text[:200] if response.text else "(empty body)"
                 raise APIError(
                     status_code=status,
-                    message=f"Client error: {response.json()}",
-                    url=url,
+                    message=f"Client error: {body_str}",
+                    url=safe_url,
                 )
 
             # --- Server errors: exponential backoff ---
@@ -174,13 +206,13 @@ class BaseAPIClient:
                     raise APIError(
                         status_code=status,
                         message=f"Server error after {_MAX_RETRIES} retries",
-                        url=url,
+                        url=safe_url,
                     )
                 sleep_time = _BACKOFF_BASE * (2**server_error_retries)
                 logger.warning(
                     "Server error %d on %s — retry %d/%d in %ds",
                     status,
-                    url,
+                    safe_url,
                     server_error_retries + 1,
                     _MAX_RETRIES,
                     sleep_time,
@@ -193,5 +225,5 @@ class BaseAPIClient:
             raise APIError(
                 status_code=status,
                 message="Unexpected response status",
-                url=url,
+                url=safe_url,
             )

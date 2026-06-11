@@ -7,7 +7,7 @@ No real API calls are made.
 from __future__ import annotations
 
 import json
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -673,8 +673,8 @@ class TestCLI:
 
         mock_result = ScanResult(
             scan_type="job_posting",
-            started_at=datetime.now(UTC),
-            completed_at=datetime.now(UTC),
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
             signals_found=[],
             total_raw_results=0,
             total_after_dedup=0,
@@ -712,8 +712,8 @@ class TestCLI:
 
         mock_result = ScanResult(
             scan_type="job_posting",
-            started_at=datetime.now(UTC),
-            completed_at=datetime.now(UTC),
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
             signals_found=[weak_signal],
             total_raw_results=1,
             total_after_dedup=1,
@@ -737,8 +737,8 @@ class TestCLI:
 
         mock_result = ScanResult(
             scan_type="job_posting",
-            started_at=datetime.now(UTC),
-            completed_at=datetime.now(UTC),
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
             signals_found=[],
             total_raw_results=0,
             total_after_dedup=0,
@@ -759,7 +759,7 @@ class TestCLI:
         assert output_file.exists()
         data = json.loads(output_file.read_text())
         assert "scan_id" in data
-        assert "signals" in data
+        assert "signals_found" in data
 
 
 # ---------------------------------------------------------------------------

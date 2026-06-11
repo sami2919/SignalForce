@@ -2,13 +2,13 @@
 
 > The open-source GTM engineer toolkit — signal-based prospecting, configurable for any ICP
 
-![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue) ![License MIT](https://img.shields.io/badge/license-MIT-green) ![Tests 448 passing](https://img.shields.io/badge/tests-448%20passing-brightgreen) ![Coverage 91%](https://img.shields.io/badge/coverage-91%25-brightgreen)
+![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue) ![License MIT](https://img.shields.io/badge/license-MIT-green) ![Tests 567 passing](https://img.shields.io/badge/tests-567%20passing-brightgreen) ![Coverage 77%](https://img.shields.io/badge/coverage-77%25-brightgreen) ![Claude tool_use](https://img.shields.io/badge/Claude-tool__use%20schema-8A2BE2)
 
 ---
 
 **Stop sending cold emails nobody reads.** SignalForce monitors public activity — GitHub repos, job postings, funding rounds, research papers, LinkedIn — to find companies actively investing in the problem you solve, then generates outreach that references their actual work.
 
-**Config-driven, not hardcoded.** Every keyword, ICP tier, scoring weight, and signal source is defined in YAML you control. The Python scripts are a dumb signal collection layer — they fetch and filter based on your config. The intelligence lives in the Claude Code skills layer, which does intent scoring (recency-weighted, multi-source breadth multipliers) and writes contextual outreach. Ships with 4 ready-to-use verticals to prove the point:
+**Config-driven, not hardcoded.** Every keyword, ICP tier, scoring weight, and signal source is defined in YAML you control. The Python scripts are a dumb signal collection layer — they fetch and filter based on your config. The intelligence lives in the Claude Code skills layer, which does intent scoring (recency-weighted, multi-source breadth multipliers) and writes contextual outreach. Ships with 5 ready-to-use verticals to prove the point:
 
 | Vertical | Example signals |
 |----------|----------------|
@@ -16,6 +16,7 @@
 | **Data Infrastructure** — dbt, Spark, Airflow, data mesh | `examples/data-infra/` |
 | **Developer Tools** — DevEx hiring, SDK repos, Series A | `examples/devtools/` |
 | **RL Infrastructure** — RLHF, sim-to-real, reward modeling | `examples/rl-infrastructure/` |
+| **MAP Migration** — Marketo/HubSpot ceiling, warehouse-native readiness | `examples/map-migration/` |
 
 Copy any example to `config/`, edit the keywords, and you're targeting a completely different market.
 
@@ -45,7 +46,7 @@ cp .env.example .env
 # Edit .env with your GitHub token (required) + other API keys (optional)
 
 # 4. Verify
-pytest --tb=short -q   # 448 tests, should all pass
+pytest --tb=short -q   # 567 tests, should all pass
 ```
 
 Open Claude Code and run `/signal-scanner` to find your first target accounts.
@@ -111,6 +112,35 @@ Three decoupled layers move data from raw public signals to enrolled sequences a
 ```
 
 **The Python scripts don't make decisions** — they collect raw signals from public APIs based on whatever keywords you configure. The Claude Code skills layer does the reasoning: intent scoring with configurable weights and recency decay, ICP fit grading, multi-source signal stacking, and contextual copywriting. Same scripts also power the n8n workflows — no code duplication between human-driven and automated paths.
+
+---
+
+## Beyond Prospecting: Lifecycle Campaign Briefs
+
+The same signal engine can point at marketing operations instead of sales prospecting.
+The `marops` module turns a YAML campaign config into a complete **lifecycle campaign
+brief** — Salesforce + warehouse segmentation, a multi-touch sequence with non-overlapping
+agent assignments (execution / QA / optimization), optimization triggers, and a pipeline
+projection with a downside scenario.
+
+It is a deterministic generator, not a mockup: the brief shape is encoded as a Claude
+`tool_use` JSON schema in [`scripts/marops/briefer.py`](scripts/marops/briefer.py), so the
+model physically cannot return an off-shape object. Pydantic validates the result, and a
+Jinja2 template renders it as a self-contained HTML artifact. ~30 seconds and ~$0.002 per
+brief with prompt caching.
+
+```bash
+# Option A — generate live (needs an Anthropic key):
+export ANTHROPIC_API_KEY=...
+python -m scripts.marops.cli hubspot-ceiling   # → out/hubspot-ceiling.html
+
+# Option B — no key, no wait: open a pre-generated brief:
+open demo/hubspot-ceiling.html
+```
+
+The example configs in `examples/marops/` target a fictional warehouse-native MAP vendor
+("Lumera") and a fictional prospect ("Meridian Analytics") so you can see the full shape
+end-to-end. Swap in your own platform's segment and channel model to make it yours.
 
 ---
 

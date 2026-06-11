@@ -13,7 +13,7 @@ Weights, half-lives, and grade thresholds are loaded from SignalForceConfig.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 
 from scripts.models import ICPScore, Signal
 from scripts.recency import apply_recency_weight
@@ -65,7 +65,7 @@ class IntentScorer:
         if not signals:
             return 0.0
         if now is None:
-            now = datetime.now(UTC)
+            now = datetime.now(timezone.utc)
 
         total = 0.0
         for signal in signals:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 
 import pytest
 from pydantic import ValidationError
@@ -14,7 +14,7 @@ class TestMeetingOutcome:
     def test_create_meeting_outcome(self):
         outcome = MeetingOutcome(
             deal_id="deal-123",
-            meeting_date=datetime.now(UTC),
+            meeting_date=datetime.now(timezone.utc),
             attendees=["John Smith (VP Eng)", "Jane Doe (Head ML)"],
             outcome="positive",
             objections=["Concerned about integration with existing Gymnasium setup"],
@@ -30,7 +30,7 @@ class TestMeetingOutcome:
     def test_outcome_is_frozen(self):
         outcome = MeetingOutcome(
             deal_id="deal-123",
-            meeting_date=datetime.now(UTC),
+            meeting_date=datetime.now(timezone.utc),
             attendees=[],
             outcome="neutral",
         )
@@ -40,7 +40,7 @@ class TestMeetingOutcome:
     def test_default_empty_lists(self):
         outcome = MeetingOutcome(
             deal_id="deal-123",
-            meeting_date=datetime.now(UTC),
+            meeting_date=datetime.now(timezone.utc),
             attendees=[],
             outcome="no_show",
         )
@@ -51,17 +51,17 @@ class TestMeetingOutcome:
 
     def test_auto_generates_id(self):
         o1 = MeetingOutcome(
-            deal_id="d1", meeting_date=datetime.now(UTC), attendees=[], outcome="positive"
+            deal_id="d1", meeting_date=datetime.now(timezone.utc), attendees=[], outcome="positive"
         )
         o2 = MeetingOutcome(
-            deal_id="d2", meeting_date=datetime.now(UTC), attendees=[], outcome="negative"
+            deal_id="d2", meeting_date=datetime.now(timezone.utc), attendees=[], outcome="negative"
         )
         assert o1.id != o2.id
         assert len(o1.id) == 36  # UUID format
 
     def test_recorded_at_defaults_to_now(self):
         outcome = MeetingOutcome(
-            deal_id="d1", meeting_date=datetime.now(UTC), attendees=[], outcome="positive"
+            deal_id="d1", meeting_date=datetime.now(timezone.utc), attendees=[], outcome="positive"
         )
         assert outcome.recorded_at is not None
 

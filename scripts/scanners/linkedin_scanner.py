@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
 
 from scripts.scanners.base import ScannerConfig, ScanResult, Signal, SignalStrength
 
@@ -71,7 +71,7 @@ class LinkedInActivityScanner:
         Returns ScanResult with signals grouped by company.
         """
         if now is None:
-            now = datetime.now(UTC)
+            now = datetime.now(timezone.utc)
 
         started_at = now
         cutoff = now - timedelta(hours=self.max_age_hours)
@@ -102,7 +102,7 @@ class LinkedInActivityScanner:
         return ScanResult(
             scan_type="linkedin_activity",
             started_at=started_at,
-            completed_at=datetime.now(UTC),
+            completed_at=datetime.now(timezone.utc),
             signals_found=signals,
             total_raw_results=total_raw,
             total_after_dedup=len(signals),
@@ -156,7 +156,7 @@ class LinkedInActivityScanner:
         try:
             dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
             if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=UTC)
+                dt = dt.replace(tzinfo=timezone.utc)
             return dt
         except (ValueError, TypeError):
             return None

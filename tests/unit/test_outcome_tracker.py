@@ -90,7 +90,7 @@ def test_conversion_rates_basic(engine, campaign_id):
     )
 
     out1 = log_outreach(engine, sig1, channel="email")
-    out2 = log_outreach(engine, sig2, channel="email")
+    log_outreach(engine, sig2, channel="email")
 
     log_outcome(engine, out1, outcome_type="reply")
     log_outcome(engine, out1, outcome_type="meeting_scheduled")
@@ -155,7 +155,7 @@ def test_conversion_rates_filter_by_campaign(engine):
     sig2 = log_signal(engine, c2, signal_type="github_repo", company_name="B", signal_strength=2)
 
     out1 = log_outreach(engine, sig1, channel="email")
-    out2 = log_outreach(engine, sig2, channel="email")
+    log_outreach(engine, sig2, channel="email")
 
     log_outcome(engine, out1, outcome_type="deal_closed")
 
@@ -233,7 +233,7 @@ def test_best_performing_signals_empty_db(engine):
 def test_best_performing_signals_limit(engine, campaign_id):
     """Limit parameter restricts result count."""
     for i in range(5):
-        sig = log_signal(
+        log_signal(
             engine, campaign_id, signal_type=f"type_{i}",
             company_name=f"Co{i}", signal_strength=2,
         )

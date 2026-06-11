@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
 
 from scripts.scanners.linkedin_scanner import LinkedInActivityScanner
 from scripts.models import SignalStrength
@@ -15,7 +15,7 @@ def _make_activity(
     topic: str = "reinforcement learning",
     hours_ago: float = 1,
 ) -> dict:
-    ts = (datetime.now(UTC) - timedelta(hours=hours_ago)).isoformat()
+    ts = (datetime.now(timezone.utc) - timedelta(hours=hours_ago)).isoformat()
     return {
         "name": name,
         "company": company,

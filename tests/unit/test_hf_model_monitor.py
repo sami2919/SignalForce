@@ -7,7 +7,7 @@ No real API calls are made.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -34,7 +34,7 @@ def make_model(
     days_ago: int = 2,
 ) -> dict:
     """Build a minimal HF model dict matching the API shape."""
-    last_modified = (datetime.now(UTC) - timedelta(days=days_ago)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    last_modified = (datetime.now(timezone.utc) - timedelta(days=days_ago)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
     return {
         "modelId": f"{org}/{model_name}",
         "id": f"{org}/{model_name}",
@@ -507,8 +507,8 @@ class TestCLIOutput:
 
         mock_result = ScanResult(
             scan_type="huggingface_model",
-            started_at=datetime.now(UTC),
-            completed_at=datetime.now(UTC),
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
             signals_found=[],
             total_raw_results=0,
             total_after_dedup=0,
@@ -545,8 +545,8 @@ class TestCLIOutput:
 
         mock_result = ScanResult(
             scan_type="huggingface_model",
-            started_at=datetime.now(UTC),
-            completed_at=datetime.now(UTC),
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
             signals_found=[weak_signal],
             total_raw_results=1,
             total_after_dedup=1,
@@ -570,8 +570,8 @@ class TestCLIOutput:
 
         mock_result = ScanResult(
             scan_type="huggingface_model",
-            started_at=datetime.now(UTC),
-            completed_at=datetime.now(UTC),
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
             signals_found=[],
             total_raw_results=0,
             total_after_dedup=0,

@@ -1,0 +1,34 @@
+prospect: Meridian Analytics
+prospect_url: https://www.meridiananalytics.io
+vertical: "Sales analytics SaaS for mid-market manufacturing — Series B, 160 employees"
+campaign_name: "HubSpot Ceiling → Warehouse-Native MAP Adoption"
+lifecycle_stage: "Prospect · New — active buying window, high urgency"
+objective: >
+  Land Meridian Analytics as a net-new Lumera customer before the Snowflake Data Cloud
+  Summit window closes. They are actively scoping a HubSpot replacement — hiring signal,
+  frustrated G2 reviews, and conference registration all fired in the last 7 days. The buying
+  committee is the VP Marketing + a newly hired Marketing Data Engineer. Move fast: shelf life
+  ~6 days.
+segment_description: >
+  Series B B2B SaaS teams (100-300 employees) already running Snowflake alongside Salesforce
+  AND showing active MAP pain: frustrated G2 reviews of their current vendor, recent hire for
+  a marketing data engineering role, or reverse ETL middleware (Hightouch, Census) in the
+  stack. Meridian fits all three. Exclude accounts with active Marketo or Lumera
+  trials already in progress. Estimated 1 account (this brief is single-account).
+num_touches: 5
+
+why_now_signals:
+  - signal_type: g2_review_velocity
+    description: "VP Marketing left a 3-star G2 review: 'HubSpot Enterprise doesn't talk to our Snowflake warehouse without a lot of duct tape. Our RevOps team spends 30% of their time on plumbing.'"
+    days_ago: 3
+    source: G2
+
+  - signal_type: hiring
+    description: "Marketing Data Engineer posted on LinkedIn — JD requires Snowflake, Salesforce, and 'building marketing attribution models from scratch outside of a MAP'"
+    days_ago: 5
+    source: LinkedIn
+
+  - signal_type: conference_registration
+    description: "VP Marketing (Jordan Kim) registered for Snowflake Data Cloud Summit 2026 (San Francisco, June 11–13). Lumera is a sponsor with a booth on the expo floor."
+    days_ago: 8
+    source: Eventbrite

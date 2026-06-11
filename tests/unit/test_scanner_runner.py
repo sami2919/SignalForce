@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 import logging
@@ -27,7 +27,7 @@ def _make_signal(signal_type: str = "github") -> Signal:
 
 
 def _make_scan_result(signals: list[Signal] | None = None) -> ScanResult:
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     return ScanResult(
         scan_type="github",
         started_at=now,
