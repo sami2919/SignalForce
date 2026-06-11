@@ -1,4 +1,4 @@
-"""End-to-end demo scan CLI for the Conversion walk-in demo.
+"""End-to-end demo scan CLI.
 
 Runs all enabled scanners, groups signals by company, computes ICP fit,
 scores with the Gojiberry formula, and prints a ranked A/B/C/D grade table.

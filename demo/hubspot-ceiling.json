@@ -3,7 +3,7 @@
   "prospect_url": "https://www.meridiananalytics.io",
   "vertical": "Sales analytics SaaS for mid-market manufacturing \u2014 Series B, 160 employees",
   "campaign_name": "HubSpot Ceiling \u2192 Warehouse-Native MAP Adoption",
-  "objective": "Land Meridian Analytics as a net-new Conversion customer before the Snowflake Data Cloud Summit window closes. They are actively scoping a HubSpot replacement \u2014 hiring signal, frustrated G2 reviews, and conference registration all fired in the last 7 days. The buying committee is the VP Marketing + a newly hired Marketing Data Engineer. Move fast: shelf life ~6 days.\n",
+  "objective": "Land Meridian Analytics as a net-new Lumera customer before the Snowflake Data Cloud Summit window closes. They are actively scoping a HubSpot replacement \u2014 hiring signal, frustrated G2 reviews, and conference registration all fired in the last 7 days. The buying committee is the VP Marketing + a newly hired Marketing Data Engineer. Move fast: shelf life ~6 days.\n",
   "lifecycle_stage": "Prospect \u00b7 New \u2014 active buying window, high urgency",
   "segment": {
     "name": "HubSpot Ceiling \u2192 Warehouse-Native MAP Adoption | Meridian Analytics",
@@ -28,7 +28,7 @@
       "account_id = 'meridian_analytics'"
     ],
     "exclusions": [
-      "Account.Active_Trial__c = TRUE AND Account.Trial_Vendor__c IN ('Marketo','Conversion')",
+      "Account.Active_Trial__c = TRUE AND Account.Trial_Vendor__c IN ('Marketo','Lumera')",
       "Account.Competitor_Customer__c = TRUE",
       "Contact.HasOptedOutOfEmail = TRUE",
       "Contact.Unsubscribed__c = TRUE",
@@ -43,7 +43,7 @@
       "agent": "execution",
       "timing": "Day 0 \u2013 send at 08:45 recipient local time, Tuesday or Wednesday preferred; do not send Friday\u2013Sunday",
       "subject": "{{contact.first_name}}, your Snowflake data deserves a better MAP than duct tape",
-      "body_brief": "Open by mirroring the exact language from Jordan's G2 review ('duct tape' + '30% RevOps time on plumbing'). Acknowledge the pain is architectural, not a configuration problem \u2014 HubSpot was not built for warehouse-native data flows. Bridge to Conversion: a MAP with a native Snowflake read/write layer that eliminates reverse ETL middleware. Include a 60-second Loom demo link showing Snowflake \u2192 Conversion \u2192 Salesforce bi-directional sync with zero middleware. Close with a single low-friction CTA: 'See how Meridian's stack would look inside Conversion \u2014 20-min live walkthrough, I'll bring the data model.' P.S. line: 'Saw you're heading to Data Cloud Summit \u2014 we're at Booth #412. Happy to show this live on the floor.'",
+      "body_brief": "Open by mirroring the exact language from Jordan's G2 review ('duct tape' + '30% RevOps time on plumbing'). Acknowledge the pain is architectural, not a configuration problem \u2014 HubSpot was not built for warehouse-native data flows. Bridge to Lumera: a MAP with a native Snowflake read/write layer that eliminates reverse ETL middleware. Include a 60-second Loom demo link showing Snowflake \u2192 Lumera \u2192 Salesforce bi-directional sync with zero middleware. Close with a single low-friction CTA: 'See how Meridian's stack would look inside Lumera \u2014 20-min live walkthrough, I'll bring the data model.' P.S. line: 'Saw you're heading to Data Cloud Summit \u2014 we're at Booth #412. Happy to show this live on the floor.'",
       "personalization_tokens": [
         "{{contact.first_name}}",
         "{{account.name}}",
@@ -72,8 +72,8 @@
       "channel": "linkedin",
       "agent": "execution",
       "timing": "Day 1 \u2013 12 hours after Step 1 email confirmed delivered; send between 09:00\u201311:00 recipient local time",
-      "subject": "LinkedIn DM: Conversion + Snowflake \u2014 saw your Data Cloud Summit registration",
-      "body_brief": "Short, warm LinkedIn DM to Jordan Kim from the assigned AE. Reference the Data Cloud Summit registration organically ('Looking forward to Summit next month \u2014 are you going to be on the expo floor?'). Mention Conversion is a sponsor at Booth #412 and that we built our MAP ground-up on Snowflake. Offer to send a one-pager mapping Meridian's current stack (HubSpot + Hightouch/Census + Snowflake) to what a Conversion-native architecture removes. No hard pitch \u2014 goal is to open a conversation thread and establish presence before the conference. 300 characters max.",
+      "subject": "LinkedIn DM: Lumera + Snowflake \u2014 saw your Data Cloud Summit registration",
+      "body_brief": "Short, warm LinkedIn DM to Jordan Kim from the assigned AE. Reference the Data Cloud Summit registration organically ('Looking forward to Summit next month \u2014 are you going to be on the expo floor?'). Mention Lumera is a sponsor at Booth #412 and that we built our MAP ground-up on Snowflake. Offer to send a one-pager mapping Meridian's current stack (HubSpot + Hightouch/Census + Snowflake) to what a Lumera-native architecture removes. No hard pitch \u2014 goal is to open a conversation thread and establish presence before the conference. 300 characters max.",
       "personalization_tokens": [
         "{{contact.first_name}}",
         "{{account.name}}",
@@ -126,8 +126,8 @@
       "channel": "email",
       "agent": "execution",
       "timing": "Day 3 \u2013 send at 09:00 recipient local time if Step 1 email was opened but no meeting booked; suppress if meeting already booked",
-      "subject": "{{contact.first_name}}, the Meridian stack \u2192 Conversion architecture (took 11 minutes to map)",
-      "body_brief": "Value-forward nurture email addressed to Jordan Kim, cc-awareness for the Marketing Data Engineer persona. Lead with: 'I mapped Meridian's current stack in our sandbox \u2014 here's what it looks like.' Include an inline architecture diagram (Snowflake \u2194 Conversion \u2194 Salesforce) that visually eliminates the Hightouch/Census middleware layer. Quantify the RevOps time savings: 'Teams in your profile recover ~25\u201330% of RevOps bandwidth in the first 90 days post-migration.' Reference the hiring JD signal naturally: 'Your new Marketing Data Engineer hire will be able to build attribution models directly in SQL against live Conversion events \u2014 no ETL layer, no lag.' Second CTA: link to a live sandbox environment pre-seeded with a fictional manufacturing SaaS dataset so Jordan/MDE can self-explore. Tertiary CTA: 'Still going to Summit? We'd love 20 minutes at Booth #412 \u2014 I can reserve a private demo slot.'",
+      "subject": "{{contact.first_name}}, the Meridian stack \u2192 Lumera architecture (took 11 minutes to map)",
+      "body_brief": "Value-forward nurture email addressed to Jordan Kim, cc-awareness for the Marketing Data Engineer persona. Lead with: 'I mapped Meridian's current stack in our sandbox \u2014 here's what it looks like.' Include an inline architecture diagram (Snowflake \u2194 Lumera \u2194 Salesforce) that visually eliminates the Hightouch/Census middleware layer. Quantify the RevOps time savings: 'Teams in your profile recover ~25\u201330% of RevOps bandwidth in the first 90 days post-migration.' Reference the hiring JD signal naturally: 'Your new Marketing Data Engineer hire will be able to build attribution models directly in SQL against live Lumera events \u2014 no ETL layer, no lag.' Second CTA: link to a live sandbox environment pre-seeded with a fictional manufacturing SaaS dataset so Jordan/MDE can self-explore. Tertiary CTA: 'Still going to Summit? We'd love 20 minutes at Booth #412 \u2014 I can reserve a private demo slot.'",
       "personalization_tokens": [
         "{{contact.first_name}}",
         "{{account.name}}",
@@ -191,7 +191,7 @@
     },
     {
       "condition": "signal.intent_topic_score_map_replacement spikes >= 85 at any point during campaign runtime",
-      "action": "Optimization agent triggers an out-of-sequence in_app_banner touch (if Meridian is already trialing any Conversion feature) AND escalates AE task priority to P0; notifies AE Slack channel with full signal context"
+      "action": "Optimization agent triggers an out-of-sequence in_app_banner touch (if Meridian is already trialing any Lumera feature) AND escalates AE task priority to P0; notifies AE Slack channel with full signal context"
     },
     {
       "condition": "signal.conference_registration_event = 'Snowflake Data Cloud Summit 2026' AND days_until_conference <= 7 AND Opportunity.StageName NOT IN ('Meeting Booked','Demo Scheduled','Closed Won')",
@@ -232,7 +232,7 @@
       "HIRING: Marketing Data Engineer JD requiring Snowflake + out-of-MAP attribution \u2014 5 days ago",
       "CONFERENCE_REGISTRATION: Jordan Kim registered for Snowflake Data Cloud Summit 2026 (SF, June 11\u201313) \u2014 8 days ago"
     ],
-    "conference_activation": "Conversion sponsoring Snowflake Data Cloud Summit 2026 \u2014 Booth #412",
+    "conference_activation": "Lumera sponsoring Snowflake Data Cloud Summit 2026 \u2014 Booth #412",
     "competing_vendors": [
       "HubSpot Enterprise"
     ],
@@ -248,7 +248,7 @@
     "cache_creation_input_tokens": 1226,
     "input_tokens": 1015,
     "output_tokens": 5584,
-    "platform_fit": "Every field maps to a Conversion primitive: the segment is Salesforce SOQL plus warehouse trait joins, the touch sequence carries execution / QA / optimization agent assignments, and the whole brief is a typed JSON object delivered by webhook \u2014 no human translation step between signal and campaign.",
+    "platform_fit": "Every field maps to a Lumera primitive: the segment is Salesforce SOQL plus warehouse trait joins, the touch sequence carries execution / QA / optimization agent assignments, and the whole brief is a typed JSON object delivered by webhook \u2014 no human translation step between signal and campaign.",
     "build_time_on_conversion_platform": "~1 day. Segment, agent roles, and suppression rules drop straight into the campaign builder; the signal stack and shelf-life feed the trigger and optimization layers.",
     "what_this_proves": "A GTM engineer can compile a buying-window signal stack into a ready-to-run lifecycle campaign \u2014 replacing intuition and manual research with a typed, schema-enforced system."
   },
@@ -273,7 +273,7 @@
       },
       {
         "signal_type": "conference_registration",
-        "description": "VP Marketing (Jordan Kim) registered for Snowflake Data Cloud Summit 2026 (San Francisco, June 11\u201313). Conversion is a sponsor with a booth on the expo floor.",
+        "description": "VP Marketing (Jordan Kim) registered for Snowflake Data Cloud Summit 2026 (San Francisco, June 11\u201313). Lumera is a sponsor with a booth on the expo floor.",
         "days_ago": 8,
         "source": "Eventbrite",
         "timing_tier": "MEDIUM",

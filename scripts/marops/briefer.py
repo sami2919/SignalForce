@@ -1,6 +1,5 @@
 """Claude API call: YAML config → LifecycleBrief via tool_use.
 
-Adapted from conversion-walkin/hypothesizer.py.
 Uses prompt caching on the system block — pays cache-write once, reads on every
 subsequent prospect. Cost in steady state: ~$0.002 per brief (Sonnet 4.6, cached).
 """
@@ -27,7 +26,8 @@ MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 8192
 
 _SYSTEM_INSTRUCTIONS = """You are a senior MarOps architect at a top-tier B2B SaaS company.
-You produce lifecycle campaign briefs in the exact shape that Conversion's platform consumes:
+You produce lifecycle campaign briefs in the exact shape a warehouse-native
+marketing automation platform (MAP) consumes:
 Salesforce + warehouse segmentation → multi-touch sequence with agent assignments
 (execution / QA / optimization) → optimization triggers → pipeline projection.
 
@@ -38,9 +38,10 @@ Quality bar:
 4. Optimization triggers must be actionable conditions, not observations.
 5. Pipeline projection must include a downside scenario."""
 
-_PLATFORM_PRIORS = """## Conversion Platform Architecture (cached)
+_PLATFORM_PRIORS = """## Target Platform Architecture (cached)
 
-Conversion is an AI-native B2B marketing automation platform. Key architectural facts:
+The target platform is an AI-native, warehouse-native B2B marketing automation
+platform. Key architectural facts:
 
 **Data layer:**
 - Salesforce two-way sync: account/contact read + AE task write
@@ -63,7 +64,7 @@ Conversion is an AI-native B2B marketing automation platform. Key architectural 
 
 _BRIEF_TOOL: dict[str, Any] = {
     "name": "submit_lifecycle_brief",
-    "description": "Submit the complete lifecycle campaign brief in Conversion platform shape.",
+    "description": "Submit the complete lifecycle campaign brief in the target platform shape.",
     "input_schema": {
         "type": "object",
         "required": ["segment", "touches", "optimization_triggers", "pipeline_projection", "meta"],

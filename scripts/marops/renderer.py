@@ -1,6 +1,6 @@
 """Render a LifecycleBrief to HTML via Jinja2.
 
-Adapted from conversion-walkin/render.py. HTML is the load-bearing artifact —
+HTML is the load-bearing artifact —
 Chrome Save-as-PDF renders better than WeasyPrint on macOS.
 WeasyPrint is attempted as best-effort if installed.
 """

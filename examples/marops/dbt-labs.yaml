@@ -4,7 +4,7 @@ vertical: "Data transformation SaaS — open-source dbt Core + dbt Cloud, ~300 e
 campaign_name: "Warehouse-Native MAP Adoption — Data Team as Champion"
 lifecycle_stage: evaluation
 objective: >
-  Convert dbt Labs from a MAP-adjacent prospect to a Conversion platform trial.
+  Convert dbt Labs from a MAP-adjacent prospect to a Lumera platform trial.
   Their data team already lives in the warehouse — they have Snowflake, BigQuery,
   and dbt natively. The gap is their marketing team is almost certainly running
   HubSpot or Marketo on top of that warehouse without a native connection.
@@ -23,7 +23,7 @@ why_now_signals:
     days_ago: 5
     source: Greenhouse
   - signal_type: github_repo
-    description: "dbt-labs/dbt-mcp repo pushed 3 days ago — they're building an MCP server for dbt, signaling active investment in agent-native tooling. Conversion's agent model is a natural fit."
+    description: "dbt-labs/dbt-mcp repo pushed 3 days ago — they're building an MCP server for dbt, signaling active investment in agent-native tooling. Lumera's agent model is a natural fit."
     days_ago: 3
     source: GitHub
   - signal_type: github_repo

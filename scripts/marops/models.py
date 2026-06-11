@@ -1,6 +1,6 @@
 """Immutable Pydantic models for MarOps lifecycle campaign briefs.
 
-Shape mirrors what Conversion's platform consumes: segment (Salesforce + warehouse
+Shape mirrors what an AI-native, warehouse-native MAP consumes: segment (Salesforce + warehouse
 filters) → touch sequence with agent assignments → optimization triggers → pipeline
 projection.
 

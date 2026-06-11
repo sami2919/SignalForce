@@ -1,4 +1,4 @@
-"""ICP fit scorer for the Conversion Marketo-migration ICP.
+"""ICP fit scorer for the Marketo-migration ICP (warehouse-native MAP vendor example).
 
 Converts raw Signal objects into a 0–10 numeric ICP fit score.
 Passed to IntentScorer.score_signals(icp_fit=...) to compute the combined
@@ -6,7 +6,7 @@ Gojiberry score: COMBINED = (ICP_Fit × 0.45) + (Intent × 0.55).
 
 Scoring table (additive, capped at 10.0):
   Marketo in skills/snippet   +3.0   (explicit MAP pain = highest value)
-  Salesforce in signals       +2.0   (Conversion is Salesforce-native)
+  Salesforce in signals       +2.0   (vendor is Salesforce-native)
   HubSpot Enterprise signal   +2.0   (hitting ceiling)
   Pardot/Eloqua signal        +2.0   (enterprise MAP = large ACV)
   Reverse ETL (Hightouch/     +2.5   (papering over MAP with middleware)
@@ -63,7 +63,7 @@ _PLG_KEYWORDS: dict[str, float] = {
 _MOPS_ROLE_KEYWORDS: dict[str, float] = {
     # A company hiring for these roles has an active MOPs function and a MAP dependency.
     "marketing operations": 3.0,
-    "marketing automation": 3.0,   # explicitly MAP
+    "marketing automation": 3.0,  # explicitly MAP
     "marketing technology": 2.5,
     "demand generation": 2.0,
     "lifecycle marketing": 2.0,

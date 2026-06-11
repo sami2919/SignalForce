@@ -2,7 +2,7 @@
 
 Usage:
     export ANTHROPIC_API_KEY=...
-    python -m scripts.marops.cli veriforce
+    python -m scripts.marops.cli hubspot-ceiling
 
 Reads: examples/marops/<slug>.yaml
 Writes: out/<slug>.json, out/<slug>.html
@@ -45,7 +45,7 @@ def run(slug: str) -> Path:
         sys.exit(1)
     except (anthropic.APITimeoutError, anthropic.APIConnectionError) as exc:
         print(
-            f"[error] Claude API failed ({type(exc).__name__}) — open demo/veriforce.html instead",
+            f"[error] Claude API failed ({type(exc).__name__}) — open demo/hubspot-ceiling.html instead",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -71,7 +71,7 @@ def run(slug: str) -> Path:
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("usage: python -m scripts.marops.cli <slug>", file=sys.stderr)
-        print("example: python -m scripts.marops.cli veriforce", file=sys.stderr)
+        print("example: python -m scripts.marops.cli hubspot-ceiling", file=sys.stderr)
         sys.exit(1)
 
     run(sys.argv[1])
