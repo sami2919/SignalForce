@@ -37,11 +37,38 @@ The full suite takes ~95 seconds. Use a timeout of at least 300000ms.
 
 - https://signalforce.fly.dev/healthz -> 200 {"status":"ok"}
 - https://signalforce.fly.dev/readyz  -> 200 {"status":"ready","db":true}
-- Fly app `signalforce`, org `personal`, region sjc, ONE shared-cpu-1x machine,
-  auto_stop = suspend.
-- Neon Postgres 18.4, AWS us-west-2, database `neondb`, 7 tables at Alembic
-  revision 36d4e4799449.
-- Suite: 601 passed, 2 failed (pre-existing, deselected in CI), 86% coverage.
+- Fly app `signalforce`, org `personal`, region sjc. TWO machines:
+    web    d8dd9e2f74e108  shared-cpu-1x, auto_stop=suspend, min_machines_running=0
+    worker 0800349a077308  1GB, --schedule daily, --restart no, -e TENANT_SLUG=agentmail
+- Neon Postgres 18.4, AWS us-west-2, db `neondb`, Alembic head 10a15fbb92b1.
+- LIVE DATA: 20 accounts, 90 account_sources, 270+ probes, 3+ scan_runs.
+  The worker appends a run every 24h. DO NOT run the CLI against .env casually —
+  it pollutes the measurement. Verify with in-memory SQLite instead.
+- Suite: 680 passed, 2 failed (pre-existing `scripts.fireworks_client`, deselected
+  in CI). Coverage gate 80%, with two demo scripts omitted.
+
+## PHASE 1 IS IMPLEMENTED. Its exit criterion is NOT yet measured.
+
+Phase 1 exits when `changes_detected / sources_probed` sits in 3-20% AT DAILY
+CADENCE. The only measurement so far used a 6.5-MINUTE interval and produced
+1.11%, which answers nothing — websites do not change every six minutes.
+Reading that against a daily target is a category error.
+
+FIRST THING TO DO ON RESUME: compute the real rate from accumulated runs.
+
+    cd /Users/sami/SignalForce-production
+    set -a && . ./.env && set +a
+    /Users/sami/SignalForce/.venv/bin/python -m scripts.watch.runner --help
+
+Then query scan_runs where id > 3 (runs 1-3 carry a wrong accounts_probed from a
+since-fixed bug; filter them out) and compute changes_detected / sources_probed
+per run.
+
+  - 3-20%  -> the two-tier design works. Record it, move to Phase 2.
+  - ~0%    -> plausible. First check the worker is actually firing daily:
+              `fly machine status 0800349a077308 --app signalforce`
+  - ~100%  -> normalization is insufficient. Report WHICH sources churn and STOP.
+              Do not start adding strippers — that is a design decision, not a fix.
 
 ## How I want you to work — this matters most
 
