@@ -34,6 +34,11 @@ primary_region = "sjc"          # co-located with Neon's AWS us-west-2 (Oregon)
     method = "GET"
     path = "/healthz"              # liveness ONLY — never /readyz, see ADR-0002
 
+# NOTE: `fly deploy` creates 2 machines by default for HA regardless of
+# min_machines_running. Use `fly deploy --ha=false` to keep it at 1, or
+# `fly scale count 1` after the fact. For a single-user read-only dashboard
+# HA buys nothing and doubles rootfs storage cost.
+#
 # The scheduled worker is NOT defined here — its entrypoint arrives in Phase 1.
 # When it does, create it as a scheduled machine (starts, runs, exits — you pay
 # only for runtime):
