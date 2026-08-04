@@ -108,8 +108,8 @@ per run.
   `cd /Users/sami/SignalForce-production && set -a && . ./.env && set +a && \
    fly secrets set --app signalforce DATABASE_URL="$DATABASE_URL" \
    DATABASE_URL_DIRECT="$DATABASE_URL_DIRECT"`
-- GITHUB_TOKEN and ANTHROPIC_API_KEY are blank in .env. Phase 1 does not need
-  them; Phase 2's scanners do.
+- GITHUB_TOKEN is SET and VERIFIED (scopes=public_repo, /search/code returns 200,
+  10 req/min). ANTHROPIC_API_KEY is still BLANK — Task 2.1 needs it, Task 2.2 does not.
 
 ## Deferred findings to carry forward
 
@@ -137,7 +137,7 @@ Only after the Phase 1 exit number is measured (see above). Then:
   the last 30 days. Intersection, not union. Nobody else runs this signal.
 - Task 2.3 diff-based signal events — a signal is a DIFF, not a snapshot
 
-Phase 2 needs GITHUB_TOKEN and ANTHROPIC_API_KEY, which are currently blank in .env.
+GITHUB_TOKEN is set and verified. ANTHROPIC_API_KEY is still blank (2.1 needs it, 2.2 does not).
 
 Carry into Phase 2: the Task 0.1 MutableDict finding (SignalEvent.payload).
 
