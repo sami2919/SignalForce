@@ -1,0 +1,347 @@
+"""The watch pass: fetch every active source, confirm-on-change, record results.
+
+Four phases, deliberately not interleaved (ADR-0005 Decision 3):
+
+    1. SYNC DB READ    create the scan_runs row (status="running"), load active
+                        sources for the tenant and their last_hash, close the
+                        session.
+    2. ASYNC FETCH      fetch_all() over every active source.
+    3. ASYNC CONFIRM     re-fetch only sources whose hash differs from
+                        last_hash (and that have a last_hash to differ from)
+                        once, and require agreement before treating it as a
+                        real change (ADR-0005 Decision 2).
+    4. SYNC DB WRITE    one Probe row per phase-2 result, batched 500/commit;
+                        update each source's last_fetched_at,
+                        consecutive_failures, active, and last_hash (only on
+                        a confirmed change or a first-ever probe); finalise
+                        scan_runs with counts, latencies, status="completed".
+
+Phases 2-4 are wrapped so that if anything raises, the scan_runs row is
+still finalised as status="failed" with the error recorded before
+re-raising — a run stuck at "running" forever is the silent failure
+ADR-0005 Decision 5 exists to prevent.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import sys
+from datetime import datetime, timezone
+
+import httpx
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from scripts.logging_config import configure_logging
+from scripts.registry.resolver import resolve_sources
+from scripts.registry.store import StoreResult, ensure_tenant, store_resolution
+from scripts.storage.models import AccountSource, Probe, ScanRun
+from scripts.storage.session import get_session
+from scripts.watch.fetcher import ProbeResult, SourceRef, fetch_all
+
+logger = logging.getLogger(__name__)
+
+_DEACTIVATE_AFTER_FAILURES = 5
+_WRITE_BATCH_SIZE = 500
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _percentile(values: list[int], pct: float) -> int:
+    if not values:
+        return 0
+    ordered = sorted(values)
+    idx = min(int(len(ordered) * pct), len(ordered) - 1)
+    return ordered[idx]
+
+
+async def resolve_and_store(tenant_id: int, domains: list[str]) -> StoreResult:
+    """Resolve each domain and persist the result. Aggregates counts across all domains."""
+    created = 0
+    updated = 0
+    deactivated = 0
+    async with httpx.AsyncClient() as client:
+        for domain in domains:
+            report = await resolve_sources(domain, client)
+            with get_session() as session:
+                result = store_resolution(tenant_id, report, session)
+            created += result.created
+            updated += result.updated
+            deactivated += result.deactivated
+            logger.info(
+                "resolution stored",
+                extra={
+                    "domain": domain,
+                    "rows_created": result.created,
+                    "rows_updated": result.updated,
+                },
+            )
+    return StoreResult(created=created, updated=updated, deactivated=deactivated)
+
+
+def _load_active_sources(tenant_id: int, session: Session) -> list[tuple[int, str, str | None]]:
+    """Return (source_id, url, last_hash) for every active source of the tenant."""
+    rows = session.execute(
+        select(AccountSource.id, AccountSource.url, AccountSource.last_hash).where(
+            AccountSource.tenant_id == tenant_id,
+            AccountSource.active.is_(True),
+        )
+    ).all()
+    return [(r.id, r.url, r.last_hash) for r in rows]
+
+
+async def run_watch_pass(tenant_id: int, concurrency: int = 100) -> int:
+    """Run one watch pass for a tenant. Returns the scan_runs id.
+
+    Raises whatever exception the pass hit, after marking the scan_runs row
+    status="failed" with the error recorded — a dead run must be visible,
+    not silently stuck at "running".
+    """
+    # --- Phase 1: sync DB read ---
+    with get_session() as session:
+        run = ScanRun(tenant_id=tenant_id, status="running")
+        session.add(run)
+        session.commit()
+        run_id = run.id
+        sources = _load_active_sources(tenant_id, session)
+
+    try:
+        # --- Phase 2: async fetch ---
+        refs = [SourceRef(source_id=sid, url=url) for sid, url, _ in sources]
+        last_hash_by_id = {sid: h for sid, _, h in sources}
+        url_by_id = {sid: url for sid, url, _ in sources}
+
+        async with httpx.AsyncClient() as client:
+            first_results = await fetch_all(refs, client=client, concurrency=concurrency)
+
+            # --- Phase 3: async confirm ---
+            # Re-fetch only sources whose hash differs from a known last_hash.
+            # A first-ever probe (last_hash is None) has nothing to confirm
+            # against — it is a baseline, not a change.
+            changed_refs = [
+                SourceRef(source_id=r.source_id, url=url_by_id[r.source_id])
+                for r in first_results
+                if r.content_hash is not None
+                and last_hash_by_id.get(r.source_id) is not None
+                and r.content_hash != last_hash_by_id[r.source_id]
+            ]
+            confirm_results: dict[int, ProbeResult] = {}
+            if changed_refs:
+                confirmed = await fetch_all(changed_refs, client=client, concurrency=concurrency)
+                confirm_results = {r.source_id: r for r in confirmed}
+
+        # --- Phase 4: sync DB write ---
+        run_id = _write_results(
+            tenant_id=tenant_id,
+            run_id=run_id,
+            first_results=first_results,
+            confirm_results=confirm_results,
+            last_hash_by_id=last_hash_by_id,
+        )
+        return run_id
+    except Exception as exc:  # noqa: BLE001
+        with get_session() as session:
+            failed = session.get(ScanRun, run_id)
+            if failed is not None:
+                failed.status = "failed"
+                failed.finished_at = _utcnow()
+                failed.error = str(exc)
+            session.commit()
+        raise
+
+
+def _write_results(
+    *,
+    tenant_id: int,
+    run_id: int,
+    first_results: list[ProbeResult],
+    confirm_results: dict[int, ProbeResult],
+    last_hash_by_id: dict[int, str | None],
+) -> int:
+    """Phase 4: write probes and update source/run state. Batched 500/commit."""
+    changes_detected = 0
+    confirm_rejected = 0
+    deactivated_count = 0
+    latencies: list[int] = []
+    now = _utcnow()
+
+    with get_session() as session:
+        pending = 0
+        for result in first_results:
+            source = session.get(AccountSource, result.source_id)
+            if source is None:
+                continue
+
+            latencies.append(result.latency_ms)
+            prior_hash = last_hash_by_id.get(result.source_id)
+            changed = False
+            new_last_hash: str | None = None
+
+            if result.error is not None:
+                source.consecutive_failures += 1
+                if source.consecutive_failures >= _DEACTIVATE_AFTER_FAILURES:
+                    source.active = False
+                    deactivated_count += 1
+                    logger.error(
+                        "source deactivated after repeated failures",
+                        extra={
+                            "source_id": source.id,
+                            "consecutive_failures": source.consecutive_failures,
+                        },
+                    )
+            elif result.content_hash is not None:
+                source.consecutive_failures = 0
+                if prior_hash is None:
+                    # First-ever probe: baseline, not a change. No confirmation needed.
+                    new_last_hash = result.content_hash
+                elif result.content_hash == prior_hash:
+                    changed = False
+                else:
+                    confirm = confirm_results.get(result.source_id)
+                    if confirm is not None and confirm.content_hash == result.content_hash:
+                        changed = True
+                        new_last_hash = result.content_hash
+                        changes_detected += 1
+                        source.last_changed_at = now
+                    else:
+                        # Unconfirmed change: record changed=False, leave
+                        # last_hash untouched so the next run re-evaluates
+                        # from the same baseline (ADR-0005 Decision 2).
+                        confirm_rejected += 1
+
+            source.last_fetched_at = now
+            if new_last_hash is not None:
+                source.last_hash = new_last_hash
+
+            probe = Probe(
+                tenant_id=tenant_id,
+                account_source_id=result.source_id,
+                scan_run_id=run_id,
+                fetched_at=now,
+                content_hash=result.content_hash,
+                changed=changed,
+                status_code=result.status_code,
+                latency_ms=result.latency_ms,
+                bytes=result.bytes,
+                error=result.error,
+            )
+            session.add(probe)
+            pending += 1
+
+            if pending >= _WRITE_BATCH_SIZE:
+                session.commit()
+                pending = 0
+
+        if pending:
+            session.commit()
+
+        run = session.get(ScanRun, run_id)
+        run.finished_at = now
+        run.status = "completed"
+        run.accounts_probed = len({r.source_id for r in first_results})
+        run.sources_probed = len(first_results)
+        run.changes_detected = changes_detected
+        run.confirm_rejected = confirm_rejected
+        run.p50_latency_ms = _percentile(latencies, 0.50)
+        run.p95_latency_ms = _percentile(latencies, 0.95)
+        session.commit()
+
+    return run_id
+
+
+# --- CLI ---
+
+
+def _cli_scan() -> int:
+    tenant_slug = __import__("os").environ.get("TENANT_SLUG")
+    if not tenant_slug:
+        logger.error("TENANT_SLUG is not set")
+        return 1
+
+    with get_session() as session:
+        tenant_id = ensure_tenant(tenant_slug, tenant_slug, session)
+
+    import asyncio
+
+    try:
+        run_id = asyncio.run(run_watch_pass(tenant_id))
+    except Exception as exc:  # noqa: BLE001
+        logger.error("watch pass failed", extra={"error": str(exc)})
+        return 1
+
+    with get_session() as session:
+        run = session.get(ScanRun, run_id)
+        payload = {
+            "id": run.id,
+            "tenant_id": run.tenant_id,
+            "status": run.status,
+            "accounts_probed": run.accounts_probed,
+            "sources_probed": run.sources_probed,
+            "changes_detected": run.changes_detected,
+            "confirm_rejected": run.confirm_rejected,
+            "p50_latency_ms": run.p50_latency_ms,
+            "p95_latency_ms": run.p95_latency_ms,
+            "started_at": run.started_at.isoformat() if run.started_at else None,
+            "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+            "error": run.error,
+        }
+    print(json.dumps(payload, indent=2))
+    return 0 if payload["status"] == "completed" else 1
+
+
+def _cli_resolve(domains: list[str]) -> int:
+    tenant_slug = __import__("os").environ.get("TENANT_SLUG")
+    if not tenant_slug:
+        logger.error("TENANT_SLUG is not set")
+        return 1
+
+    with get_session() as session:
+        tenant_id = ensure_tenant(tenant_slug, tenant_slug, session)
+
+    import asyncio
+
+    try:
+        result = asyncio.run(resolve_and_store(tenant_id, domains))
+    except Exception as exc:  # noqa: BLE001
+        logger.error("resolution failed", extra={"error": str(exc)})
+        return 1
+
+    print(
+        json.dumps(
+            {
+                "domains": domains,
+                "created": result.created,
+                "updated": result.updated,
+                "deactivated": result.deactivated,
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    configure_logging()
+    parser = argparse.ArgumentParser(prog="python -m scripts.watch.runner")
+    sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("scan")
+    resolve_parser = sub.add_parser("resolve")
+    resolve_parser.add_argument("--domains", required=True, help="comma-separated domain list")
+
+    args = parser.parse_args(argv)
+
+    if args.command == "scan":
+        return _cli_scan()
+    if args.command == "resolve":
+        domains = [d.strip() for d in args.domains.split(",") if d.strip()]
+        return _cli_resolve(domains)
+    parser.error(f"unknown command: {args.command}")
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())
