@@ -963,6 +963,30 @@ git commit -m "feat: stable HTML normalization for content hashing"
 
 ### Task 1.3: Async watch layer
 
+> **MEASURED FINDING (2026-08-04) — add confirm-on-change.** Fetching
+> `boards.greenhouse.io/anthropic` six times produced **two distinct content hashes**.
+> The delta is 5 characters: Greenhouse intermittently renders the unresolved i18n
+> template key `tags.new` instead of the string `New`. It is a rendering race in
+> their app, pure noise, and it fires on ~17% of fetches — which would consume the
+> entire 3-20% change-rate budget by itself.
+>
+> **Mitigation: confirm-on-change.** When a hash differs from `last_hash`, re-fetch
+> that source once immediately and require both fetches to agree before recording a
+> change. Costs one extra cheap GET on only the ~5-17% of sources that changed, and
+> adds no detection lag.
+>
+> Rejected alternative: requiring a change to persist across two consecutive daily
+> runs. Same false-positive reduction (0.17² ≈ 3%), but it adds ~24h to detection
+> lag — the exact metric Phase 3 exists to minimise. Confirming within one run is
+> strictly better.
+>
+> Rejected alternative: stripping `tags.*` placeholders. Fixes this instance and
+> nothing else; every ATS will have its own flake. Confirm-on-change is source-agnostic.
+>
+> **Also add:** count confirm-on-change rejections on the `scan_runs` row. A rising
+> rejection rate is an early signal that a source has become unstable, and it is the
+> number that tells you whether normalization needs to get more aggressive.
+
 **Files:**
 - Create: `scripts/watch/fetcher.py`, `scripts/watch/runner.py`
 - Test: `tests/watch/test_fetcher.py`, `tests/watch/test_runner.py`

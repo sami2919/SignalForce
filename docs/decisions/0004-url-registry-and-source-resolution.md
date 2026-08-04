@@ -119,3 +119,33 @@ This closes the critical gap flagged in the plan's failure-mode table (#4). With
 - Some accounts will resolve zero sources. That is a legitimate outcome and must be recorded, not treated as an error — Phase 3's source-health metrics need to distinguish "no source exists" from "source broke."
 - `resolution_method` becomes a diagnostic field worth querying: a sudden rise in `blocked_by_robots` or a fall in `heuristic` success indicates something changed upstream.
 - Resolution recall is unmeasured until Task 1.1 reports it. Do not claim a number for it before then.
+
+---
+
+## Postscript — Decision 3 confirmed in the wild (2026-08-04)
+
+Within minutes of pointing the normalizer at real traffic during Task 1.2:
+
+```
+jobs.lever.co/mistral  ->  HTTP 200
+                       ->  "Sorry, we couldn't find anything here. The job
+                            posting you're looking for might have closed, or
+                            it has been removed. (404 error). Jobs powered by"
+```
+
+A 200 status carrying a 404 page. A resolver trusting status codes would have
+written this into the registry and then hashed an error page daily forever,
+emitting nothing and looking exactly like a quiet account.
+
+The homepage-hash comparison in Decision 3 catches the SPA-shell variant of this.
+This instance is a different shape — an ATS error page, not a homepage echo — so
+Task 1.1 needs a second check: **reject a candidate whose normalized text matches
+known not-found phrasing** ("couldn't find anything", "404 error", "no longer
+available", "position has been filled"). Substring matching is brittle and
+language-specific, which is why it is a supplement to the homepage-hash check
+rather than a replacement for it.
+
+Recording the specific measurement so the claim is grounded: 6 fetches of
+`boards.greenhouse.io/anthropic` produced 2 distinct hashes (5:1 split), the delta
+being an unresolved `tags.new` i18n key. That drove the confirm-on-change decision
+now recorded against Task 1.3 in the plan.
