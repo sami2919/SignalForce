@@ -25,6 +25,24 @@ def _init() -> None:
     _SessionLocal = sessionmaker(bind=_engine, expire_on_commit=False)
 
 
+def migration_url() -> str:
+    """Database URL for Alembic. Prefers the direct (non-pooled) endpoint.
+
+    The app uses the pooled endpoint because PgBouncer multiplexes many short
+    connections. Migrations must NOT: transaction-mode pooling can hand
+    consecutive statements to different backends, so DDL can partially apply
+    and still report success.
+
+    See docs/decisions/0003-deployment-and-scheduling.md, Decision 3.
+    """
+    url = os.environ.get("DATABASE_URL_DIRECT") or os.environ.get("DATABASE_URL")
+    if not url:
+        raise RuntimeError(
+            "Neither DATABASE_URL_DIRECT nor DATABASE_URL is set — cannot run migrations"
+        )
+    return url
+
+
 @contextmanager
 def get_session() -> Iterator[Session]:
     _init()

@@ -9,11 +9,13 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
+from scripts.logging_config import configure_logging
 from scripts.web.routes_health import router as health_router
 
 
 def create_app() -> FastAPI:
     """Build a fresh FastAPI instance."""
+    configure_logging()
     app = FastAPI(
         title="SignalForce",
         version="0.2.0",

@@ -1,0 +1,45 @@
+# Fly configuration. Deployed by a human via `fly deploy` — CI does not deploy.
+# See docs/decisions/0003-deployment-and-scheduling.md.
+
+app = "signalforce"
+primary_region = "sjc"          # co-located with Neon's AWS us-west-2 (Oregon)
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # Non-secret configuration only. Anything that would be bad in a screenshot
+  # belongs in `fly secrets set`.
+  LOG_LEVEL = "INFO"
+  TENANT_SLUG = "agentmail"
+  PYTHONUNBUFFERED = "1"
+
+[deploy]
+  # Runs once in a temporary machine BEFORE new machines take traffic. A failed
+  # migration aborts the deploy and the previous version keeps serving, instead
+  # of every booting machine racing on the same schema.
+  release_command = "alembic upgrade head"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "suspend"   # snapshots memory; restore is ~1-3s
+  auto_start_machines = true
+  min_machines_running = 0         # dashboard is read-only and rarely hit
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/healthz"              # liveness ONLY — never /readyz, see ADR-0002
+
+# The scheduled worker is NOT defined here — its entrypoint arrives in Phase 1.
+# When it does, create it as a scheduled machine (starts, runs, exits — you pay
+# only for runtime):
+#
+#   fly machine run . --schedule daily --command "python -m scripts.watch.runner"
+#
+# It must NOT be an in-process scheduler on the web machine: with
+# min_machines_running = 0 the web machine suspends and an in-process scheduler
+# would silently stop firing. See ADR-0003 Decision 2.

@@ -1,4 +1,3 @@
-import os
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
@@ -7,6 +6,7 @@ from sqlalchemy import pool
 from alembic import context
 
 from scripts.storage.models import Base
+from scripts.storage.session import migration_url
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -21,8 +21,14 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 target_metadata = Base.metadata
 
-# Read the database URL from the environment, not alembic.ini.
-config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
+# Read the database URL from the environment, not alembic.ini. Use the direct
+# (non-pooled) endpoint — see scripts/storage/session.py:migration_url().
+#
+# configparser treats % as interpolation syntax. Percent-encoded passwords
+# (which is what you get after URL-escaping a password containing @ : / ?)
+# contain % and would raise InterpolationSyntaxError here. Escape before
+# handing the URL to Alembic's config.
+config.set_main_option("sqlalchemy.url", migration_url().replace("%", "%%"))
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

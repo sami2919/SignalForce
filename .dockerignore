@@ -1,0 +1,32 @@
+.git
+.gitignore
+.venv
+venv
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.ruff_cache
+.coverage
+htmlcov
+
+# SECRETS — must never enter the build context
+.env
+.env.*
+config/
+
+# Not needed at runtime
+tests/
+docs/
+examples/
+n8n-workflows/
+templates/
+skills/
+tasks/
+.superpowers/
+data/
+*.pdf
+*.pptx
+*.md
+!README.md
