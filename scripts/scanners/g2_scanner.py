@@ -25,8 +25,24 @@ from scripts.scanners.base import ScannerConfig, ScanResult, Signal, SignalStren
 
 logger = logging.getLogger(__name__)
 
-_STRONG_KEYWORDS = {"migration", "replacing", "switching", "evaluating", "replacement", "alternative"}
-_MODERATE_KEYWORDS = {"expensive", "complex", "slow", "frustrating", "difficult", "overhead", "bloated", "ceiling"}
+_STRONG_KEYWORDS = {
+    "migration",
+    "replacing",
+    "switching",
+    "evaluating",
+    "replacement",
+    "alternative",
+}
+_MODERATE_KEYWORDS = {
+    "expensive",
+    "complex",
+    "slow",
+    "frustrating",
+    "difficult",
+    "overhead",
+    "bloated",
+    "ceiling",
+}
 
 # LinkedIn posts from MOPs practitioners discussing MAP pain — company name
 # appears in the poster's profile URL and often in the post body.
@@ -48,16 +64,41 @@ _BLOG_QUERIES: list[str] = [
 
 _ALL_QUERIES = _LINKEDIN_QUERIES + _BLOG_QUERIES
 
-_LINKEDIN_COMPANY_RE = re.compile(
-    r"linkedin\.com/(?:in|company)/([a-z0-9\-]+)", re.IGNORECASE
-)
+_LINKEDIN_COMPANY_RE = re.compile(r"linkedin\.com/(?:in|company)/([a-z0-9\-]+)", re.IGNORECASE)
 
 # Words that look like company names in regex matches but aren't
 _NON_COMPANY_WORDS = {
-    "if", "why", "how", "what", "when", "we", "i", "you", "they", "he", "she",
-    "adobe", "summit", "conference", "forum", "highlights", "marketo", "hubspot",
-    "pardot", "salesforce", "forrester", "gartner", "linkedin", "google",
-    "episode", "last", "this", "that", "just", "here", "there",
+    "if",
+    "why",
+    "how",
+    "what",
+    "when",
+    "we",
+    "i",
+    "you",
+    "they",
+    "he",
+    "she",
+    "adobe",
+    "summit",
+    "conference",
+    "forum",
+    "highlights",
+    "marketo",
+    "hubspot",
+    "pardot",
+    "salesforce",
+    "forrester",
+    "gartner",
+    "linkedin",
+    "google",
+    "episode",
+    "last",
+    "this",
+    "that",
+    "just",
+    "here",
+    "there",
 }
 
 
@@ -142,9 +183,9 @@ class MAPFrustrationScanner:
 
         # 2. Title: "CompanyName Replaces/Left/Migrated Marketo/HubSpot" (present or past tense)
         title_m = re.search(
-            r'^([A-Z][A-Za-z0-9&]{1,}(?:\s+[A-Z]?[A-Za-z0-9&]{1,}){0,4}?)\s+'
-            r'(?:replaces?|migrates?|migrated|switched?|left|drops?|ditches?|moves?)\s+'
-            r'(?:marketo|hubspot|pardot|salesforce marketing cloud)',
+            r"^([A-Z][A-Za-z0-9&]{1,}(?:\s+[A-Z]?[A-Za-z0-9&]{1,}){0,4}?)\s+"
+            r"(?:replaces?|migrates?|migrated|switched?|left|drops?|ditches?|moves?)\s+"
+            r"(?:marketo|hubspot|pardot|salesforce marketing cloud)",
             title,
             re.IGNORECASE,
         )
@@ -157,7 +198,7 @@ class MAPFrustrationScanner:
         # 3. "at CompanyName" in title or snippet — company is a proper noun
         text = title + " " + snippet
         at_m = re.search(
-            r'\bat\s+([A-Z][A-Za-z0-9]{1,}(?:\s+[A-Z][A-Za-z0-9]{1,}){0,2})',
+            r"\bat\s+([A-Z][A-Za-z0-9]{1,}(?:\s+[A-Z][A-Za-z0-9]{1,}){0,2})",
             text,
         )
         if at_m:
@@ -166,9 +207,11 @@ class MAPFrustrationScanner:
             # Reject event names, products, known non-companies
             bad_suffixes = {"summit", "conference", "forum", "hub", "engage"}
             last_word = name.split()[-1].lower()
-            if (first_word not in _NON_COMPANY_WORDS
-                    and last_word not in bad_suffixes
-                    and len(name) >= 2):
+            if (
+                first_word not in _NON_COMPANY_WORDS
+                and last_word not in bad_suffixes
+                and len(name) >= 2
+            ):
                 return name
 
         return None

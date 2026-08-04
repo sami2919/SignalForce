@@ -223,9 +223,7 @@ def get_conversion_rates(
             return round(numerator / denominator, 4) if denominator > 0 else 0.0
 
         reply_count = outcomes.get("reply", 0) + outcomes.get("positive_reply", 0)
-        meeting_count = outcomes.get("meeting_scheduled", 0) + outcomes.get(
-            "meeting_completed", 0
-        )
+        meeting_count = outcomes.get("meeting_scheduled", 0) + outcomes.get("meeting_completed", 0)
         deal_count = outcomes.get("deal_closed", 0)
 
         rates = {

@@ -1,4 +1,5 @@
 """Tests for briefer.py — Claude API call mocked."""
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -37,7 +38,9 @@ _TOOL_INPUT = {
             "success_metric": "Open rate >38%",
         }
     ],
-    "optimization_triggers": [{"condition": "intent spike detected", "action": "accelerate to step 4"}],
+    "optimization_triggers": [
+        {"condition": "intent spike detected", "action": "accelerate to step 4"}
+    ],
     "pipeline_projection": {
         "expected_renewals": "~$1.4M ARR",
         "ae_efficiency": "70% task acceptance",

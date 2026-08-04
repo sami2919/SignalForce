@@ -1,4 +1,5 @@
 """Tests for MarOps Pydantic models."""
+
 import pytest
 
 from scripts.marops.models import (

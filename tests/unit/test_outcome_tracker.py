@@ -81,12 +81,18 @@ def test_conversion_rates_basic(engine, campaign_id):
     """Conversion rates are calculated correctly for a simple funnel."""
     # 2 signals, 2 outreach, 1 reply, 1 meeting
     sig1 = log_signal(
-        engine, campaign_id, signal_type="github_repo",
-        company_name="A", signal_strength=3,
+        engine,
+        campaign_id,
+        signal_type="github_repo",
+        company_name="A",
+        signal_strength=3,
     )
     sig2 = log_signal(
-        engine, campaign_id, signal_type="github_repo",
-        company_name="B", signal_strength=2,
+        engine,
+        campaign_id,
+        signal_type="github_repo",
+        company_name="B",
+        signal_strength=2,
     )
 
     out1 = log_outreach(engine, sig1, channel="email")
@@ -121,12 +127,18 @@ def test_conversion_rates_empty_db(engine):
 def test_conversion_rates_filter_by_signal_type(engine, campaign_id):
     """Filtering by signal_type narrows results correctly."""
     sig_gh = log_signal(
-        engine, campaign_id, signal_type="github_repo",
-        company_name="A", signal_strength=3,
+        engine,
+        campaign_id,
+        signal_type="github_repo",
+        company_name="A",
+        signal_strength=3,
     )
     sig_arxiv = log_signal(
-        engine, campaign_id, signal_type="arxiv_paper",
-        company_name="B", signal_strength=2,
+        engine,
+        campaign_id,
+        signal_type="arxiv_paper",
+        company_name="B",
+        signal_strength=2,
     )
 
     out_gh = log_outreach(engine, sig_gh, channel="email")
@@ -174,12 +186,20 @@ def test_conversion_rates_filter_by_date_range(engine, campaign_id):
     old = now - timedelta(days=30)
 
     log_signal(
-        engine, campaign_id, signal_type="github_repo",
-        company_name="Old", signal_strength=2, detected_at=old,
+        engine,
+        campaign_id,
+        signal_type="github_repo",
+        company_name="Old",
+        signal_strength=2,
+        detected_at=old,
     )
     log_signal(
-        engine, campaign_id, signal_type="github_repo",
-        company_name="New", signal_strength=3, detected_at=now,
+        engine,
+        campaign_id,
+        signal_type="github_repo",
+        company_name="New",
+        signal_strength=3,
+        detected_at=now,
     )
 
     rates = get_conversion_rates(
@@ -199,8 +219,11 @@ def test_best_performing_signals(engine, campaign_id):
     # github_repo: 2 signals, 2 positive outcomes
     for name in ("A", "B"):
         sig = log_signal(
-            engine, campaign_id, signal_type="github_repo",
-            company_name=name, signal_strength=3,
+            engine,
+            campaign_id,
+            signal_type="github_repo",
+            company_name=name,
+            signal_strength=3,
         )
         out = log_outreach(engine, sig, channel="email")
         log_outcome(engine, out, outcome_type="positive_reply")
@@ -208,8 +231,11 @@ def test_best_performing_signals(engine, campaign_id):
     # arxiv_paper: 2 signals, 0 positive outcomes (only plain replies)
     for name in ("C", "D"):
         sig = log_signal(
-            engine, campaign_id, signal_type="arxiv_paper",
-            company_name=name, signal_strength=2,
+            engine,
+            campaign_id,
+            signal_type="arxiv_paper",
+            company_name=name,
+            signal_strength=2,
         )
         out = log_outreach(engine, sig, channel="email")
         log_outcome(engine, out, outcome_type="reply")
@@ -234,8 +260,11 @@ def test_best_performing_signals_limit(engine, campaign_id):
     """Limit parameter restricts result count."""
     for i in range(5):
         log_signal(
-            engine, campaign_id, signal_type=f"type_{i}",
-            company_name=f"Co{i}", signal_strength=2,
+            engine,
+            campaign_id,
+            signal_type=f"type_{i}",
+            company_name=f"Co{i}",
+            signal_strength=2,
         )
 
     results = get_best_performing_signals(engine, limit=3)
@@ -250,8 +279,11 @@ def test_best_performing_signals_limit(engine, campaign_id):
 def test_invalid_channel_raises(engine, campaign_id):
     """log_outreach rejects invalid channel values."""
     sig = log_signal(
-        engine, campaign_id, signal_type="github_repo",
-        company_name="A", signal_strength=3,
+        engine,
+        campaign_id,
+        signal_type="github_repo",
+        company_name="A",
+        signal_strength=3,
     )
     with pytest.raises(ValueError, match="channel"):
         log_outreach(engine, sig, channel="carrier_pigeon")
@@ -260,8 +292,11 @@ def test_invalid_channel_raises(engine, campaign_id):
 def test_invalid_outcome_type_raises(engine, campaign_id):
     """log_outcome rejects invalid outcome_type values."""
     sig = log_signal(
-        engine, campaign_id, signal_type="github_repo",
-        company_name="A", signal_strength=3,
+        engine,
+        campaign_id,
+        signal_type="github_repo",
+        company_name="A",
+        signal_strength=3,
     )
     out = log_outreach(engine, sig, channel="email")
     with pytest.raises(ValueError, match="outcome_type"):
@@ -276,12 +311,18 @@ def test_invalid_outcome_type_raises(engine, campaign_id):
 def test_multiple_signals_same_company(engine, campaign_id):
     """Multiple signals for the same company are tracked independently."""
     sig1 = log_signal(
-        engine, campaign_id, signal_type="github_repo",
-        company_name="Acme", signal_strength=3,
+        engine,
+        campaign_id,
+        signal_type="github_repo",
+        company_name="Acme",
+        signal_strength=3,
     )
     sig2 = log_signal(
-        engine, campaign_id, signal_type="arxiv_paper",
-        company_name="Acme", signal_strength=2,
+        engine,
+        campaign_id,
+        signal_type="arxiv_paper",
+        company_name="Acme",
+        signal_strength=2,
     )
     assert sig1 != sig2
 

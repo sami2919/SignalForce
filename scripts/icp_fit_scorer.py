@@ -57,7 +57,7 @@ _PLG_KEYWORDS: dict[str, float] = {
 _MOPS_ROLE_KEYWORDS: dict[str, float] = {
     # A company hiring for these roles has an active MOPs function and a MAP dependency.
     "marketing operations": 3.0,
-    "marketing automation": 3.0,   # explicitly MAP
+    "marketing automation": 3.0,  # explicitly MAP
     "marketing technology": 2.5,
     "demand generation": 2.0,
     "lifecycle marketing": 2.0,
