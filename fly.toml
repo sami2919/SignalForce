@@ -43,7 +43,26 @@ primary_region = "sjc"          # co-located with Neon's AWS us-west-2 (Oregon)
 # When it does, create it as a scheduled machine (starts, runs, exits — you pay
 # only for runtime):
 #
-#   fly machine run . --schedule daily --command "python -m scripts.watch.runner"
+#   fly machine run registry.fly.io/signalforce:<deployment-tag> \
+#     --app signalforce --name signalforce-worker --region sjc \
+#     --schedule daily --vm-memory 1024 --vm-cpus 1 --restart no \
+#     -e TENANT_SLUG=agentmail -e LOG_LEVEL=INFO -e PYTHONUNBUFFERED=1 \
+#     --entrypoint "/bin/sh -c" "python -m scripts.watch.runner scan"
+#
+# TWO THINGS THAT BIT ON THE FIRST ATTEMPT (2026-08-04):
+#
+#   1. The [env] block above does NOT propagate to machines created by
+#      `fly machine run`. It applies only to machines created by `fly deploy`.
+#      SECRETS (fly secrets set) DO propagate app-wide. The worker exited 1 with
+#      "TENANT_SLUG is not set" until the -e flags were passed explicitly.
+#
+#   2. The default --restart policy is `on-failure`, which turns a failing
+#      scheduled job into a crash loop — it restarted every ~10s. For a scheduled
+#      machine the SCHEDULE is the retry mechanism, so --restart no is correct:
+#      a failed run should wait for tomorrow, not hammer.
+#
+#   --vm-memory 1024 is required, not optional: 100 concurrency x the 8MB body
+#   cap is 800MB worst case. Fly's 256MB default would OOM mid-pass.
 #
 # It must NOT be an in-process scheduler on the web machine: with
 # min_machines_running = 0 the web machine suspends and an in-process scheduler
