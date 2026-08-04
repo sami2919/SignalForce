@@ -43,3 +43,10 @@ target-version = "py311"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov=scripts --cov-report=term-missing"
+# Known-broken, unrelated to config/.env isolation (Task 0.3a) — see
+# .superpowers/sdd/2026-08-04-signalforce-production/task-0.3a-report.md.
+# scripts/fireworks_client.py was never committed on this branch, so
+# scripts/demo_fireworks_icp.py fails to import it. Tracked debt, not
+# deleted assertions. CI (Task 0.3b) should pass these as --deselect:
+#   --deselect tests/test_fireworks_icp_config.py::test_demo_script_loaders
+#   --deselect tests/test_fireworks_icp_config.py::test_demo_script_build_prompt

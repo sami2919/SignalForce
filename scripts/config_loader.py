@@ -6,6 +6,7 @@ This module handles domain configuration: what to scan for, how to score, who to
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -15,9 +16,31 @@ from pydantic import BaseModel, ConfigDict
 from scripts.models import PlaybookEntry
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-_CONFIG_DIR = _PROJECT_ROOT / "config"
-_CONFIG_FILE = _CONFIG_DIR / "config.yaml"
-_PLAYBOOKS_FILE = _CONFIG_DIR / "playbooks.yaml"
+_DEFAULT_CONFIG_DIRNAME = "config"
+
+
+def config_dir() -> Path:
+    """Resolve the active config directory AT CALL TIME.
+
+    Defaults to <repo>/config, which is gitignored. Tests and fresh clones set
+    SIGNALFORCE_CONFIG_DIR to point at the committed config.example/ instead.
+
+    Deliberately an explicit override rather than an automatic fallback to
+    config.example: a production deploy with a missing config/ must fail
+    loudly, not silently run on example data.
+    """
+    override = os.environ.get("SIGNALFORCE_CONFIG_DIR")
+    if override:
+        return Path(override)
+    return _PROJECT_ROOT / _DEFAULT_CONFIG_DIRNAME
+
+
+def config_file() -> Path:
+    return config_dir() / "config.yaml"
+
+
+def playbooks_file() -> Path:
+    return config_dir() / "playbooks.yaml"
 
 
 class CompanyConfig(BaseModel):
@@ -103,9 +126,10 @@ class SignalForceConfig(BaseModel):
     filters: FiltersConfig = FiltersConfig()
 
 
-def check_config_exists(config_dir: Path = _CONFIG_DIR) -> None:
+def check_config_exists(config_dir_path: Path | None = None) -> None:
     """Check that config/ exists with a config.yaml. Exit with helpful message if not."""
-    if not config_dir.exists() or not (config_dir / "config.yaml").exists():
+    directory = config_dir_path if config_dir_path is not None else config_dir()
+    if not directory.exists() or not (directory / "config.yaml").exists():
         print(
             "\n  SignalForce is not configured yet.\n"
             "\n"
@@ -119,7 +143,7 @@ def check_config_exists(config_dir: Path = _CONFIG_DIR) -> None:
         raise SystemExit(1)
 
 
-def load_config(config_path: Path = _CONFIG_FILE) -> SignalForceConfig:
+def load_config(config_path: Path | None = None) -> SignalForceConfig:
     """Load and validate SignalForce configuration.
 
     Raises:
@@ -127,18 +151,19 @@ def load_config(config_path: Path = _CONFIG_FILE) -> SignalForceConfig:
         yaml.YAMLError: YAML syntax error.
         pydantic.ValidationError: schema validation failure.
     """
-    if not config_path.exists():
+    path = config_path if config_path is not None else config_file()
+    if not path.exists():
         raise FileNotFoundError(
-            f"No config found at {config_path}. "
+            f"No config found at {path}. "
             "Run the /setup skill to configure SignalForce for your ICP, "
             "or copy an example: cp -r config.example/ config/"
         )
-    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     return SignalForceConfig.model_validate(raw)
 
 
 def load_playbooks(
-    playbooks_path: Path = _PLAYBOOKS_FILE,
+    playbooks_path: Path | None = None,
 ) -> list[PlaybookEntry]:
     """Load and validate signal-to-angle playbook entries from YAML.
 
@@ -149,6 +174,7 @@ def load_playbooks(
         yaml.YAMLError: YAML syntax error.
         pydantic.ValidationError: schema validation failure.
     """
+    playbooks_path = playbooks_path if playbooks_path is not None else playbooks_file()
     if not playbooks_path.exists():
         raise FileNotFoundError(
             f"No playbooks found at {playbooks_path}. "
