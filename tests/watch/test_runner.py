@@ -589,3 +589,109 @@ async def test_resolve_and_store_persists_resolved_sources(session_factory, monk
 
     session = session_factory()
     assert session.query(AccountSource).count() == 1
+
+
+# --- accounts_probed vs sources_probed (review fix round 1, finding 1) ---
+
+
+def _make_multi_account_sources(
+    session_factory, accounts: dict[str, list[str]]
+) -> tuple[int, dict[str, list[int]]]:
+    """Create one tenant with multiple accounts, each with multiple sources.
+
+    `accounts` maps domain -> list of source urls. Returns (tenant_id,
+    {domain: [source_id, ...]}).
+    """
+    _tenant_counter["n"] += 1
+    session = session_factory()
+    tenant = Tenant(slug=f"t{_tenant_counter['n']}", name="T1")
+    session.add(tenant)
+    session.commit()
+
+    from scripts.storage.models import Account
+
+    source_ids_by_domain: dict[str, list[int]] = {}
+    for domain, urls in accounts.items():
+        account = Account(tenant_id=tenant.id, domain=domain, name=domain)
+        session.add(account)
+        session.commit()
+
+        ids = []
+        for i, url in enumerate(urls):
+            src = AccountSource(
+                tenant_id=tenant.id,
+                account_id=account.id,
+                source_type=["careers", "docs", "changelog", "pricing", "blog"][i % 5],
+                url=url,
+                last_hash=None,
+                active=True,
+            )
+            session.add(src)
+            session.commit()
+            ids.append(src.id)
+        source_ids_by_domain[domain] = ids
+
+    tenant_id = tenant.id
+    session.close()
+    return tenant_id, source_ids_by_domain
+
+
+@pytest.mark.asyncio
+async def test_accounts_probed_counts_distinct_accounts_not_sources(session_factory, _patch_client):
+    """2 accounts x 3 sources each must yield accounts_probed=2, sources_probed=6.
+
+    Every prior test used exactly one source per account, so accounts_probed
+    (len of a set of source ids, a bug) was indistinguishable from
+    sources_probed. This is the test that would have caught it.
+    """
+    tenant_id, source_ids_by_domain = _make_multi_account_sources(
+        session_factory,
+        {
+            "a.com": ["https://a.com/careers", "https://a.com/docs", "https://a.com/blog"],
+            "b.com": ["https://b.com/careers", "https://b.com/docs", "https://b.com/blog"],
+        },
+    )
+    _patch_client["handler"] = _static_handler(PAGE_A)
+    run_id = await run_watch_pass(tenant_id)
+
+    session = session_factory()
+    run = session.get(ScanRun, run_id)
+    assert run.sources_probed == 6
+    assert run.accounts_probed == 2
+    assert run.accounts_probed != run.sources_probed
+
+
+# --- robots-blocked sources (review fix round 1, finding 2) ---
+
+
+@pytest.mark.asyncio
+async def test_robots_blocked_source_is_visible_and_not_penalized(session_factory, _patch_client):
+    """A robots-blocked source is not broken — we are simply not permitted to
+    fetch it. It must still produce a visible, queryable Probe row (distinct
+    error marker) and increment the run's robots_blocked counter, but must
+    NOT increment consecutive_failures or deactivate the source: robots.txt
+    is re-checked every run and can permit it again tomorrow.
+    """
+    tenant_id, source_ids = _make_tenant_and_sources(
+        session_factory, ["https://acme.com/careers"], last_hash=None
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text="User-agent: *\nDisallow: /careers\n")
+        return httpx.Response(200, text=PAGE_A)
+
+    _patch_client["handler"] = handler
+    run_id = await run_watch_pass(tenant_id)
+
+    session = session_factory()
+    probe = session.query(Probe).filter_by(scan_run_id=run_id).one()
+    assert probe.error == "blocked_by_robots"
+    assert probe.changed is False
+
+    src = session.get(AccountSource, source_ids[0])
+    assert src.consecutive_failures == 0
+    assert src.active is True
+
+    run = session.get(ScanRun, run_id)
+    assert run.robots_blocked == 1

@@ -25,8 +25,10 @@ ADR-0005 Decision 5 exists to prevent.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import logging
+import os
 import sys
 from datetime import datetime, timezone
 
@@ -83,15 +85,22 @@ async def resolve_and_store(tenant_id: int, domains: list[str]) -> StoreResult:
     return StoreResult(created=created, updated=updated, deactivated=deactivated)
 
 
-def _load_active_sources(tenant_id: int, session: Session) -> list[tuple[int, str, str | None]]:
-    """Return (source_id, url, last_hash) for every active source of the tenant."""
+def _load_active_sources(
+    tenant_id: int, session: Session
+) -> list[tuple[int, int, str, str | None]]:
+    """Return (source_id, account_id, url, last_hash) for every active source of the tenant."""
     rows = session.execute(
-        select(AccountSource.id, AccountSource.url, AccountSource.last_hash).where(
+        select(
+            AccountSource.id,
+            AccountSource.account_id,
+            AccountSource.url,
+            AccountSource.last_hash,
+        ).where(
             AccountSource.tenant_id == tenant_id,
             AccountSource.active.is_(True),
         )
     ).all()
-    return [(r.id, r.url, r.last_hash) for r in rows]
+    return [(r.id, r.account_id, r.url, r.last_hash) for r in rows]
 
 
 async def run_watch_pass(tenant_id: int, concurrency: int = 100) -> int:
@@ -111,9 +120,10 @@ async def run_watch_pass(tenant_id: int, concurrency: int = 100) -> int:
 
     try:
         # --- Phase 2: async fetch ---
-        refs = [SourceRef(source_id=sid, url=url) for sid, url, _ in sources]
-        last_hash_by_id = {sid: h for sid, _, h in sources}
-        url_by_id = {sid: url for sid, url, _ in sources}
+        refs = [SourceRef(source_id=sid, url=url) for sid, _, url, _ in sources]
+        last_hash_by_id = {sid: h for sid, _, _, h in sources}
+        url_by_id = {sid: url for sid, _, url, _ in sources}
+        account_id_by_source_id = {sid: account_id for sid, account_id, _, _ in sources}
 
         async with httpx.AsyncClient() as client:
             first_results = await fetch_all(refs, client=client, concurrency=concurrency)
@@ -141,6 +151,7 @@ async def run_watch_pass(tenant_id: int, concurrency: int = 100) -> int:
             first_results=first_results,
             confirm_results=confirm_results,
             last_hash_by_id=last_hash_by_id,
+            account_id_by_source_id=account_id_by_source_id,
         )
         return run_id
     except Exception as exc:  # noqa: BLE001
@@ -154,6 +165,9 @@ async def run_watch_pass(tenant_id: int, concurrency: int = 100) -> int:
         raise
 
 
+_ROBOTS_BLOCKED_ERROR = "blocked_by_robots"
+
+
 def _write_results(
     *,
     tenant_id: int,
@@ -161,12 +175,15 @@ def _write_results(
     first_results: list[ProbeResult],
     confirm_results: dict[int, ProbeResult],
     last_hash_by_id: dict[int, str | None],
+    account_id_by_source_id: dict[int, int],
 ) -> int:
     """Phase 4: write probes and update source/run state. Batched 500/commit."""
     changes_detected = 0
     confirm_rejected = 0
     deactivated_count = 0
+    robots_blocked_count = 0
     latencies: list[int] = []
+    accounts_probed: set[int] = set()
     now = _utcnow()
 
     with get_session() as session:
@@ -177,11 +194,24 @@ def _write_results(
                 continue
 
             latencies.append(result.latency_ms)
+            account_id = account_id_by_source_id.get(result.source_id)
+            if account_id is not None:
+                accounts_probed.add(account_id)
+
             prior_hash = last_hash_by_id.get(result.source_id)
             changed = False
             new_last_hash: str | None = None
+            probe_error = result.error
 
-            if result.error is not None:
+            if result.robots_blocked:
+                # Not a failure — we are simply not permitted to fetch it
+                # right now. robots.txt is re-checked every run (ADR-0005
+                # Decision 4), so this can reverse on its own. Do NOT touch
+                # consecutive_failures or active; do make it visible so it
+                # is queryable and distinguishable from a benign no-op.
+                robots_blocked_count += 1
+                probe_error = _ROBOTS_BLOCKED_ERROR
+            elif result.error is not None:
                 source.consecutive_failures += 1
                 if source.consecutive_failures >= _DEACTIVATE_AFTER_FAILURES:
                     source.active = False
@@ -227,7 +257,7 @@ def _write_results(
                 status_code=result.status_code,
                 latency_ms=result.latency_ms,
                 bytes=result.bytes,
-                error=result.error,
+                error=probe_error,
             )
             session.add(probe)
             pending += 1
@@ -242,10 +272,11 @@ def _write_results(
         run = session.get(ScanRun, run_id)
         run.finished_at = now
         run.status = "completed"
-        run.accounts_probed = len({r.source_id for r in first_results})
+        run.accounts_probed = len(accounts_probed)
         run.sources_probed = len(first_results)
         run.changes_detected = changes_detected
         run.confirm_rejected = confirm_rejected
+        run.robots_blocked = robots_blocked_count
         run.p50_latency_ms = _percentile(latencies, 0.50)
         run.p95_latency_ms = _percentile(latencies, 0.95)
         session.commit()
@@ -257,15 +288,13 @@ def _write_results(
 
 
 def _cli_scan() -> int:
-    tenant_slug = __import__("os").environ.get("TENANT_SLUG")
+    tenant_slug = os.environ.get("TENANT_SLUG")
     if not tenant_slug:
         logger.error("TENANT_SLUG is not set")
         return 1
 
     with get_session() as session:
         tenant_id = ensure_tenant(tenant_slug, tenant_slug, session)
-
-    import asyncio
 
     try:
         run_id = asyncio.run(run_watch_pass(tenant_id))
@@ -283,6 +312,7 @@ def _cli_scan() -> int:
             "sources_probed": run.sources_probed,
             "changes_detected": run.changes_detected,
             "confirm_rejected": run.confirm_rejected,
+            "robots_blocked": run.robots_blocked,
             "p50_latency_ms": run.p50_latency_ms,
             "p95_latency_ms": run.p95_latency_ms,
             "started_at": run.started_at.isoformat() if run.started_at else None,
@@ -294,15 +324,13 @@ def _cli_scan() -> int:
 
 
 def _cli_resolve(domains: list[str]) -> int:
-    tenant_slug = __import__("os").environ.get("TENANT_SLUG")
+    tenant_slug = os.environ.get("TENANT_SLUG")
     if not tenant_slug:
         logger.error("TENANT_SLUG is not set")
         return 1
 
     with get_session() as session:
         tenant_id = ensure_tenant(tenant_slug, tenant_slug, session)
-
-    import asyncio
 
     try:
         result = asyncio.run(resolve_and_store(tenant_id, domains))

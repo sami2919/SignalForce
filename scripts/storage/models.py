@@ -163,6 +163,7 @@ class ScanRun(Base):
     sources_probed: Mapped[int] = mapped_column(Integer, default=0)
     changes_detected: Mapped[int] = mapped_column(Integer, default=0)
     confirm_rejected: Mapped[int] = mapped_column(Integer, default=0)
+    robots_blocked: Mapped[int] = mapped_column(Integer, default=0)
     verify_calls: Mapped[int] = mapped_column(Integer, default=0)
     signals_emitted: Mapped[int] = mapped_column(Integer, default=0)
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
