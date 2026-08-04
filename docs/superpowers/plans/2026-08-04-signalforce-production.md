@@ -557,7 +557,16 @@ git commit -m "feat: postgres storage layer with multi-tenant schema"
 - Test: `tests/web/test_health.py`
 
 **Interfaces:**
-- Produces: `create_app() -> FastAPI`; route `GET /healthz -> {"status": "ok", "db": bool}`
+- Produces: `create_app() -> FastAPI`; `GET /healthz` (liveness, no DB); `GET /readyz` (readiness, checks DB, 503 on failure)
+
+> **ADR-0002 amendment (2026-08-04).** This task originally specified a single
+> `/healthz` returning `{"status": "ok", "db": bool}` with a 200 regardless of DB
+> state. That conflates liveness with readiness. Fly restarts machines whose health
+> check fails — so a DB-checking `/healthz` converts a Neon outage into a Neon outage
+> *plus* a crash-looping web tier, since restarting cannot fix a remote dependency.
+> **Split into two endpoints:** `/healthz` never touches the DB (Fly's check points
+> here); `/readyz` checks it and returns 503. See
+> `docs/decisions/0002-web-layer-and-health-checks.md`, Decision 3.
 
 - [ ] **Step 1: Write the failing test**
 
