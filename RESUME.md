@@ -5,7 +5,8 @@ Copy everything in the fenced block below into a fresh Claude Code session.
 ---
 
 ```
-I'm continuing work on SignalForce. Phase 0 is complete and deployed. Read these
+I'm continuing work on SignalForce. Phases 0 and 1 are implemented and deployed,
+with a scheduled worker running daily. Read these
 files first, in this order, before doing anything:
 
 1. /Users/sami/SignalForce/.superpowers/sdd/2026-08-04-signalforce-production/progress.md
@@ -17,9 +18,13 @@ files first, in this order, before doing anything:
    inline, and Task 3.4 (probe retention) and Task 5.4 (retire db.py) which were
    added after the plan was first written.
 
-3. /Users/sami/SignalForce-production/docs/decisions/000{1,2,3}-*.md
-   — ADRs for the storage layer, web layer/health checks, and deployment.
-   These record what was rejected and why. Do not re-litigate them.
+3. /Users/sami/SignalForce-production/docs/decisions/*.md — FIVE ADRs:
+     0001 storage layer (Postgres/SQLAlchemy/Alembic, + Neon vs Supabase vs Lakebase)
+     0002 web layer + the liveness/readiness split
+     0003 deployment, scheduling, migrations-as-release-command
+     0004 URL registry, soft-404 detection, robots.txt
+     0005 watch layer concurrency, confirm-on-change, persistence
+   These record what was REJECTED and why. Do not re-litigate them.
 
 ## Where the work happens
 
@@ -121,20 +126,20 @@ per run.
 - scripts/scanners/g2_seed_scanner.py is at 0% coverage and deliberately left
   measured (not omitted) so the gap stays visible.
 
-## Next task: Phase 1, Task 1.1 — source resolution
+## Next: Phase 2 — the verify layer and the AgentMail scanners
 
-Start by writing ADR-0004 covering the URL registry design, then the task brief,
-then dispatch. The plan has full code for Tasks 1.1, 1.2, and 1.3.
+Only after the Phase 1 exit number is measured (see above). Then:
 
-Phase 1's exit criterion is the number that validates the whole architecture:
-`changes_detected / sources_probed` must land in the 3-20% band. If it is near
-100%, HTML normalization is broken and the two-tier cost model collapses — fix
-that before Phase 2.
+- Task 2.1 verify budget gate — decides which detected changes earn an LLM call
+- Task 2.2 agent_email_scanner — THE bullseye signal for AgentMail's ICP: a GitHub
+  repo importing BOTH an agent framework (openai-agents, langgraph, crewai, mastra,
+  agno) AND an email library (resend, sendgrid, nodemailer, smtplib), first seen in
+  the last 30 days. Intersection, not union. Nobody else runs this signal.
+- Task 2.3 diff-based signal events — a signal is a DIFF, not a snapshot
 
-Also in Phase 1: create the scheduled worker machine. It must be a SEPARATE Fly
-machine, never an in-process scheduler, because min_machines_running = 0 means
-the web machine suspends and an in-process scheduler would silently stop firing.
-See ADR-0003 Decision 2. The command is commented at the bottom of fly.toml.
+Phase 2 needs GITHUB_TOKEN and ANTHROPIC_API_KEY, which are currently blank in .env.
+
+Carry into Phase 2: the Task 0.1 MutableDict finding (SignalEvent.payload).
 
 ## Context for why this project exists
 
