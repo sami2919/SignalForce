@@ -50,3 +50,21 @@ addopts = "--cov=scripts --cov-report=term-missing"
 # deleted assertions. CI (Task 0.3b) should pass these as --deselect:
 #   --deselect tests/test_fireworks_icp_config.py::test_demo_script_loaders
 #   --deselect tests/test_fireworks_icp_config.py::test_demo_script_build_prompt
+
+[tool.coverage.run]
+# Demo/one-off scripts, deliberately excluded from the production coverage gate.
+# Neither is imported by the web app or the scan worker — they exist to generate
+# artifacts by hand, so measuring them would make the gate a statement about
+# throwaway code rather than about the deployed system.
+#
+# NOT a dumping ground: every entry needs a reason on the line above it, and
+# anything under scripts/scanners/ stays measured. g2_seed_scanner.py sits at
+# 0% and is deliberately left IN so its missing tests remain visible debt.
+# Decision D10, 2026-08-04.
+omit = [
+    # One-off PDF generator for the demo deck. 267 statements, run by hand.
+    "scripts/generate_demo_pdf.py",
+    # Fireworks demo script; imports scripts.fireworks_client, which was never
+    # committed on any branch. Dead on this branch by definition.
+    "scripts/demo_fireworks_icp.py",
+]
