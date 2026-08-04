@@ -46,8 +46,10 @@ def normalize_html(raw: str) -> str:
         for tag in _DROP_TAGS:
             for node in tree.css(tag):
                 node.decompose()
-        for comment in tree.css("comment"):
-            comment.decompose()
+        # Comments are excluded by selectolax's .text() in the pinned version, so no
+        # explicit stripping is needed. test_ignores_html_comments is the guard: if a
+        # future selectolax changes that behaviour, that test fails rather than this
+        # silently churning the hash on every render-timestamp comment.
         # separator=" " keeps word boundaries: <span>A</span><span>B</span>
         # must not collapse to "AB", which would hash identically to a page
         # that genuinely says "AB".
