@@ -36,7 +36,17 @@ from scripts.watch.normalize import content_hash
 logger = logging.getLogger(__name__)
 
 _TIMEOUT = httpx.Timeout(15.0, connect=5.0)
-_MAX_BYTES = 2_000_000  # skip hashing pathological pages
+
+# Peak memory is roughly concurrency x response size. Typical pages are
+# ~200KB, so a 100-wide pass holds ~20MB. The cap bounds the pathological
+# case: 100 x 8MB = 800MB worst case, which is why Task 1.3b provisions the
+# worker machine at 1GB rather than the 256MB default.
+#
+# 2MB was the original value and was wrong: measured 2026-08-04, neon.com's
+# changelog is 2.7MB raw but only 18,805 chars normalized, and neon.com/blog
+# is 3.8MB raw / 2,076 normalized. Raw transport size is not a proxy for
+# content size on JS-heavy sites.
+_MAX_BYTES = 8_000_000  # skip hashing pathological pages (DoS bound, not content filter)
 _USER_AGENT = "SignalForce/0.2 (+https://signalforce.fly.dev)"
 
 

@@ -275,9 +275,28 @@ async def test_oversized_body_is_skipped_not_hashed() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/robots.txt":
             return httpx.Response(200, text=ROBOTS_ALLOW)
-        return httpx.Response(200, text="x" * 3_000_000)
+        return httpx.Response(200, text="x" * 9_000_000)
 
     async with _client(handler) as c:
         results = await fetch_all([SourceRef(source_id=1, url="https://x.com/c")], client=c)
     assert results[0].content_hash is None
     assert results[0].error is not None
+
+
+@pytest.mark.asyncio
+async def test_large_but_reasonable_body_is_hashed() -> None:
+    """JS-heavy sites (Next.js bundles, base64 images) legitimately ship large
+    raw HTML with small normalized content. Raw transport size is not a proxy
+    for content size, so a large-but-real page (well under the 8MB DoS cap)
+    must still be fetched and hashed, not rejected as pathological."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text=ROBOTS_ALLOW)
+        padding = "<!-- " + ("x" * 3_000_000) + " -->"
+        return httpx.Response(200, text=f"<html><body>{PAGE}{padding}</body></html>")
+
+    async with _client(handler) as c:
+        results = await fetch_all([SourceRef(source_id=1, url="https://x.com/c")], client=c)
+    assert results[0].content_hash is not None
+    assert results[0].error is None
