@@ -1,5 +1,16 @@
 """SQLite database setup for the SignalForce feedback loop.
 
+DEPRECATED — superseded by scripts/storage/.
+
+This SQLite layer remains only because scripts/outcome_tracker.py depends on its
+four tables (campaigns, tracked_signals, outreach_events, outcome_events). Their
+replacement (contacts / outreach, tied to signal_events via triggering_signal_ids)
+lands in Phase 5 Task 5.4, at which point this module and tests/unit/test_db.py
+are deleted.
+
+Write no new code against this module. Use scripts/storage/ instead.
+See docs/decisions/0001-postgres-storage-layer.md, Decision 7.
+
 Provides SQLAlchemy engine, table definitions, and session management.
 DB file lives at data/signalforce.db with WAL mode for concurrent reads.
 """

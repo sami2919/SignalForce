@@ -74,8 +74,22 @@ SignalForce currently persists to SQLite at `data/signalforce.db` (`scripts/db.p
 - Read replicas (no measured read bottleneck; adding one now would be caching-without-a-bottleneck, the failure mode `docs/system-design/03-caching.md` warns about)
 - Backup policy beyond Neon's default PITR
 
+## Decision 7 — `scripts/db.py` survives until Phase 5 (amended 2026-08-04)
+
+**Original intent:** delete `scripts/db.py` in this task.
+
+**Reality found during implementation:** `scripts/outcome_tracker.py` (313 lines, with a full test suite) depends on its four tables — `campaigns`, `tracked_signals`, `outreach_events`, `outcome_events`. Their conceptual replacement is the Phase 5 `contacts` / `outreach` pair, which does not exist yet.
+
+**Chosen:** keep `db.py`, add a deprecation docstring naming Phase 5 Task 5.4 as the removal point.
+
+**Rejected: port the four tables into the new schema now.** Phase 5 designs `outreach` against `signal_events` with `triggering_signal_ids`, so outcomes join directly to the signals that caused them. Porting the legacy shape now means building tables that get redesigned in five weeks — guaranteed rework, and roughly double this task's size.
+
+**Rejected: delete `outcome_tracker.py` outright.** It is the only outcome measurement currently in the codebase, and measurement is the entire thesis of this project. Removing it for a replacement that is five weeks out and explicitly marked cuttable is trading a bird in hand for one in the bush.
+
+**Accepted cost:** two storage layers coexist for ~5 weeks. Mitigated by the deprecation docstring; the risk is someone writing *new* code against the old layer, which the docstring exists to prevent.
+
 ## Consequences
 
-- `scripts/db.py` is deleted. Any consumer importing it breaks and must migrate to `scripts/storage/`.
+- `scripts/db.py` remains, deprecated, until Phase 5 Task 5.4. Write no new code against it.
 - Local development now needs a `DATABASE_URL`. Neon's free tier or a local Docker Postgres both work.
 - Test fixtures move from file-backed SQLite to in-memory, so they get faster and stop leaking state between runs.
