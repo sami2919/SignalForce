@@ -97,7 +97,9 @@ async def _fetch_robots(domain: str, client: httpx.AsyncClient) -> RobotFilePars
     parser = RobotFileParser()
     url = f"https://{domain}/robots.txt"
     try:
-        resp = await client.get(url, headers={"User-Agent": _USER_AGENT}, timeout=_TIMEOUT)
+        resp = await client.get(
+            url, headers={"User-Agent": _USER_AGENT}, timeout=_TIMEOUT, follow_redirects=True
+        )
         if resp.status_code == 200:
             parser.parse(resp.text.splitlines())
         else:
