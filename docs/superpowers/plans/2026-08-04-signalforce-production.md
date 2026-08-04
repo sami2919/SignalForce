@@ -336,7 +336,9 @@ CREATE INDEX ix_signal_events_type_time ON signal_events(tenant_id, signal_type,
 CREATE INDEX ix_sources_due ON account_sources(tenant_id, active, last_fetched_at);
 ```
 
-`probes` is the high-volume table (accounts × sources × runs). Partition by month once it passes ~10M rows. Not now — say so if asked, and say why not now.
+`probes` is the high-volume table (accounts × sources × runs) and the only unbounded one. **Task 3.4 caps it** with rollup-then-prune: unchanged probes live 30 days, changed probes 180, and the aggregate survives in `source_health`. Steady state at 5,000 accounts is ~144 MB — flat, not growing.
+
+Partitioning is therefore deferred indefinitely rather than "until ~10M rows": retention keeps the table below that ceiling permanently. If retention were removed, the threshold argument returns. The interview answer is *"bounded by retention, not by partitioning — here's the arithmetic and here's the safety guard that stops the prune from outrunning the rollup."*
 
 ---
 
@@ -1896,6 +1898,125 @@ def detect_anomaly(
 
 - [ ] **Step 5: Commit** — `git commit -m "feat: source health metrics and silent-breakage alerts"`
 
+### Task 3.4: Probe retention and rollup
+
+**Files:**
+- Create: `scripts/measure/retention.py`
+- Test: `tests/measure/test_retention.py`
+
+**Interfaces:**
+- Consumes: `compute_health` (3.3), `Probe` / `SourceHealth` ORM
+- Produces: `rollup_and_prune(tenant_id, session, now) -> RetentionReport`
+
+**Why this exists.** `probes` is the only unbounded table in the schema — one row per source per run, forever. The arithmetic:
+
+```
+rows/day = accounts × sources                    row ≈ 150 bytes with index overhead
+
+   500 accounts × 4  =  2,000/day  →  110 MB/year   fits Neon's 0.5 GB free tier for years
+ 5,000 accounts × 4  = 20,000/day  →  1.1 GB/year   blows it in ~5 months
+```
+
+Individual probe rows have a short useful life. What you actually query long-term is the *aggregate* — `source_health` — which is already computed daily by Task 3.3. So roll up, then prune. Storage goes from linear-in-time to flat.
+
+**Two-tier retention.** Unchanged probes are the bulk (85-95%) and the least interesting: they only ever proved a source was alive, and `source_health` already records that. Changed probes are the forensic record — when detection lag or a missed signal needs explaining, these are what you read. So:
+
+| Probe | Retained | Rationale |
+|---|---|---|
+| `changed = False` | 30 days | Aggregate survives in `source_health`; the row itself adds nothing |
+| `changed = True` | 180 days | ~10% of volume, and the only per-event evidence for lag debugging |
+
+Steady state at 5,000 accounts: ~600K unchanged + ~360K changed ≈ 144 MB. Flat, not growing.
+
+**The safety property that matters.** Never delete a probe whose `source_health` rollup does not exist — that silently destroys data with no aggregate to replace it. The prune must verify the rollup landed first. A retention job that runs before its rollup is a data-loss bug that reports success.
+
+- [ ] **Step 1: Write the failing test**
+
+```python
+# tests/measure/test_retention.py
+from datetime import datetime, timedelta, timezone
+from scripts.measure.retention import rollup_and_prune
+
+NOW = datetime(2026, 8, 1, tzinfo=timezone.utc)
+
+
+def test_prunes_unchanged_probes_older_than_30_days(session, tenant, seeded_health):
+    _probe(session, tenant, fetched_at=NOW - timedelta(days=45), changed=False)
+    report = rollup_and_prune(tenant.id, session, now=NOW)
+    assert report.unchanged_pruned == 1
+
+
+def test_keeps_unchanged_probes_inside_the_window(session, tenant, seeded_health):
+    _probe(session, tenant, fetched_at=NOW - timedelta(days=10), changed=False)
+    assert rollup_and_prune(tenant.id, session, now=NOW).unchanged_pruned == 0
+
+
+def test_keeps_changed_probes_for_180_days(session, tenant, seeded_health):
+    _probe(session, tenant, fetched_at=NOW - timedelta(days=45), changed=True)
+    assert rollup_and_prune(tenant.id, session, now=NOW).changed_pruned == 0
+
+
+def test_prunes_changed_probes_past_180_days(session, tenant, seeded_health):
+    _probe(session, tenant, fetched_at=NOW - timedelta(days=200), changed=True)
+    assert rollup_and_prune(tenant.id, session, now=NOW).changed_pruned == 1
+
+
+def test_never_prunes_a_day_with_no_source_health_rollup(session, tenant):
+    """THE safety property. No aggregate means the row is the only record."""
+    _probe(session, tenant, fetched_at=NOW - timedelta(days=45), changed=False)
+    report = rollup_and_prune(tenant.id, session, now=NOW)   # no seeded_health fixture
+    assert report.unchanged_pruned == 0
+    assert report.skipped_days_missing_rollup == 1
+
+
+def test_rollup_is_idempotent(session, tenant):
+    """Re-running must not double-count into source_health."""
+    _probe(session, tenant, fetched_at=NOW - timedelta(days=45), changed=False)
+    first = rollup_and_prune(tenant.id, session, now=NOW)
+    second = rollup_and_prune(tenant.id, session, now=NOW)
+    assert second.rows_rolled_up == 0
+    assert first.rows_rolled_up >= 1
+
+
+def test_prune_is_batched(session, tenant, seeded_health):
+    """A single unbounded DELETE can hold a lock long enough to stall the scan run."""
+    for _ in range(2500):
+        _probe(session, tenant, fetched_at=NOW - timedelta(days=45), changed=False)
+    report = rollup_and_prune(tenant.id, session, now=NOW, batch_size=1000)
+    assert report.unchanged_pruned == 2500
+    assert report.batches >= 3
+```
+
+- [ ] **Step 2: Run tests, confirm they fail** — `pytest tests/measure/test_retention.py -v`
+
+- [ ] **Step 3: Implement**
+
+Order of operations is the whole design — do not reorder:
+
+```
+  1. Find distinct probe days older than the shorter cutoff
+  2. For each day: ensure a source_health row exists (compute it if missing)
+  3. ONLY for days with a confirmed rollup, delete in batches
+  4. Report what was rolled up, what was pruned, what was skipped and why
+```
+
+Use `ON CONFLICT (tenant_id, source_type, run_date) DO NOTHING` for the upsert so re-runs are idempotent. Batch deletes as `DELETE FROM probes WHERE id IN (SELECT id FROM probes WHERE ... LIMIT :batch_size)` — an unbounded `DELETE` over hundreds of thousands of rows holds locks long enough to stall a concurrent scan run.
+
+`RetentionReport` is a frozen Pydantic model: `rows_rolled_up`, `unchanged_pruned`, `changed_pruned`, `skipped_days_missing_rollup`, `batches`.
+
+- [ ] **Step 4: Run tests, confirm pass**
+
+- [ ] **Step 5: Wire into the scheduled worker** — runs *after* the watch pass and *after* Task 3.3's health computation, never before. Record counts on the `scan_runs` row.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add scripts/measure/retention.py tests/measure/test_retention.py
+git commit -m "feat: probe retention with rollup-before-prune safety guard"
+```
+
+---
+
 **Phase 3 exit criteria:** `/dashboard/health` shows recall, p50/p95 detection lag, and per-source zero-result trend, computed from at least two weeks of real runs. Screenshot it. That screenshot is the answer to the question that beat you.
 
 ---
@@ -2384,7 +2505,8 @@ reconstruction.
 | Contact enrichment (Apollo/Hunter) | Existing code covers it; not on the critical path to the four numbers. |
 | n8n workflows | Superseded by the scheduled worker. |
 | Second tenant config | D6: AgentMail specifically. Config-driven architecture makes this a YAML edit later. |
-| Partitioning `probes` | Not until ~10M rows. Know the threshold, don't pre-build. |
+| Partitioning `probes` | Superseded by Task 3.4 retention — rollup-then-prune holds the table flat at ~144 MB, so it never reaches the ~10M-row threshold where partitioning pays. Revisit only if retention is removed. |
+| Neon paid tier | Free tier (0.5 GB storage, 100 CU-hours/mo) is sufficient once Task 3.4 caps `probes`. Compute is comfortable because the workload is a daily batch that lets the database autosuspend ~23h/day. |
 
 ---
 

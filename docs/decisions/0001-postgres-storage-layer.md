@@ -22,7 +22,33 @@ SignalForce currently persists to SQLite at `data/signalforce.db` (`scripts/db.p
 
 **Rejected: Postgres self-hosted on Fly.** Fly's unmanaged Postgres makes backups, failover, and connection pooling your problem. At 10h/week that is the wrong place to spend hours. Neon gives PITR and a pooler with zero operational work, and has a usable free tier.
 
-**Cost of being wrong:** low and reversible. SQLAlchemy abstracts the dialect; the escape hatch is a connection string change plus a migration replay.
+### Decision 1a — Neon over the other managed providers (added 2026-08-04)
+
+The original text justified managed-over-self-hosted but never compared managed providers. Closing that gap.
+
+| | Neon | Supabase | Databricks Lakebase |
+|---|---|---|---|
+| Free storage | 0.5 GB | 500 MB (identical) | no meaningful free tier |
+| Free compute | 100 CU-hrs, autoscale to 2 CU | shared CPU, no allocation | DBU-based |
+| Idle behavior | scale-to-zero at 5 min, **auto-resumes on connect** | **pauses after 1 week, manual unpause** | workspace-dependent |
+| Bundles | nothing — plain Postgres | auth, storage, realtime, PostgREST | lakehouse / Delta sync |
+| Next tier | usage-based, no minimum | $25/mo flat | enterprise |
+
+**Rejected: Supabase — because of the pause, not the specs.** On storage the two free tiers are identical. The difference that decides it is idle behaviour. Supabase pauses free projects after a week of inactivity and requires a manual dashboard action to restore them.
+
+This project is built at ~10h/week alongside a job search, so multi-week gaps are likely rather than hypothetical. Phase 3's deliverable is a **continuous measurement record** — detection lag, recall, and a 14-day trailing baseline for source-health anomaly detection. A paused database does not merely stop the cron; it punches a hole in the trend data the project exists to produce, and it does so silently. Neon's scale-to-zero achieves the same $0 idle cost through a mechanism that self-heals on the next connection.
+
+**Supabase's bundle is an anti-feature here.** Its differentiation is auth, storage, realtime, and PostgREST. D4 deferred auth and billing entirely, so none of it would be used, while its opinions (the `auth` schema, RLS conventions, PostgREST exposure) would be inherited by a plain SQLAlchemy app. This is the same reasoning that rejected Django in Decision 2: do not adopt a platform whose value is integration when the components have already been chosen independently.
+
+**Rejected: Databricks Lakebase — it is Neon.** Databricks acquired Neon for ~$1B in May 2025; Lakebase is Neon's separated compute/storage engine inside the Databricks platform. Choosing it means the same engine behind a workspace, DBU pricing, and enterprise onboarding, for a lakehouse-integration value proposition irrelevant to a daily batch job.
+
+**Rejected: Railway / Render Postgres.** Both are fine and simpler to reason about than Fly. Neither offers scale-to-zero on a free tier, so idle cost is not $0 — the specific property being optimised for.
+
+**Known risks, stated:**
+- Post-acquisition free tiers usually get squeezed. Neon's went the other way (compute allowance doubled, storage price cut ~80%), but a $1B acquirer tuning an enterprise funnel is a real medium-term risk.
+- **Revisit trigger:** if the product pivots to D4-option-B (true multi-tenant SaaS with signup and auth), Supabase Auth is worth weeks of work and this decision should be re-opened.
+
+**Cost of being wrong:** near zero, which is why this decision does not deserve more deliberation than the above. Plain Postgres behind SQLAlchemy and Alembic means switching providers is a `DATABASE_URL` change plus `alembic upgrade head` — no ORM rewrite, no query changes, no data-model coupling. Reversible decisions get made fast.
 
 ## Decision 2 — SQLAlchemy ORM, not raw SQL or an alternative ORM
 
