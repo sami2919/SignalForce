@@ -733,6 +733,18 @@ git commit -m "chore: docker, fly deploy, and CI"
 
 ### Task 1.1: Source resolution
 
+> **ADR-0004 amendment (2026-08-04): EXECUTE TASK 1.2 FIRST.** Soft-404 detection
+> (ADR-0004 Decision 3) compares a candidate page's normalized content hash against
+> the homepage's, which requires `normalize_html` / `content_hash` from Task 1.2.
+> Task 1.2 has no dependencies. Order is 1.2 → 1.1 → 1.3; the numbering is kept as-is
+> so existing references stay valid.
+>
+> ADR-0004 also adds to this task, beyond what is written below: robots.txt compliance,
+> storing the post-redirect final URL, a `resolution_method` of `blocked_by_robots`,
+> re-runnable resolution (closes failure-mode gap #4), and **reporting resolution
+> recall per source type** — the number that decides whether to climb the fallback
+> ladder to sitemap parsing or LLM extraction.
+
 **Files:**
 - Create: `scripts/registry/resolver.py`, `scripts/registry/models.py`
 - Test: `tests/registry/test_resolver.py`
