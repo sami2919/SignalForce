@@ -17,6 +17,7 @@ import pytest
 from pydantic import ConfigDict
 
 from scripts.verify.extractor import (
+    _derive_identity,
     CareersFacts,
     ExtractorError,
     Fact,
@@ -317,6 +318,7 @@ class TestStripForExtraction:
         html = "<html><body>" + ("word " * 50_000) + '<a href="/jobs/1">Engineer</a></body></html>'
         out = _strip_for_extraction(html)
         body_part = out.split("\n\nLINKS:\n")[0]
+        assert len(body_part) < 25_000  # absolute, independent of the constant
         assert len(body_part) <= _MAX_BODY_CHARS
         assert len(out) < len(html) / 2
 
@@ -345,3 +347,339 @@ class TestStripForExtraction:
         sent = kwargs["messages"][0]["content"]
         assert "<div" not in sent  # markup gone
         assert "5023394008" in sent  # the job id survives
+
+
+# ---------------------------------------------------------------------------
+# Identity regex scoping (review C1): the stable-id search must run on the URL
+# PATH only, must match a WHOLE path segment, must have a floor that actually
+# excludes a bare year, and must degrade rather than guess when ambiguous.
+# ---------------------------------------------------------------------------
+
+
+class TestNumericIdScoping:
+    def test_bare_year_in_path_is_not_a_confident_identity_key(self):
+        # A year is exactly 4 digits. The original `\d{4,}` matched it and
+        # returned ('2026', degraded=False) — two different jobs posted under
+        # the same year collapsed onto one non-degraded key.
+        raw = _RawJob(title="Backend Engineer", location="Remote", url="/careers/2026/backend-eng")
+        key, degraded = _derive_identity(raw)
+        assert degraded is True
+        assert key != "2026"
+        assert "Backend Engineer" in key
+
+    def test_two_jobs_sharing_only_a_year_do_not_share_an_identity_key(self):
+        a = _derive_identity(_RawJob(title="Backend Eng", url="/careers/2026/backend-eng"))
+        b = _derive_identity(_RawJob(title="Frontend Eng", url="/careers/2026/frontend-eng"))
+        assert a[0] != b[0]
+
+    def test_query_string_digits_never_become_the_identity_key(self):
+        raw = _RawJob(title="Engineer", location="Remote", url="/careers/list?limit=1000&page=3")
+        key, degraded = _derive_identity(raw)
+        assert key != "1000"
+        assert degraded is True
+
+    def test_host_digits_never_become_the_identity_key(self):
+        raw = _RawJob(title="Data Scientist", location="NYC", url="https://acme2024.com/careers/ds")
+        key, degraded = _derive_identity(raw)
+        assert key != "2024"
+        assert degraded is True
+
+    def test_digits_embedded_in_a_longer_path_token_are_not_a_whole_segment_id(self):
+        raw = _RawJob(title="Engineer", url="/en-US/jobs/senior-engineer-2026")
+        key, degraded = _derive_identity(raw)
+        assert key != "2026"
+        assert degraded is True
+
+    def test_long_digit_run_embedded_in_a_slug_is_not_a_whole_segment_id(self):
+        # Above the length floor, so only the WHOLE-SEGMENT anchoring rejects it.
+        # Without anchoring (a bare `\d{6,}` search over the URL) this returns a
+        # confident "123456" for what is really an arbitrary slug substring.
+        raw = _RawJob(title="Engineer", location="Remote", url="/careers/senior-eng-123456-v2")
+        key, degraded = _derive_identity(raw)
+        assert key != "123456"
+        assert degraded is True
+
+    def test_long_digit_run_in_a_query_param_is_not_an_identity_key(self):
+        # Also above the floor: only path-only scoping rejects it.
+        raw = _RawJob(title="Engineer", location="Remote", url="/careers/engineer?utm_id=987654")
+        key, degraded = _derive_identity(raw)
+        assert key != "987654"
+        assert degraded is True
+
+    def test_long_digit_run_in_the_host_is_not_an_identity_key(self):
+        raw = _RawJob(title="Engineer", location="Remote", url="https://acme123456.com/careers/e")
+        key, degraded = _derive_identity(raw)
+        assert key != "123456"
+        assert degraded is True
+
+    def test_long_digit_run_in_the_fragment_is_not_an_identity_key(self):
+        raw = _RawJob(title="Engineer", location="Remote", url="/careers/engineer#job-654321")
+        key, degraded = _derive_identity(raw)
+        assert key != "654321"
+        assert degraded is True
+
+    def test_five_digit_segment_is_below_the_floor_and_degrades(self):
+        # Load-bearing guard on _MIN_NUMERIC_ID_DIGITS: drop the floor to 5 and
+        # this must fail. Five digits is a US zip code / a small ordinal, not an
+        # ATS id (Greenhouse measured at 10 digits).
+        raw = _RawJob(title="Engineer", location="Remote", url="/careers/12345/engineer")
+        key, degraded = _derive_identity(raw)
+        assert key != "12345"
+        assert degraded is True
+
+    def test_six_digit_segment_is_at_the_floor_and_is_accepted(self):
+        # Raise the floor to 7 and this must fail. Together with the test above
+        # this pins the floor at exactly 6 from both sides.
+        raw = _RawJob(title="Engineer", url="/careers/123456")
+        assert _derive_identity(raw) == ("123456", False)
+
+    def test_ambiguous_multiple_numeric_segments_degrade_rather_than_guess(self):
+        # Two whole-segment candidates: picking "first" would be a silent guess.
+        raw = _RawJob(title="Engineer", location="Remote", url="/jobs/1234567/apply/7654321")
+        key, degraded = _derive_identity(raw)
+        assert degraded is True
+        assert "Engineer" in key
+
+    # --- regression: the existing measured baselines must still resolve ---
+
+    def test_greenhouse_id_still_resolves_non_degraded(self):
+        raw = _RawJob(title="X", url="https://job-boards.greenhouse.io/acme/jobs/5023394008")
+        assert _derive_identity(raw) == ("5023394008", False)
+
+    def test_greenhouse_id_with_tracking_query_still_resolves_non_degraded(self):
+        raw = _RawJob(title="X", url="https://boards.greenhouse.io/acme/jobs/5023394008?gh_src=ab1")
+        assert _derive_identity(raw) == ("5023394008", False)
+
+    def test_ashby_uuid_still_resolves_non_degraded(self):
+        raw = _RawJob(
+            title="X", url="https://jobs.ashbyhq.com/modal/0d4c15af-afa7-4430-b3db-dd8258950aec"
+        )
+        assert _derive_identity(raw) == ("0d4c15af-afa7-4430-b3db-dd8258950aec", False)
+
+    def test_lever_uuid_with_tracking_query_still_resolves_non_degraded(self):
+        raw = _RawJob(
+            title="X",
+            url="https://jobs.lever.co/acme/0d4c15af-afa7-4430-b3db-dd8258950aec?lever-source=LI",
+        )
+        assert _derive_identity(raw) == ("0d4c15af-afa7-4430-b3db-dd8258950aec", False)
+
+    def test_trailing_slash_does_not_hide_the_id(self):
+        raw = _RawJob(title="X", url="https://job-boards.greenhouse.io/acme/jobs/5023394008/")
+        assert _derive_identity(raw) == ("5023394008", False)
+
+
+# ---------------------------------------------------------------------------
+# Script-tag hydration payloads (review C2): __NEXT_DATA__ / ld+json carry real
+# job records. Blanket-dropping <script> silently lost them.
+# ---------------------------------------------------------------------------
+
+
+class TestScriptDataPreservation:
+    _HYDRATED = (
+        '<html><body><div id="__next">'
+        '<h1>Careers</h1><a href="/jobs/9001">Only Statically Rendered Job</a>'
+        "</div>"
+        '<script id="__NEXT_DATA__" type="application/json">'
+        '{"props":{"pageProps":{"jobs":['
+        '{"title":"Backend Engineer","location":"Remote - US","url":"/jobs/9002"},'
+        '{"title":"ML Engineer","location":"San Francisco, CA","url":"/jobs/9003"}'
+        "]}}}</script></body></html>"
+    )
+
+    def test_hydration_json_survives_the_strip(self):
+        from scripts.verify.extractor import _strip_for_extraction
+
+        out = _strip_for_extraction(self._HYDRATED)
+        assert "9001" in out
+        assert "9002" in out, "job from __NEXT_DATA__ lost by the strip"
+        assert "9003" in out, "job from __NEXT_DATA__ lost by the strip"
+        assert "Backend Engineer" in out
+        assert "ML Engineer" in out
+
+    def test_ld_json_in_head_survives_the_strip(self):
+        # schema.org JobPosting is the standard structured form and normally
+        # lives in <head>, which is itself a dropped tag.
+        from scripts.verify.extractor import _strip_for_extraction
+
+        html = (
+            "<html><head><title>Careers</title>"
+            '<script type="application/ld+json">'
+            '{"@type":"JobPosting","title":"Staff SRE","url":"/jobs/778899"}'
+            "</script></head><body><h1>Careers</h1></body></html>"
+        )
+        out = _strip_for_extraction(html)
+        assert "JobPosting" in out
+        assert "778899" in out
+        assert "Staff SRE" in out
+
+    def test_executable_script_is_still_dropped(self):
+        # Control: this narrows the drop, it does not remove it.
+        from scripts.verify.extractor import _strip_for_extraction
+
+        html = (
+            "<html><body><p>Real content</p>"
+            "<script>alert(1)</script>"
+            '<script type="text/javascript">var tracking = "beacon123456";</script>'
+            '<script type="module">import x from "y";</script>'
+            "</body></html>"
+        )
+        out = _strip_for_extraction(html)
+        assert "alert(1)" not in out
+        assert "beacon123456" not in out
+        assert "import x" not in out
+        assert "Real content" in out
+
+    def test_script_data_section_is_capped(self):
+        from scripts.verify.extractor import _strip_for_extraction
+
+        blob = '{"pad":"' + ("x" * 500_000) + '"}'
+        html = (
+            '<html><body><p>Careers</p><script type="application/json">'
+            f"{blob}</script></body></html>"
+        )
+        out = _strip_for_extraction(html)
+        # Absolute ceiling, not expressed via the constant under test.
+        assert len(out) < 50_000
+        assert "[truncated]" in out  # the cut is announced, not silent
+
+
+# ---------------------------------------------------------------------------
+# LINKS section cap (review I2): body text was capped, the link list was not.
+# ---------------------------------------------------------------------------
+
+
+def test_links_section_is_capped_so_a_link_dense_page_cannot_balloon_the_request():
+    from scripts.verify.extractor import _MAX_LINKS_CHARS, _strip_for_extraction
+
+    html = (
+        "<html><body>"
+        + "".join(
+            f'<a href="https://boards.example.com/acme/jobs/{5000000000 + i}">'
+            f"Senior Staff Engineer, Platform Infrastructure {i}</a>"
+            for i in range(3000)
+        )
+        + "</body></html>"
+    )
+    # ~305,000 chars of links alone before any cap — measured in review.
+    assert len(html) > 300_000
+
+    out = _strip_for_extraction(html)
+    links_part = out.split("\n\nLINKS:\n", 1)[1]
+
+    # ABSOLUTE ceiling, deliberately not expressed in terms of _MAX_LINKS_CHARS:
+    # a test that reads the constant it is guarding moves with the mutation and
+    # proves nothing. 60,000 chars is ~16k tokens, the outer bound of what
+    # ADR-0008's amended cost model tolerates for one extraction.
+    assert len(links_part) < 60_000
+    assert len(out) < 100_000
+    assert "[truncated]" in links_part  # the cut is announced, not silent
+    assert "5000000000" in out  # the first links are still there
+    assert len(links_part) <= _MAX_LINKS_CHARS + 200  # +truncation marker
+
+
+# ---------------------------------------------------------------------------
+# Error boundary (review I1): every plausible failure becomes ExtractorError.
+# ---------------------------------------------------------------------------
+
+
+def test_truncated_model_output_becomes_extractor_error_not_raw_validation_error():
+    # This is what the SDK really raises when max_tokens truncates the JSON:
+    # Messages.parse -> parse_response -> parse_text -> TypeAdapter.validate_json
+    from anthropic.lib._parse._response import parse_text
+
+    try:
+        parse_text('{"jobs": [{"title": "Senior Backend Eng', _RawCareersExtraction)
+        raise AssertionError("expected the SDK to reject truncated JSON")
+    except Exception as exc:  # noqa: BLE001
+        real_validation_error = exc
+
+    assert not isinstance(real_validation_error, anthropic.AnthropicError)
+
+    client = MagicMock()
+    client.messages.parse.side_effect = real_validation_error
+
+    with pytest.raises(ExtractorError):
+        extract_careers(_fixture("careers_page.html"), client=client)
+
+
+def test_api_response_validation_error_becomes_extractor_error():
+    client = MagicMock()
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    client.messages.parse.side_effect = anthropic.APIResponseValidationError(
+        response=httpx.Response(200, request=request, json={}), body=None
+    )
+
+    with pytest.raises(ExtractorError):
+        extract_careers(_fixture("careers_page.html"), client=client)
+
+
+def test_missing_parsed_output_becomes_extractor_error():
+    client = MagicMock()
+    response = MagicMock()
+    response.parsed_output = None
+    response.usage = _mock_usage()
+    client.messages.parse.return_value = response
+
+    with pytest.raises(ExtractorError):
+        extract_careers(_fixture("careers_page.html"), client=client)
+
+
+def test_strip_failure_degrades_to_raw_html_rather_than_raising(monkeypatch):
+    from scripts.verify import extractor as mod
+
+    def boom(_html):
+        raise RuntimeError("parser exploded")
+
+    monkeypatch.setattr(mod, "HTMLParser", boom)
+    html = "<html><body><a href='/jobs/123456'>Engineer</a></body></html>"
+    assert mod._strip_for_extraction(html) == html
+
+
+# ---------------------------------------------------------------------------
+# Degraded-key collisions must be visible (review I3).
+# ---------------------------------------------------------------------------
+
+
+def test_colliding_identity_keys_are_logged_not_silent(caplog):
+    raw = _RawCareersExtraction(
+        jobs=[
+            _RawJob(title="Software Engineer", location="Remote", url=None),
+            _RawJob(title="Software Engineer", location="Remote", url="/careers/apply"),
+            _RawJob(title="Data Scientist", location="NYC", url="/jobs/5023394008"),
+        ]
+    )
+    client = _mock_client(raw)
+
+    with caplog.at_level("WARNING"):
+        facts = extract_careers(_fixture("careers_page.html"), client=client)
+
+    # Both facts survive — the extractor never merges them.
+    assert len(facts.jobs) == 3
+    assert facts.jobs[0].identity_key == facts.jobs[1].identity_key
+    # ...but the ambiguity is visible.
+    assert any(
+        "title:Software Engineer|location:Remote" in rec.message for rec in caplog.records
+    ), "colliding identity key was not reported"
+
+
+def test_no_collision_warning_when_all_keys_are_distinct(caplog):
+    raw = _RawCareersExtraction(
+        jobs=[
+            _RawJob(title="A", location="Remote", url="/jobs/5023394008"),
+            _RawJob(title="B", location="Remote", url="/jobs/5023394115"),
+        ]
+    )
+    client = _mock_client(raw)
+
+    with caplog.at_level("WARNING"):
+        extract_careers(_fixture("careers_page.html"), client=client)
+
+    assert not [r for r in caplog.records if "identity key" in r.message]
+
+
+def test_missing_api_key_raises_extractor_error(monkeypatch):
+    from scripts.verify.extractor import _default_client
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    with pytest.raises(ExtractorError):
+        _default_client()
