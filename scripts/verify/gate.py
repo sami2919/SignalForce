@@ -1,22 +1,26 @@
 """Decide which detected changes earn an expensive extraction.
 
 ADR-0009 (docs/decisions/0009-verify-budget-gate.md) is the spec. Budget is a hard
-cap, not a target: sorting by (source priority x account score) means when the
-budget binds, it binds on the accounts and source types you care least about.
+cap, not a target: the sort key gives source-type priority a floor contribution
+independent of account_score, then lets account_score scale it up further, so a
+higher-priority source still outranks a lower-priority one even before Phase 4
+scoring exists and every account_score is the caller's 0.0 placeholder — a plain
+product (priority x account_score) collapses to zero for every source type in
+that regime and silently stops ranking by source type at all. See review fix
+2026-08-05: this was caught by independent review after shipping, not before.
 
 Deviations from the plan's Task 2.1 reference implementation, all decided in the
 ADR:
 
 1. `max_cost_usd` does not exist here. The plan's field was never read by the
    selection function — a caller setting it believed a dollar cap was enforced
-   when nothing enforced it. Task 2.1a/c measured extraction cost varying 35x per
-   page ($0.026-$0.916), which makes that gap concretely dangerous rather than
-   theoretical. Enforcing it for real needs a per-candidate cost estimate that
-   does not exist yet (`ChangeRef` carries no size/cost field); build that when it
-   exists, do not resurrect an unenforced field before then.
+   when nothing enforced it. Enforcing it for real needs a per-candidate cost
+   estimate that does not exist yet (`ChangeRef` carries no size/cost field);
+   build that when it exists, do not resurrect an unenforced field before then.
 2. An unknown `source_type` still gets selected (one bad `ChangeRef` must not
-   abort the whole batch — ADR-0005 Decision 1's posture) but is logged once per
-   distinct unknown value, not silently downweighted with no trace.
+   abort the whole batch — the same "never abort a pass over one bad input"
+   posture as scripts/watch/fetcher.py) but is logged once per distinct
+   unknown value, not silently downweighted with no trace.
 3. Ties break deterministically on `source_id` ascending, not on whatever order
    the caller happened to pass `changes` in.
 """
@@ -25,7 +29,7 @@ from __future__ import annotations
 
 import logging
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +49,10 @@ class ChangeRef(BaseModel):
 
     source_id: int
     source_type: str
-    account_score: float = 0.0
+    # ge=0: the sort key's `1 + account_score` scaling factor (see
+    # select_for_verification) assumes non-negative scores. A negative score
+    # would invert priority ordering end-for-end rather than merely down-rank.
+    account_score: float = Field(default=0.0, ge=0.0)
 
 
 class VerifyBudget(BaseModel):
@@ -59,7 +66,9 @@ class VerifyBudget(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    max_calls: int
+    # ge=0: a negative max_calls slices as ranked[:-1]-style "all but the last
+    # N", i.e. near-maximum spend from a module whose one job is capping it.
+    max_calls: int = Field(ge=0)
 
 
 def _priority(source_type: str, *, warned: set[str]) -> float:
@@ -77,12 +86,24 @@ def _priority(source_type: str, *, warned: set[str]) -> float:
 
 
 def select_for_verification(changes: list[ChangeRef], budget: VerifyBudget) -> list[ChangeRef]:
-    """Rank by (source priority x account score), descending; ties broken by
+    """Rank by source-type priority, scaled up by account_score; ties broken by
     source_id ascending for a replayable result independent of input order.
-    Take up to `budget.max_calls`."""
+    Take up to `budget.max_calls`.
+
+    The key is `priority * (1 + account_score)`, not `priority * account_score`.
+    A plain product is zero for every source type whenever account_score is
+    zero — the common case before Phase 4 scoring exists — which would silently
+    stop the gate from ranking by source type at all in exactly the regime
+    ADR-0009 says is normal today. The `1 +` term gives priority a floor
+    contribution independent of score; account_score >= 0 (enforced on
+    ChangeRef) keeps that floor from being able to flip sign.
+    """
     warned: set[str] = set()
     ranked = sorted(
         changes,
-        key=lambda c: (-(_priority(c.source_type, warned=warned) * c.account_score), c.source_id),
+        key=lambda c: (
+            -(_priority(c.source_type, warned=warned) * (1 + c.account_score)),
+            c.source_id,
+        ),
     )
     return ranked[: budget.max_calls]

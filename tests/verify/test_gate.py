@@ -1,18 +1,29 @@
 """Tests for scripts/verify/gate.py.
 
-ADR-0009 (docs/decisions/0009-verify-budget-gate.md) is the spec. Three deviations
-from the plan's reference implementation, all decided there:
-  1. max_cost_usd is REMOVED — the plan's field was never enforced, and this
-     project's own measurements (Task 2.1a/c: $0.026-$0.916 per extraction, 35x
-     spread) make an unenforced dollar cap actively misleading, not harmless.
+ADR-0009 (docs/decisions/0009-verify-budget-gate.md) is the spec. Deviations from
+the plan's reference implementation, all decided there:
+  1. max_cost_usd is REMOVED — the plan's field was never enforced, which is
+     actively misleading (a caller believes a dollar cap is enforced), not harmless.
   2. Unknown source_type gets the fallback weight but is LOGGED, not silent.
   3. Ties break deterministically on source_id, not on input order.
+  4. account_score and max_calls are constrained to non-negative (added on
+     independent review, 2026-08-05) — a negative account_score inverts priority
+     ordering via the sort key's `1 + account_score` term, and a negative
+     max_calls slices as "all but the last N" under Python's list slicing rather
+     than "select nothing."
+
+Also fixed on review: the sort key is `priority * (1 + account_score)`, not
+`priority * account_score`. The plain-product form is zero for every source type
+whenever account_score is 0.0, which silently stops the gate from ranking by
+source type at all in the pre-Phase-4 regime where every account_score is a
+0.0 placeholder — exactly the regime this ADR says is the common case today.
 """
 
 from __future__ import annotations
 
 import logging
 
+import pydantic
 import pytest
 
 from scripts.verify.gate import ChangeRef, VerifyBudget, select_for_verification
@@ -72,9 +83,12 @@ def test_verify_budget_has_no_cost_field():
 
 
 def test_verify_budget_rejects_unknown_fields():
-    # frozen + extra="forbid" (implicit default) — a caller trying to pass
-    # max_cost_usd gets a loud validation error, not a silently ignored kwarg.
-    with pytest.raises(Exception):  # pydantic.ValidationError
+    # extra="forbid" — NOT pydantic's default (pydantic v2 defaults to "ignore",
+    # as ChangeRef in this same module demonstrates). Set explicitly on
+    # VerifyBudget so a caller trying to pass max_cost_usd (copied from the
+    # plan's original interface) gets a loud validation error, not a silently
+    # ignored kwarg that looks like it did something.
+    with pytest.raises(pydantic.ValidationError):
         VerifyBudget(max_calls=1, max_cost_usd=5.0)
 
 
@@ -84,8 +98,8 @@ def test_verify_budget_rejects_unknown_fields():
 
 
 def test_unknown_source_type_still_gets_selected_not_dropped():
-    """One bad ChangeRef must not abort selection for the whole batch
-    (ADR-0005 Decision 1's 'never raise on one input' posture)."""
+    """One bad ChangeRef must not abort selection for the whole batch — the
+    same posture scripts/watch/fetcher.py states for itself."""
     changes = [ChangeRef(source_id=1, source_type="carrers", account_score=100.0)]
     selected = select_for_verification(changes, VerifyBudget(max_calls=1))
     assert len(selected) == 1
@@ -150,3 +164,69 @@ def test_result_is_identical_regardless_of_input_order():
     r1 = select_for_verification([a, b], VerifyBudget(max_calls=2))
     r2 = select_for_verification([b, a], VerifyBudget(max_calls=2))
     assert [c.source_id for c in r1] == [c.source_id for c in r2]
+
+
+# ---------------------------------------------------------------------------
+# ADR-0009 Decision 3 correction — the sort key must not collapse to a
+# source_id coin-flip at account_score=0.0, the pre-Phase-4 common case.
+# ---------------------------------------------------------------------------
+
+
+def test_source_priority_still_ranks_at_zero_account_score():
+    """The bug independent review caught: priority * account_score is zero
+    for every source type when account_score is 0.0, so a plain product
+    silently stops ranking by source type in exactly the regime ADR-0009
+    says is normal before Phase 4 exists. Reproduced pre-fix: blog (lower
+    priority, lower source_id) won over careers here."""
+    changes = [
+        ChangeRef(source_id=1, source_type="blog", account_score=0.0),
+        ChangeRef(source_id=9, source_type="careers", account_score=0.0),
+    ]
+    selected = select_for_verification(changes, VerifyBudget(max_calls=1))
+    assert selected[0].source_type == "careers"
+
+
+def test_higher_account_score_can_still_outrank_a_lower_priority_source():
+    # Sanity: the score term still contributes once it's nonzero, not just
+    # the priority floor from the `1 +` term.
+    changes = [
+        ChangeRef(source_id=1, source_type="blog", account_score=100.0),
+        ChangeRef(source_id=2, source_type="docs", account_score=0.0),
+    ]
+    selected = select_for_verification(changes, VerifyBudget(max_calls=1))
+    assert selected[0].source_type == "blog"
+
+
+# ---------------------------------------------------------------------------
+# ADR-0009 Decision 4 — non-negative constraints, added on review.
+# ---------------------------------------------------------------------------
+
+
+def test_negative_account_score_is_rejected():
+    with pytest.raises(pydantic.ValidationError):
+        ChangeRef(source_id=1, source_type="careers", account_score=-5.0)
+
+
+def test_negative_max_calls_is_rejected():
+    with pytest.raises(pydantic.ValidationError):
+        VerifyBudget(max_calls=-1)
+
+
+def test_zero_account_score_and_zero_max_calls_are_still_valid():
+    # ge=0 must not reject the legitimate boundary values.
+    ref = ChangeRef(source_id=1, source_type="careers", account_score=0.0)
+    assert select_for_verification([ref], VerifyBudget(max_calls=0)) == []
+
+
+def test_ranking_formula_is_multiplicative_not_additive():
+    """Pins the exact formula, not just 'there is some ordering.' At these
+    scores, priority * (1 + score) and priority + score disagree on the
+    winner — careers(score=1) beats blog(score=5) under multiplication
+    (2.0 vs 1.8) but loses under addition (2.0 vs 5.3). If this test ever
+    breaks, check whether the formula changed before assuming it's the test."""
+    changes = [
+        ChangeRef(source_id=1, source_type="careers", account_score=1.0),
+        ChangeRef(source_id=2, source_type="blog", account_score=5.0),
+    ]
+    selected = select_for_verification(changes, VerifyBudget(max_calls=1))
+    assert selected[0].source_type == "careers"
