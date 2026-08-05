@@ -40,6 +40,17 @@ keep anchors. Rejected for now because it is a token optimisation whose failure 
 data loss, and the token cost it saves is not yet measured. Revisit if extraction cost becomes
 material; the gate (Decision 5) bounds it first.
 
+> **AMENDED 2026-08-05 — the rejection above was wrong, and it was wrong because it reasoned
+> about an unmeasured cost.** Task 2.1a's Step 5 measured it. An href-preserving strip cuts
+> input by **84% on Greenhouse (33,411 → 5,236 tokens) and 99% on railway.app
+> (179,561 → 2,662)**, and the job ids survive in both. Per-extraction cost falls from
+> $0.167 → $0.026 and $0.898 → $0.013. See the amendment to Decision 5.
+>
+> The original caveat still stands and is now the acceptance criterion rather than a reason to
+> decline: the failure mode of stripping is *silent* data loss. So the switch is gated on
+> reproducing the measured raw-HTML baseline — 50/50 jobs with stable ids on Greenhouse, 16 on
+> railway.app — not merely on being cheaper. Tracked as Task 2.1c.
+
 **Accepted cost:** raw HTML is many times larger than normalized text, so extraction costs more
 tokens per call. That is a cost problem, which the budget gate bounds. Identity loss is a
 correctness problem, which nothing downstream can recover from.
@@ -120,6 +131,19 @@ At the measured scale this is not close: 90 sources at the 3–20% change rate i
 per day. Choosing a cheaper model to save on 18 calls, before a single extraction-quality number
 exists, would be optimising the wrong axis — and extraction quality is what every downstream
 number inherits.
+
+> **AMENDED 2026-08-05 — "not close" was an assertion, not a measurement, and it does not
+> survive one.** Measured per-extraction cost on raw HTML is **$0.265 (Greenhouse) to $0.916
+> (railway.app)**. At 3–18 extractions/day that is **$45–270/month** — not the rounding error
+> the original wording implies. The conclusion (keep `claude-opus-5`; bound cost at the gate)
+> still holds, but for a different reason than stated: the fix is the **input size**
+> (Decision 1's amendment, 84–99% reduction), not the model. Re-derive this arithmetic before
+> quoting a cost-per-account figure.
+>
+> **Prompt caching is marginal, also measured.** Run 2 of the same page read 1,342 cached
+> tokens — the system prompt caches correctly, confirming the >512-token prefix — but that is
+> **4% of a 33,409-token request**. The page content dominates so completely that caching is
+> nearly irrelevant on raw HTML. It becomes material only *after* the input shrinks.
 
 **Rejected: a cheaper model now.** Revisit when there is a measured quality baseline to trade
 against, and when account count makes the arithmetic matter. Not before.
