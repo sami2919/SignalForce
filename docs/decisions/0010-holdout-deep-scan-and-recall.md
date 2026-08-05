@@ -26,6 +26,36 @@ upgrade that can be layered on later without redesigning Task 3.1/3.2. Hash-leve
 directly answers the literal Sajwal question — "if you don't know something changed at all" is a
 hash question, not a "which specific job posting" question.
 
+## Decision 0 — `select_holdout` must use consistent hashing, not `random.sample` ★
+
+**Correction, 2026-08-06.** This ADR originally kept the plan's `select_holdout` unchanged —
+"the plan's version is correct as written." It is not. Found and fixed after Task 3.1 landed,
+by checking the exact stability claim this ADR's own Decision 1 and the plan's docstring both
+assert: *"the holdout must be stable across runs, or you are measuring a different population
+every month and the trend is meaningless."*
+
+**Measured:** `random.Random(seed).sample(account_ids, size)` maps its random draws to *indices*
+in the population array. Removing a single account that was **never even in the holdout** — out
+of 20, with the same seed — changed 3 of 5 holdout members (2/5 overlap). The stability the ADR
+promised does not hold the moment the account population changes shape at all, which is the
+expected, routine case for a growing account list, not an edge case.
+
+**Chosen:** consistent hashing — `sorted(account_ids, key=lambda id: sha256(f"{seed}:{id}"))[:size]`.
+Each account's inclusion is decided by its own hash rank relative to the *current* population,
+independent of every other account's presence, order, or count. Measured under the identical
+scenario: 5/5 overlap (fully stable) when an unrelated account is removed. Under population
+*growth* it is not perfectly stable — a newly added account can legitimately rank into the top
+`size` and displace an existing member, an unavoidable property of any "k best of N" rule — but
+degrades gracefully (4/5 overlap at +5 growth) rather than catastrophically.
+
+**Rejected: the plan's `random.sample`, kept as a documented limitation.** The three tests the
+plan specified (deterministic for a fixed population, correct size, caps at population size) all
+passed against the broken version — none of them tested population *change*, which is the one
+scenario the stability requirement exists for. Same shape as every other self-caught error this
+session: a plan artifact that looked right, passed its own narrow tests, and was wrong on the
+property that actually mattered. Recorded here rather than silently fixed in code, per this
+project's practice of leaving corrections visible.
+
 ## Decision 1 — The deep scan runs on its own, more-frequent cadence, on a small holdout ★
 
 **The finding.** The plan's Task 3.1 never states how often `run_deep_scan` runs. If it runs on

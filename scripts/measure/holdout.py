@@ -24,10 +24,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import logging
 import os
-import random
 import sys
 from datetime import datetime, timezone
 
@@ -51,12 +51,36 @@ def _utcnow() -> datetime:
 
 
 def select_holdout(account_ids: list[int], size: int, seed: int) -> list[int]:
-    """Deterministically sample up to `size` account ids for the holdout.
+    """Deterministically select up to `size` account ids for the holdout, by
+    consistent hashing rather than `random.Random(seed).sample()`.
 
-    Same seed + same population -> same holdout, every call (this is the
-    property `compute_recall`, and every caller of this task, depends on).
+    Fixed on review, 2026-08-06: the plan's `random.sample()` version passed
+    its own three tests (fixed population, same seed -> same result) but does
+    NOT have the stability property ADR-0010 and the plan's own docstring
+    require -- "the holdout must be stable across runs, or you are measuring
+    a different population every month and the trend is meaningless."
+    `random.sample`'s draws map to INDICES in the population array, so adding
+    or removing *any* account anywhere -- even one never selected, even one
+    completely unrelated to the holdout -- can reshuffle the entire
+    selection. Measured: removing one unrelated account out of 20 changed 3
+    of 5 holdout members (2/5 overlap) under the old implementation.
+
+    Consistent hashing avoids this: each account's inclusion is decided by
+    its own hash rank relative to the *current* population, independent of
+    every other account's presence, order, or count. Measured under the same
+    scenario: 5/5 overlap (fully stable) when an unrelated account is
+    removed; overlap degrades gracefully, not catastrophically, as the
+    population grows. It is not perfectly stable under arbitrary growth (a
+    newly added account can rank into the top `size` and displace an
+    existing member -- an unavoidable property of any *k best of N* rule),
+    but only a genuine near-boundary case moves, not an unrelated one.
     """
-    return sorted(random.Random(seed).sample(account_ids, min(size, len(account_ids))))
+
+    def _score(account_id: int) -> str:
+        return hashlib.sha256(f"{seed}:{account_id}".encode()).hexdigest()
+
+    ranked = sorted(account_ids, key=_score)
+    return sorted(ranked[:size])
 
 
 def _load_active_account_ids(tenant_id: int, session: Session) -> list[int]:

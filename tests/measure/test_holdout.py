@@ -146,6 +146,57 @@ def test_select_holdout_caps_at_population_size():
     assert len(result) == 3
 
 
+def test_select_holdout_is_stable_when_an_unrelated_account_is_removed():
+    """Fixed on review: random.sample() reshuffled the ENTIRE holdout when a
+    single account not even IN the holdout was removed (measured: 2/5
+    overlap). The whole point of a fixed seed is that this must not happen.
+    """
+    base = list(range(1, 21))
+    original = select_holdout(base, size=5, seed=42)
+
+    unrelated_id = next(i for i in base if i not in original)
+    shrunk = [i for i in base if i != unrelated_id]
+    after_removal = select_holdout(shrunk, size=5, seed=42)
+
+    assert after_removal == original
+
+
+def test_select_holdout_is_mostly_stable_under_population_growth():
+    """Growth can legitimately displace a member (a new account can rank
+    into the top `size`), but must not reshuffle the whole holdout. Measured:
+    random.sample() dropped to 3/5 overlap on +5 growth; consistent hashing
+    holds at 4/5."""
+    base = list(range(1, 21))
+    original = set(select_holdout(base, size=5, seed=42))
+
+    grown = base + list(range(21, 26))  # +5 new accounts
+    after_growth = set(select_holdout(grown, size=5, seed=42))
+
+    assert len(original & after_growth) >= 4
+
+
+def test_select_holdout_different_seeds_select_differently():
+    # Confirms `seed` is actually mixed into the selection, not a no-op --
+    # a different tenant/measurement should not be forced onto one fixed
+    # holdout regardless of the seed it was configured with.
+    account_ids = list(range(1, 21))
+    a = select_holdout(account_ids, size=5, seed=1)
+    b = select_holdout(account_ids, size=5, seed=2)
+    assert a != b
+
+
+def test_select_holdout_membership_is_a_per_item_function_not_positional():
+    """The defining property of consistent hashing: whether account X is in
+    the holdout depends only on (seed, X, current population), never on
+    which OTHER accounts happen to be present. Verified directly by checking
+    that every member of a smaller holdout remains a member of a superset
+    selection with a larger size, for the same seed."""
+    account_ids = list(range(1, 51))
+    small = set(select_holdout(account_ids, size=5, seed=7))
+    large = set(select_holdout(account_ids, size=15, seed=7))
+    assert small <= large
+
+
 # --- run_deep_scan ---
 
 
