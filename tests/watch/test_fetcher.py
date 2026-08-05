@@ -283,6 +283,98 @@ async def test_oversized_body_is_skipped_not_hashed() -> None:
     assert results[0].error is not None
 
 
+# --- body retention (Task 2.1b) ---
+
+
+@pytest.mark.asyncio
+async def test_retain_bodies_false_by_default_body_stays_none() -> None:
+    """Regression proof: phase 2's behavior (retain_bodies unset) is unchanged
+    even on a successful 200 fetch."""
+    async with _client(_ok) as c:
+        results = await fetch_all([SourceRef(source_id=1, url="https://x.com/c")], client=c)
+    assert results[0].content_hash is not None
+    assert results[0].body is None
+
+
+@pytest.mark.asyncio
+async def test_retain_bodies_true_populates_body_on_200() -> None:
+    async with _client(_ok) as c:
+        results = await fetch_all(
+            [SourceRef(source_id=1, url="https://x.com/c")], client=c, retain_bodies=True
+        )
+    assert results[0].body == PAGE
+
+
+@pytest.mark.asyncio
+async def test_retain_bodies_true_leaves_body_none_on_non_200() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text=ROBOTS_ALLOW)
+        return httpx.Response(503, text="down")
+
+    async with _client(handler) as c:
+        results = await fetch_all(
+            [SourceRef(source_id=1, url="https://x.com/c")], client=c, retain_bodies=True
+        )
+    assert results[0].body is None
+
+
+@pytest.mark.asyncio
+async def test_retain_bodies_true_leaves_body_none_on_error() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text=ROBOTS_ALLOW)
+        raise httpx.ConnectError("boom")
+
+    async with _client(handler) as c:
+        results = await fetch_all(
+            [SourceRef(source_id=1, url="https://x.com/c")], client=c, retain_bodies=True
+        )
+    assert results[0].body is None
+
+
+@pytest.mark.asyncio
+async def test_retention_cap_drops_largest_bodies_first(caplog) -> None:
+    """Construct a batch where retaining everything would exceed the 50MB cap
+    (each body individually stays under the 8MB per-body _MAX_BYTES DoS
+    bound, so this exercises the *retention* cap, not the fetch-size cap).
+    The largest body must be dropped (body is None); smaller ones retained.
+    A warning must be logged naming the dropped source."""
+    import logging
+
+    # 7 bodies just under the 8MB per-fetch cap, summing to ~53.2MB > the
+    # 50MB retention cap. Dropping only the single largest (7.9MB) brings
+    # the total to ~45.3MB, back under the cap.
+    sizes = {
+        1: 7_900_000,
+        2: 7_800_000,
+        3: 7_700_000,
+        4: 7_600_000,
+        5: 7_500_000,
+        6: 7_400_000,
+        7: 7_300_000,
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text=ROBOTS_ALLOW)
+        host = request.url.host
+        sid = int(host.replace("h", "").split(".")[0])
+        return httpx.Response(200, text="x" * sizes[sid])
+
+    refs = [SourceRef(source_id=sid, url=f"https://h{sid}.com/c") for sid in sizes]
+    with caplog.at_level(logging.WARNING):
+        async with _client(handler) as c:
+            results = await fetch_all(refs, client=c, retain_bodies=True, concurrency=7)
+
+    by_id = {r.source_id: r for r in results}
+    assert by_id[1].body is None  # largest (7.9MB) dropped
+    for sid in (2, 3, 4, 5, 6, 7):
+        assert by_id[sid].body is not None
+        assert by_id[sid].content_hash is not None  # hash unaffected by retention drop
+    assert any("retention cap" in rec.message and "1" in rec.message for rec in caplog.records)
+
+
 @pytest.mark.asyncio
 async def test_large_but_reasonable_body_is_hashed() -> None:
     """JS-heavy sites (Next.js bundles, base64 images) legitimately ship large

@@ -31,6 +31,7 @@ import logging
 import os
 import sys
 from datetime import datetime, timezone
+from typing import Callable
 
 import httpx
 from sqlalchemy import select
@@ -103,12 +104,22 @@ def _load_active_sources(
     return [(r.id, r.account_id, r.url, r.last_hash) for r in rows]
 
 
-async def run_watch_pass(tenant_id: int, concurrency: int = 100) -> int:
+async def run_watch_pass(
+    tenant_id: int,
+    concurrency: int = 100,
+    on_confirmed_change: Callable[[int, str], None] | None = None,
+) -> int:
     """Run one watch pass for a tenant. Returns the scan_runs id.
 
     Raises whatever exception the pass hit, after marking the scan_runs row
     status="failed" with the error recorded — a dead run must be visible,
     not silently stuck at "running".
+
+    `on_confirmed_change`, if provided, is invoked once per source with
+    `(source_id, body)` for every CONFIRMED content change (ADR-0008
+    Decision 2 amendment) — never for a phase-2-only mismatch that phase 3's
+    confirm fetch rejects, and never for a first-ever baseline probe. Nothing
+    passes this yet; Task 2.3 is the first real consumer.
     """
     # --- Phase 1: sync DB read ---
     with get_session() as session:
@@ -141,7 +152,9 @@ async def run_watch_pass(tenant_id: int, concurrency: int = 100) -> int:
             ]
             confirm_results: dict[int, ProbeResult] = {}
             if changed_refs:
-                confirmed = await fetch_all(changed_refs, client=client, concurrency=concurrency)
+                confirmed = await fetch_all(
+                    changed_refs, client=client, concurrency=concurrency, retain_bodies=True
+                )
                 confirm_results = {r.source_id: r for r in confirmed}
 
         # --- Phase 4: sync DB write ---
@@ -152,6 +165,7 @@ async def run_watch_pass(tenant_id: int, concurrency: int = 100) -> int:
             confirm_results=confirm_results,
             last_hash_by_id=last_hash_by_id,
             account_id_by_source_id=account_id_by_source_id,
+            on_confirmed_change=on_confirmed_change,
         )
         return run_id
     except Exception as exc:  # noqa: BLE001
@@ -176,6 +190,7 @@ def _write_results(
     confirm_results: dict[int, ProbeResult],
     last_hash_by_id: dict[int, str | None],
     account_id_by_source_id: dict[int, int],
+    on_confirmed_change: Callable[[int, str], None] | None = None,
 ) -> int:
     """Phase 4: write probes and update source/run state. Batched 500/commit."""
     changes_detected = 0
@@ -237,6 +252,13 @@ def _write_results(
                         new_last_hash = result.content_hash
                         changes_detected += 1
                         source.last_changed_at = now
+                        if on_confirmed_change is not None and confirm.body is not None:
+                            on_confirmed_change(result.source_id, confirm.body)
+                        elif confirm.body is None:
+                            logger.debug(
+                                "confirmed change had no retained body",
+                                extra={"source_id": result.source_id},
+                            )
                     else:
                         # Unconfirmed change: record changed=False, leave
                         # last_hash untouched so the next run re-evaluates

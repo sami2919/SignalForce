@@ -49,6 +49,16 @@ _TIMEOUT = httpx.Timeout(15.0, connect=5.0)
 _MAX_BYTES = 8_000_000  # skip hashing pathological pages (DoS bound, not content filter)
 _USER_AGENT = "SignalForce/0.2 (+https://signalforce.fly.dev)"
 
+# Retained bodies come out of the 200MB headroom Task 1.3a measured (100
+# concurrency x 8MB cap = 800MB worst case vs 1GB provisioned). Retention is
+# scoped to phase 3's confirm set (ADR-0008 Decision 2 amendment), which
+# Task 1.3b measured at ~1% of sources per run -- so in the common case this
+# cap never binds. It exists for a burst day (a shared domain-wide template
+# change hitting many sources in one confirm batch), not the everyday path.
+# 50MB is generous headroom below the 200MB budget while leaving room for
+# other per-run memory (ProbeResult lists, etc.) alongside it.
+_MAX_RETAINED_BYTES = 50_000_000
+
 
 class SourceRef(BaseModel, frozen=True):
     source_id: int
@@ -63,6 +73,7 @@ class ProbeResult(BaseModel, frozen=True):
     bytes: int = 0
     error: str | None = None
     robots_blocked: bool = False
+    body: str | None = None
 
 
 async def _fetch_robots(host: str, client: httpx.AsyncClient) -> RobotFileParser:
@@ -92,6 +103,7 @@ async def _fetch_one(
     global_sem: asyncio.Semaphore,
     host_sems: dict[str, asyncio.Semaphore],
     robots_cache: dict[str, RobotFileParser],
+    retain_bodies: bool = False,
 ) -> ProbeResult:
     """Fetch and hash a single source. Never raises."""
     try:
@@ -155,6 +167,7 @@ async def _fetch_one(
             status_code=resp.status_code,
             latency_ms=latency_ms,
             bytes=n_bytes,
+            body=text if retain_bodies else None,
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning(
@@ -169,12 +182,23 @@ async def fetch_all(
     client: httpx.AsyncClient,
     concurrency: int = 100,
     per_host: int = 2,
+    retain_bodies: bool = False,
 ) -> list[ProbeResult]:
     """Fetch and hash every source concurrently. Never raises.
 
     Global concurrency is bounded by `concurrency`; per-host concurrency is
     independently bounded by `per_host`. robots.txt is fetched once per
     distinct host and cached for the duration of this call.
+
+    `retain_bodies` is `False` by default and used only by the runner's
+    phase-3 confirm fetch (ADR-0008 Decision 2 amendment) -- retaining a body
+    from the unconfirmed phase-2 fetch would hand the verify layer bodies for
+    changes that get rejected one phase later. When `True`, each successful
+    200 fetch's `body` is populated with the response text, subject to a
+    total-retained-bytes cap (`_MAX_RETAINED_BYTES`) across this call: if
+    retaining every body would exceed the cap, the largest bodies are dropped
+    (body set back to `None`, `content_hash` untouched) with a logged
+    warning, largest first, until the total fits.
     """
     if not sources:
         return []
@@ -204,10 +228,57 @@ async def fetch_all(
         robots_cache = dict(zip(hosts.keys(), robots_results))
 
     fetched = await asyncio.gather(
-        *(_fetch_one(ref, client, global_sem, host_sems, robots_cache) for ref in parseable)
+        *(
+            _fetch_one(ref, client, global_sem, host_sems, robots_cache, retain_bodies)
+            for ref in parseable
+        )
     )
 
+    if retain_bodies:
+        fetched = _apply_retention_cap(fetched)
+
     return [*unparseable, *fetched]
+
+
+def _apply_retention_cap(results: list[ProbeResult]) -> list[ProbeResult]:
+    """Drop the largest retained bodies until the total fits _MAX_RETAINED_BYTES.
+
+    Never mutates inputs -- returns a new list. Dropping a body only clears
+    `body`; `content_hash` and every other field are untouched, since the
+    retention cap is a memory bound, not a signal about whether the fetch
+    succeeded.
+    """
+    total = sum(len(r.body.encode("utf-8")) for r in results if r.body is not None)
+    if total <= _MAX_RETAINED_BYTES:
+        return results
+
+    # Largest-first: a burst of many small confirmed changes is more
+    # informative than one giant body crowding everything else out.
+    by_size_desc = sorted(
+        (r for r in results if r.body is not None),
+        key=lambda r: len(r.body.encode("utf-8")),
+        reverse=True,
+    )
+    dropped_ids: set[int] = set()
+    for r in by_size_desc:
+        if total <= _MAX_RETAINED_BYTES:
+            break
+        size = len(r.body.encode("utf-8"))
+        dropped_ids.add(r.source_id)
+        total -= size
+        logger.warning(
+            "body dropped by retention cap: source_id=%s bytes=%s",
+            r.source_id,
+            size,
+            extra={"source_id": r.source_id, "bytes": size},
+        )
+
+    if not dropped_ids:
+        return results
+
+    return [
+        r.model_copy(update={"body": None}) if r.source_id in dropped_ids else r for r in results
+    ]
 
 
 if __name__ == "__main__":

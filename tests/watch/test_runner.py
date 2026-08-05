@@ -591,6 +591,171 @@ async def test_resolve_and_store_persists_resolved_sources(session_factory, monk
     assert session.query(AccountSource).count() == 1
 
 
+# --- on_confirmed_change callback (Task 2.1b) ---
+
+
+@pytest.mark.asyncio
+async def test_confirmed_change_invokes_callback_with_confirm_fetch_body(
+    session_factory, _patch_client
+):
+    """A confirmed change (both fetches agree) must invoke on_confirmed_change
+    with the CONFIRM fetch's body — the phase-3 fetch, not the phase-2 one."""
+    tenant_id, source_ids = _make_tenant_and_sources(
+        session_factory, ["https://acme.com/careers"], last_hash=None
+    )
+    _patch_client["handler"] = _static_handler(PAGE_A)
+    await run_watch_pass(tenant_id)  # baseline
+
+    _patch_client["handler"] = _static_handler(PAGE_B)
+    calls: list[tuple[int, str]] = []
+
+    def on_confirmed_change(source_id: int, body: str) -> None:
+        calls.append((source_id, body))
+
+    await run_watch_pass(tenant_id, on_confirmed_change=on_confirmed_change)
+
+    assert calls == [(source_ids[0], PAGE_B)]
+
+
+@pytest.mark.asyncio
+async def test_rejected_change_does_not_invoke_callback(session_factory, _patch_client):
+    """This is the test that proves the ADR amendment's fix: a hash mismatch
+    that phase 3 rejects must NOT reach the callback. A naive 'retain from
+    phase 2' implementation would invoke the callback here with PAGE_B (the
+    phase-2 body) even though the change is rejected; the correct design
+    (retain from phase 3, gated on confirmation) must not invoke it at all.
+    """
+    tenant_id, source_ids = _make_tenant_and_sources(
+        session_factory, ["https://acme.com/careers"], last_hash=None
+    )
+    _patch_client["handler"] = _static_handler(PAGE_A)
+    await run_watch_pass(tenant_id)  # baseline: last_hash = hash(PAGE_A)
+
+    calls: list[tuple[int, str]] = []
+
+    def on_confirmed_change(source_id: int, body: str) -> None:
+        calls.append((source_id, body))
+
+    # First fetch of pass 2 looks changed (PAGE_B); confirm fetch disagrees
+    # (flips back to PAGE_A) -> rejected, per ADR-0005 Decision 2.
+    call_n = {"n": 0}
+
+    def flaky_handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text=ROBOTS_ALLOW)
+        call_n["n"] += 1
+        return httpx.Response(200, text=PAGE_B if call_n["n"] == 1 else PAGE_A)
+
+    _patch_client["handler"] = flaky_handler
+    run_id = await run_watch_pass(tenant_id, on_confirmed_change=on_confirmed_change)
+
+    session = session_factory()
+    run = session.get(ScanRun, run_id)
+    assert run.confirm_rejected == 1
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_baseline_probe_does_not_invoke_callback(session_factory, _patch_client):
+    """A first-ever probe (prior_hash is None) is not a change; the callback
+    must not fire for it."""
+    tenant_id, source_ids = _make_tenant_and_sources(
+        session_factory, ["https://acme.com/careers"], last_hash=None
+    )
+    calls: list[tuple[int, str]] = []
+
+    def on_confirmed_change(source_id: int, body: str) -> None:
+        calls.append((source_id, body))
+
+    _patch_client["handler"] = _static_handler(PAGE_A)
+    await run_watch_pass(tenant_id, on_confirmed_change=on_confirmed_change)
+
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_no_callback_provided_existing_behavior_unchanged(session_factory, _patch_client):
+    """on_confirmed_change=None (the default): existing confirmed-change
+    accounting is completely unaffected."""
+    tenant_id, source_ids = _make_tenant_and_sources(
+        session_factory, ["https://acme.com/careers"], last_hash=None
+    )
+    _patch_client["handler"] = _static_handler(PAGE_A)
+    await run_watch_pass(tenant_id)  # baseline
+
+    _patch_client["handler"] = _static_handler(PAGE_B)
+    run_id = await run_watch_pass(tenant_id)  # no callback passed at all
+
+    session = session_factory()
+    probe = session.query(Probe).filter_by(scan_run_id=run_id).one()
+    assert probe.changed is True
+    run = session.get(ScanRun, run_id)
+    assert run.changes_detected == 1
+
+
+@pytest.mark.asyncio
+async def test_confirmed_change_with_dropped_body_does_not_invoke_callback_or_raise(
+    session_factory, _patch_client, monkeypatch
+):
+    """A confirmed change where the retention cap dropped the body
+    (confirm.body is None) must not invoke the callback, must not raise, and
+    must not alter changes_detected / last_hash accounting."""
+    tenant_id, source_ids = _make_tenant_and_sources(
+        session_factory, ["https://acme.com/careers"], last_hash=None
+    )
+    _patch_client["handler"] = _static_handler(PAGE_A)
+    await run_watch_pass(tenant_id)  # baseline
+
+    from scripts.watch.fetcher import ProbeResult
+    from scripts.watch.normalize import content_hash
+
+    call_n = {"n": 0}
+
+    async def _fetch_all_drop_body_on_confirm(
+        refs, *, client, concurrency=100, per_host=2, retain_bodies=False
+    ):
+        call_n["n"] += 1
+        if call_n["n"] == 1:
+            # Phase 2: looks changed.
+            return [
+                ProbeResult(
+                    source_id=refs[0].source_id,
+                    content_hash=content_hash(PAGE_B),
+                    status_code=200,
+                )
+            ]
+        # Phase 3 (confirm): agrees, but the retention cap dropped the body.
+        return [
+            ProbeResult(
+                source_id=refs[0].source_id,
+                content_hash=content_hash(PAGE_B),
+                status_code=200,
+                body=None,
+            )
+        ]
+
+    monkeypatch.setattr(runner_module, "fetch_all", _fetch_all_drop_body_on_confirm)
+
+    calls: list[tuple[int, str]] = []
+
+    def on_confirmed_change(source_id: int, body: str) -> None:
+        calls.append((source_id, body))
+
+    run_id = await run_watch_pass(tenant_id, on_confirmed_change=on_confirmed_change)
+
+    assert calls == []  # callback not invoked when body was dropped
+
+    session = session_factory()
+    probe = session.query(Probe).filter_by(scan_run_id=run_id).one()
+    assert probe.changed is True  # accounting unaffected by missing body
+
+    src = session.get(AccountSource, source_ids[0])
+    assert src.last_hash == content_hash(PAGE_B)
+
+    run = session.get(ScanRun, run_id)
+    assert run.changes_detected == 1
+
+
 # --- accounts_probed vs sources_probed (review fix round 1, finding 1) ---
 
 
