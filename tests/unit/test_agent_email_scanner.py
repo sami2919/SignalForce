@@ -7,6 +7,7 @@ per the Task 2.2 brief's "keep the DB out of scanner unit tests" seam.
 
 from __future__ import annotations
 
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import requests
@@ -364,7 +365,7 @@ class TestEnrichmentCallCount:
 
 
 class TestTruncationWarning:
-    def test_pair_with_total_count_over_1000_logs_truncation_warning(self, caplog):
+    def test_pair_over_the_page_cap_logs_truncation_warning(self, caplog):
         config = make_scanner_config()
         ledger = FakeLedger(seed={"x/y"})
         item = make_search_item("acme/agent-mailer")
@@ -376,9 +377,12 @@ class TestTruncationWarning:
                 repo_side_effect=[make_repo_response("acme/agent-mailer")],
             )
         assert len(stats.truncated_pairs) == 1
-        assert any("truncation" in rec.message.lower() for rec in caplog.records)
+        # The warning must name BOTH the cap we applied and the true total, so an
+        # operator reading `fly logs` can size the recall gap without re-querying.
+        messages = [rec.getMessage() for rec in caplog.records]
+        assert any("truncated" in m.lower() and "5000" in m for m in messages), messages
 
-    def test_pair_under_1000_does_not_truncate(self):
+    def test_pair_within_the_page_cap_does_not_truncate(self):
         config = make_scanner_config()
         ledger = FakeLedger(seed={"x/y"})
         item = make_search_item("acme/agent-mailer")
@@ -738,6 +742,11 @@ class TestSeedingRunFloodRegression:
             f"those whose enrichment failed; recorded {len(ledger.recorded)}"
         )
 
+        assert s1.enriched == 2, (
+            "stats.enriched must count successful GET /repos calls, not recorded "
+            f"rows — the seeding placeholders are not enrichments; got {s1.enriched}"
+        )
+
         quota_dead["v"] = False  # quota recovers before the next run
         _r2, s2 = _run_scan(cfg, ledger, search_side_effect=search, repo_side_effect=enrich)
         assert s2.seeding_run is False
@@ -767,7 +776,12 @@ class TestPayloadCarriesBothTimeNotions:
         meta = result.signals_found[0].metadata
         assert meta["created_at"] == "2026-01-01T00:00:00+00:00"
         assert meta["pushed_at"] == "2026-08-01T00:00:00+00:00"
-        assert meta["first_seen_at"] is not None
+        # The POINT of Decision 5 is that first_seen_at is a DISTINCT notion from
+        # the GitHub timestamps — asserting only "is not None" would pass even if
+        # first_seen_at were collapsed onto created_at, which is the exact
+        # misreporting ("new to us" == "shipped this week") the ADR forbids.
+        assert meta["first_seen_at"] not in (meta["created_at"], meta["pushed_at"])
+        assert datetime.fromisoformat(meta["first_seen_at"]).year >= 2026
 
 
 class TestConfigExampleKeepsScannerDisabled:
@@ -785,3 +799,38 @@ class TestConfigExampleKeepsScannerDisabled:
         repo_root = Path(__file__).resolve().parents[2]
         cfg = yaml.safe_load((repo_root / "config.example" / "config.yaml").read_text())
         assert cfg["scanners"]["agent_email"]["enabled"] is False
+
+
+class TestTruncationBoundary:
+    """total_count exactly at the cap is fully fetched and must NOT be flagged;
+    one above it must be. Guards the `>` vs `>=` off-by-one.
+    """
+
+    def _run(self, total: int):
+        full_page = [make_search_item(f"org{i}/repo{i}") for i in range(100)]
+
+        def search(query, page=1, per_page=100):
+            fetched = (page - 1) * 100
+            remaining = max(total - fetched, 0)
+            items = full_page[: min(100, remaining)]
+            return make_search_response(items, total=total)
+
+        ledger = FakeLedger(seed={"sentinel/seen"})
+        _r, stats = _run_scan(
+            make_scanner_config(),
+            ledger,
+            search_side_effect=search,
+            repo_side_effect=lambda fn: make_repo_response(fn),
+        )
+        return stats
+
+    def test_exactly_at_cap_is_not_truncated(self):
+        assert self._run(300).truncated_pairs == []
+
+    def test_one_over_cap_is_truncated(self):
+        assert self._run(301).truncated_pairs != []
+
+    def test_truncated_pair_records_the_magnitude(self):
+        """Without total_count the recall gap cannot be sized from the run log,
+        so the _MAX_PAGES decision could not be made on data."""
+        assert "total_count=750" in self._run(750).truncated_pairs[0]

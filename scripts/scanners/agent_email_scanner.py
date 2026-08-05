@@ -306,21 +306,26 @@ def _build_signal(rec: RepoObservationRecord, first_seen_at: datetime) -> Signal
     )
 
 
-def _search_pair(client: GitHubClient, query: str) -> tuple[list[_Candidate], int, int, bool]:
+def _search_pair(client: GitHubClient, query: str) -> tuple[list[_Candidate], int, int, int]:
     """Run one query, paging up to _MAX_PAGES. Returns
-    (candidates, raw_hit_count, search_requests_used, truncated)."""
+    (candidates, raw_hit_count, search_requests_used, total_count).
+
+    total_count is returned rather than a bare `truncated` bool so the caller can
+    record HOW BADLY a pair truncated. Without the magnitude, `truncated_pairs`
+    says a pair was sampled but not whether it was at 350 or 8000 — and the
+    _MAX_PAGES decision cannot then be made on data, which is the standard
+    ADR-0006 Consequences sets ("Do not claim a yield number before then").
+    """
     candidates: list[_Candidate] = []
     raw_hits = 0
     requests_used = 0
-    truncated = False
+    total_count = 0
 
     page = 1
     while page <= _MAX_PAGES:
         response = client.search_code(query, page=page)
         requests_used += 1
-        total_count = response.get("total_count", 0)
-        if total_count > _TRUNCATION_CEILING:
-            truncated = True
+        total_count = max(total_count, response.get("total_count", 0))
         items = response.get("items", [])
         raw_hits += len(items)
         for item in items:
@@ -331,7 +336,7 @@ def _search_pair(client: GitHubClient, query: str) -> tuple[list[_Candidate], in
             break
         page += 1
 
-    return candidates, raw_hits, requests_used, truncated
+    return candidates, raw_hits, requests_used, total_count
 
 
 def scan_with_stats(config: ScannerConfig, ledger: LedgerPort) -> tuple[ScanResult, ScanStats]:
@@ -369,7 +374,7 @@ def scan_with_stats(config: ScannerConfig, ledger: LedgerPort) -> tuple[ScanResu
             continue
 
         try:
-            found, hits, used, truncated = _search_pair(client, query)
+            found, hits, used, pair_total = _search_pair(client, query)
         except (APIError, requests.RequestException) as exc:
             # requests.RequestException (e.g. ConnectionError, or a second
             # consecutive Timeout — BaseAPIClient only retries a timeout once,
@@ -384,11 +389,11 @@ def scan_with_stats(config: ScannerConfig, ledger: LedgerPort) -> tuple[ScanResu
 
         search_requests += used
         raw_hits += hits
-        if truncated:
+        if pair_total > _TRUNCATION_CEILING:
             logger.warning(
-                "Query total_count exceeds truncation ceiling (%d): %s", _TRUNCATION_CEILING, query
+                "Query truncated at %d of %d results: %s", _TRUNCATION_CEILING, pair_total, query
             )
-            truncated_pairs.append(query)
+            truncated_pairs.append(f"{query} (total_count={pair_total})")
 
         for candidate in found:
             candidates.setdefault(candidate.full_name, candidate)
@@ -411,6 +416,12 @@ def scan_with_stats(config: ScannerConfig, ledger: LedgerPort) -> tuple[ScanResu
     # Enrichment (Decision 3): core bucket only, on the new-to-us set only,
     # never inside the search loop.
     new_records: list[RepoObservationRecord] = []
+    # Counted separately from len(new_records): since the seeding-run fix below
+    # appends un-enriched placeholder records, len(new_records) is a count of
+    # ROWS, not of enrichments. Reporting it as `enriched` would overstate in
+    # exactly the partially-failed seeding run the placeholder exists to handle
+    # — the plausible-wrong-number shape of the Task 1.3b accounts_probed bug.
+    enriched_ok = 0
     for full_name in new_full_names:
         candidate = org_owned[full_name]
         try:
@@ -441,6 +452,7 @@ def scan_with_stats(config: ScannerConfig, ledger: LedgerPort) -> tuple[ScanResu
                 )
             continue
 
+        enriched_ok += 1
         created_at_gh = _parse_gh_datetime(repo_data.get("created_at"))
         pushed_at_gh = _parse_gh_datetime(repo_data.get("pushed_at"))
 
@@ -485,7 +497,7 @@ def scan_with_stats(config: ScannerConfig, ledger: LedgerPort) -> tuple[ScanResu
         after_fork_drop=after_fork_drop,
         after_org_filter=after_org_filter,
         new_to_us=len(new_full_names),
-        enriched=len(new_records),
+        enriched=enriched_ok,
         emitted=len(signals),
         truncated_pairs=truncated_pairs,
         seeding_run=seeding_run,
