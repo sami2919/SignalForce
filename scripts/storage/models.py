@@ -148,6 +148,32 @@ class Score(Base):
     account: Mapped[Account] = relationship()
 
 
+class RepoObservation(Base):
+    """Ledger of GitHub repos seen by the agent+email scanner (ADR-0006, Task 2.2).
+
+    Load-bearing state, not a cache: a repo is "new to us" iff it has no row
+    here. Truncating this table silently re-seeds the next run and suppresses
+    a day of signals (ADR-0006, Decision 5).
+    """
+
+    __tablename__ = "repo_observations"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "full_name"),
+        Index("ix_repo_observations_first_seen", "tenant_id", "first_seen_at"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    full_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    owner_login: Mapped[str] = mapped_column(String(255), nullable=False)
+    html_url: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at_gh: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    stars_at_first_seen: Mapped[int] = mapped_column(Integer, default=0)
+    archived: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    tenant: Mapped[Tenant] = relationship()
+
+
 class ScanRun(Base):
     """Run-level operational metrics."""
 
