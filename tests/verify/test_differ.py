@@ -281,3 +281,119 @@ def test_payload_dumps_are_full_facts_not_partial():
     assert change.previous is None
     assert change.current["key"] == "1"
     assert change.current["value"] == "X"
+
+
+# ---------------------------------------------------------------------------
+# Fix round (review of a2ee4c1) — duplicate identity, nested-dict new key,
+# None reaching a fact-list field, negative max_changes, cap boundary,
+# sort-order determinism on ties.
+# ---------------------------------------------------------------------------
+
+
+def test_duplicate_identity_in_current_raises():
+    # Two facts sharing one identity — the degraded title+location fallback
+    # collides by construction whenever two real facts share both fields.
+    # A pure reorder must never silently report a false MODIFIED, and a
+    # real removal must never silently report as a no-op modification —
+    # both were the shipped (pre-fix) behavior.
+    a = _item("dup", value="A")
+    b = Item(key="dup", value="B", other="o")
+    with pytest.raises(ValueError, match="duplicate identity"):
+        diff_facts({"items": [a, b]}, {"items": [b, a]})
+
+
+def test_duplicate_identity_in_previous_raises():
+    a = _item("dup", value="A")
+    b = Item(key="dup", value="B", other="o")
+    with pytest.raises(ValueError, match="duplicate identity"):
+        diff_facts({"items": [a, b]}, {"items": [a]})
+
+
+def test_new_nested_dict_field_is_handled_not_a_type_error():
+    previous = {"a": 1}
+    current = {"a": 1, "pricing": {"tier1": 10.0}}
+    result = diff_facts(previous, current)
+    assert len(result.changes) == 1
+    assert result.changes[0].field == "pricing.tier1"
+    assert result.changes[0].previous is None
+    assert result.changes[0].current == 10.0
+
+
+def test_new_key_inside_a_nested_dict_is_handled():
+    previous = {"pricing": {"tier1": 10.0}}
+    current = {"pricing": {"tier1": 10.0, "tier2": 20.0}}
+    result = diff_facts(previous, current)
+    assert len(result.changes) == 1
+    assert result.changes[0].field == "pricing.tier2"
+    assert result.changes[0].previous is None
+
+
+def test_fact_list_field_going_to_none_is_treated_as_degraded_not_a_crash():
+    previous = {"items": [_item("1")]}
+    current = {"items": None}
+    result = diff_facts(previous, current)
+    assert result.outcome == DiffOutcome.DEGRADED
+    assert "items" in result.degraded_fields
+    assert result.changes == ()
+
+
+def test_fact_list_field_replaced_with_wrong_type_raises_with_field_name():
+    previous = {"items": []}
+    current = {"items": 5}
+    with pytest.raises(TypeError, match="'items'"):
+        diff_facts(previous, current)
+
+
+def test_negative_max_changes_raises():
+    with pytest.raises(ValueError, match="max_changes"):
+        diff_facts({"items": []}, {"items": [_item("1")]}, max_changes=-1)
+
+
+def test_truncation_boundary_exactly_at_cap_is_not_truncated():
+    previous = {"items": []}
+    current = {"items": [_item(str(i)) for i in range(3)]}
+    result = diff_facts(previous, current, max_changes=3)
+    assert result.truncated is False
+    assert result.truncated_total is None
+    assert len(result.changes) == 3
+
+
+def test_truncation_boundary_one_over_cap_is_truncated():
+    previous = {"items": []}
+    current = {"items": [_item(str(i)) for i in range(4)]}
+    result = diff_facts(previous, current, max_changes=3)
+    assert result.truncated is True
+    assert result.truncated_total == 4
+    assert len(result.changes) == 3
+
+
+def test_degraded_fields_are_sorted_deterministically():
+    previous = {
+        "zzz_field": [_item("1")],
+        "aaa_field": [_item("2")],
+    }
+    current = {"zzz_field": [], "aaa_field": []}
+    result = diff_facts(previous, current)
+    assert result.degraded_fields == ("aaa_field", "zzz_field")
+
+
+def test_changed_fields_are_sorted_deterministically():
+    previous = {"items": [Item(key="1", value="A", other="A")]}
+    current = {"items": [Item(key="1", value="B", other="B")]}
+    result = diff_facts(previous, current)
+    assert result.changes[0].changed_fields == ("other", "value")
+
+
+def test_sort_key_includes_kind_not_just_field_and_identity():
+    # A REMOVED with a SMALL identity and an ADDED with a LARGE identity —
+    # identity-only sorting would put REMOVED("1") first; kind-inclusive
+    # sorting ("added" < "removed") puts ADDED("9") first regardless. This
+    # is the disagreeing case; a same-direction case (e.g. ADDED("1") vs
+    # REMOVED("9")) would pass even with kind dropped from the sort key.
+    previous = {"items": [_item("1")]}  # only in previous -> REMOVED "1"
+    current = {"items": [_item("9")]}  # only in current -> ADDED "9"
+    result = diff_facts(previous, current)
+    assert [(c.kind, c.identity) for c in result.changes] == [
+        (ChangeKind.ADDED, ("9",)),
+        (ChangeKind.REMOVED, ("1",)),
+    ]

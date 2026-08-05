@@ -118,7 +118,15 @@ consumer reimplements the comparison and they drift apart" failure the task docs
 
 **Cap:** a single diff emits at most N rows; beyond that the diff is truncated and **recorded as
 truncated with its true count** — the lesson from Task 2.2, where a warning threshold that did
-not match the actual cut point hid a real 5% sampling gap for three runs.
+not match the actual cut point hid a real 5% sampling gap (3 of 60 query pairs) across the two
+runs before the fix.
+
+> **Correction, 2026-08-05:** this and the near-identical line in the Implementation note below
+> both said "three runs." Checked against the source (the SDD ledger, Task 2.2): the defect was
+> live for **two** runs, not three — "runs 1-2 had silently sampled," confirmed by the run-3
+> measurement after the fix. The 5% (3 of 60 pairs) figure was accurate; the run count was not.
+> Found while reviewing Task 2.3, which cited this same line — see `differ.py`'s docstring,
+> which paraphrases the lesson without repeating the specific numbers for exactly this reason.
 
 **`payload` is assigned as a whole new dict, never mutated in place** — carried forward from the
 Task 0.1 finding: `SignalEvent.payload` is a plain `JSON` column, not `MutableDict`-wrapped, so
@@ -195,9 +203,10 @@ changed sub-fields" (Decision 1) concretely means.
 
 **Cap default: 200.** Chosen the same way this project has chosen every other cap this
 session — as a number to be measured against, not trusted blindly. Task 2.2's lesson (a warning
-threshold that didn't match the actual cut point hid a real 5% sampling gap for three runs)
-applies directly: `truncated` and `truncated_total` must always be checked together, never
-`truncated_total` alone, since the true count is what makes a silent-looking cap visible.
+threshold that didn't match the actual cut point hid a real 5% sampling gap — 3 of 60 query
+pairs — across the two runs before it was fixed) applies directly: `truncated` and
+`truncated_total` must always be checked together, never `truncated_total` alone, since the true
+count is what makes a silent-looking cap visible.
 
 **Scope: this task does not write `SignalEvent` rows.** `diff_facts` is a pure function, same
 posture as the extractor and the gate — persistence (Decision 5's "payload assigned as a whole
