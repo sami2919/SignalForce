@@ -66,6 +66,32 @@ changed", the bytes that changed no longer exist anywhere.
 **Chosen:** the fetcher retains the body **only for sources whose hash differs from the last
 one**, and hands it to the verify layer within the same run. Unchanged sources discard as today.
 
+> **AMENDED 2026-08-05 — "differs from the last one" was underspecified, and the underspecified
+> reading is wrong.** Re-reading `scripts/watch/runner.py` for Task 2.1b found that a raw hash
+> mismatch is not itself trustworthy: ADR-0005 Decision 2 requires **confirm-on-change** — the
+> runner re-fetches once and only treats the change as real if the confirm fetch agrees. Task 1.2
+> measured why this exists: Greenhouse's own board flipped hash on ~17% of fetches from an
+> unrelated i18n glitch, with no real content change.
+>
+> Retaining the body from the **first** (unconfirmed) fetch would hand the verify layer bodies for
+> changes that get *rejected* one phase later — reintroducing exactly the cosmetic-churn cost the
+> two-tier design and confirm-on-change both exist to keep out of the expensive layer. The body
+> that matters is the one from the **confirm fetch** (phase 3), because that fetch already targets
+> only `changed_refs` — the identical, already-computed, already-small subset — and its result is
+> what actually sets `source.last_hash` and increments `changes_detected`.
+>
+> This also shrinks Decision 2's memory concern by roughly the observed change rate: retention
+> now scopes to phase 3's confirm set, not "every source whose hash differs" from phase 2, and
+> Task 1.3b measured that set at ~1% of sources per run. The 200 MB headroom this ADR budgets
+> against is now a defensive ceiling for a burst day, not the expected case.
+>
+> **Interface, chosen to avoid touching `run_watch_pass`'s return contract** (39 existing test
+> call sites depend on `-> int`): `fetch_all` gains `retain_bodies: bool = False`, used only on
+> the phase-3 confirm call. `run_watch_pass` gains an optional
+> `on_confirmed_change: Callable[[int, str], None] | None = None`, invoked once per source in the
+> existing "confirmed change" branch of `_write_results` — the branch that already sets
+> `changed = True`. No caller passes it yet; Task 2.3 is the first one that will.
+
 This is the only option that preserves temporal attribution: the extraction describes the exact
 observation that triggered it, so Phase 3's detection lag measures one event rather than two.
 
