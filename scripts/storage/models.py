@@ -80,7 +80,11 @@ class AccountSource(Base):
 
 
 class Probe(Base):
-    """High-volume watch-layer log, one row per fetch."""
+    """High-volume watch-layer log, one row per fetch.
+
+    For independent ground-truth recall measurement, see `HoldoutScan`
+    (ADR-0010) -- a separate table, not this one.
+    """
 
     __tablename__ = "probes"
     __table_args__ = (Index("ix_probes_source_time", "account_source_id", "fetched_at"),)
@@ -99,6 +103,35 @@ class Probe(Base):
     tenant: Mapped[Tenant] = relationship()
     account_source: Mapped[AccountSource] = relationship()
     scan_run: Mapped["ScanRun"] = relationship(back_populates="probes")
+
+
+class HoldoutScan(Base):
+    """Ground-truth deep-scan log for a small holdout of accounts (ADR-0010).
+
+    Structurally close to `Probe` but deliberately NOT tied to a `ScanRun` --
+    the deep scan has no watch-layer scan run to attach to (Decision 2).
+    `changed` is computed against the most recent prior `HoldoutScan` row for
+    the same `account_source_id`, never against `AccountSource.last_hash` --
+    that field is the watch layer's own confirm-on-change state and this
+    table must never write to it. Query `probes` for operational watch-layer
+    behavior; query this table for independent recall ground truth.
+    """
+
+    __tablename__ = "holdout_scans"
+    __table_args__ = (Index("ix_holdout_scans_source_time", "account_source_id", "fetched_at"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    account_source_id: Mapped[int] = mapped_column(ForeignKey("account_sources.id"), nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    changed: Mapped[bool] = mapped_column(Boolean, default=False)
+    status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    latency_ms: Mapped[int] = mapped_column(Integer, default=0)
+    bytes: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    tenant: Mapped[Tenant] = relationship()
+    account_source: Mapped[AccountSource] = relationship()
 
 
 class SignalEvent(Base):
