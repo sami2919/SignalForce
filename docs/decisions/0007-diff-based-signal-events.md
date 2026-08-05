@@ -152,6 +152,58 @@ produces byte-identical output. Phase 4's scoring trace is only replayable if it
   real-data validation is limited to synthetic-but-real fact structures until then. Do not
   claim end-to-end verification of this task.
 
+## Implementation note, 2026-08-05 — the concrete interface
+
+The decisions above leave the exact shapes unpinned. Fixing them here before writing code, since
+`scripts/verify/extractor.py` (Task 2.1a) now exists and the differ must consume its actual output
+rather than the plan's generic dicts.
+
+**Input:** `diff_facts(previous: dict[str, object] | None, current: dict[str, object], *, max_changes: int = 200) -> DiffResult`.
+Each dict is a **snapshot**: a mapping of field name to either a `Sequence[Fact]` (diffed by
+identity, Decision 1), a scalar (`str | int | float | bool | None`, diffed by inequality,
+Decision 2), or a nested `dict` (recursed, Decision 2, field names joined with `.`). Any other
+value type raises `TypeError` — Decision 2's "unhandled type raises rather than continues." A key
+present in `previous` but absent from `current` also raises: a real extractor should not drop a
+field between calls, and silently treating a disappeared field as "went empty" would be
+indistinguishable from a genuine content change.
+
+Snapshots are `dict[str, object]`, not the extractor's Pydantic models directly, so the differ
+never depends on `CareersFacts` or any other per-source-type model — a caller builds
+`{"jobs": list(facts.jobs)}` and the differ works identically for a hypothetical `PricingFacts`.
+This is the boundary Decision 1's "What this does NOT decide — where fact snapshots are stored"
+was pointing at: storage, whenever it's built, reconstructs Fact instances from persisted JSON
+and hands the differ the same shape it always took.
+
+**Identity extraction is generic, not duplicated.** `Fact.identity_fields` (already implemented
+in `extractor.py` for Decision 1) is read directly — `tuple(str(getattr(fact, f)) for f in
+fact.identity_fields)` — so a fact type only declares its identity once, in the extractor, not
+again in the differ.
+
+**Output:** `DiffResult(outcome: SEEDING | DEGRADED | NORMAL, changes: tuple[FactChange, ...],
+truncated: bool, truncated_total: int | None, degraded_fields: tuple[str, ...])`.
+`degraded_fields` names which list-valued fields specifically triggered Decision 3's
+removal-suppression, so a snapshot with multiple list fields (e.g. a future source type with
+both `jobs` and `press_releases`) doesn't collapse "one field went empty" into an
+undifferentiated top-level flag.
+
+**`FactChange`** carries `field`, `kind` (`added | removed | modified`), `identity: tuple[str, ...]`
+(the fact's identity for list items; `(field_name,)` for a scalar change, kept as a tuple for
+type uniformity rather than a special-cased `str | None`), `previous`, `current` (full dumps,
+one side `None` for `added`/`removed`), and `changed_fields: tuple[str, ...]` — populated only for
+`modified`, naming which sub-fields actually differ, which is what "reports … modified with the
+changed sub-fields" (Decision 1) concretely means.
+
+**Cap default: 200.** Chosen the same way this project has chosen every other cap this
+session — as a number to be measured against, not trusted blindly. Task 2.2's lesson (a warning
+threshold that didn't match the actual cut point hid a real 5% sampling gap for three runs)
+applies directly: `truncated` and `truncated_total` must always be checked together, never
+`truncated_total` alone, since the true count is what makes a silent-looking cap visible.
+
+**Scope: this task does not write `SignalEvent` rows.** `diff_facts` is a pure function, same
+posture as the extractor and the gate — persistence (Decision 5's "payload assigned as a whole
+new dict, never mutated in place," carried forward from the Task 0.1 finding) is a wiring task
+for whenever fact-snapshot storage is decided, not this one.
+
 ---
 
 ## Appendix — measurements (live, 2026-08-04)
