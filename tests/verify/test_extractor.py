@@ -238,9 +238,12 @@ def test_request_sets_cache_control_on_system_block_and_page_content_in_user_tur
     messages = kwargs["messages"]
     assert len(messages) == 1
     assert messages[0]["role"] == "user"
-    assert html in messages[0]["content"]
+    # The user turn carries the STRIPPED representation (Task 2.1c), not the raw
+    # HTML — but the page's actual content must survive the reduction.
+    assert "Check back soon" in messages[0]["content"]
+    assert "<html" not in messages[0]["content"]
     # Page content must not leak into the cached system block.
-    assert all(html not in block.get("text", "") for block in system)
+    assert all("Check back soon" not in block.get("text", "") for block in system)
 
 
 def test_default_client_used_when_none_provided(monkeypatch):
@@ -253,3 +256,92 @@ def test_default_client_used_when_none_provided(monkeypatch):
 
     assert facts.jobs == ()
     fake_client.messages.parse.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# _strip_for_extraction (Task 2.1c, ADR-0008 Decision 1 amendment)
+# ---------------------------------------------------------------------------
+
+
+class TestStripForExtraction:
+    """Href-preserving reduction. Gated on reproducing the raw-HTML baseline
+    (Task 2.1a Step 5), not on being cheaper — see the acceptance criterion in
+    ADR-0008's Decision 1 amendment."""
+
+    def test_drops_non_content_tags(self):
+        from scripts.verify.extractor import _strip_for_extraction
+
+        html = (
+            "<html><head><title>x</title></head><body>"
+            "<script>evil()</script><style>.x{}</style>"
+            "<p>Real content</p>"
+            "</body></html>"
+        )
+        out = _strip_for_extraction(html)
+        assert "evil()" not in out
+        assert ".x{}" not in out
+        assert "Real content" in out
+
+    def test_preserves_every_href_paired_with_its_link_text(self):
+        from scripts.verify.extractor import _strip_for_extraction
+
+        out = _strip_for_extraction(_fixture("careers_page.html"))
+        assert (
+            "Senior Backend Engineer <https://job-boards.greenhouse.io/acme/jobs/5023394008>" in out
+        )
+        assert (
+            "Staff Product Designer <https://job-boards.greenhouse.io/acme/jobs/5023394115>" in out
+        )
+        assert "Support Engineer </careers/apply?role=support-engineer>" in out
+
+    def test_output_is_much_smaller_than_input_for_a_realistic_page(self):
+        from scripts.verify.extractor import _strip_for_extraction
+
+        # A page with a lot of markup weight around a small number of real links —
+        # the shape that made railway.app measure a 99% reduction in Step 5.
+        html = (
+            "<html><body>"
+            + ("<div class='chrome'>filler</div>" * 500)
+            + ('<a href="/jobs/1">Engineer</a>')
+            + "</body></html>"
+        )
+        out = _strip_for_extraction(html)
+        assert len(out) < len(html) / 2
+        assert "/jobs/1" in out
+
+    def test_body_text_is_capped_so_a_pathological_page_cannot_balloon_the_request(self):
+        from scripts.verify.extractor import _MAX_BODY_CHARS, _strip_for_extraction
+
+        # No links at all — an uncapped body-text run of prose, larger than the cap,
+        # with a link at the very end to prove truncation, not just brevity.
+        html = "<html><body>" + ("word " * 50_000) + '<a href="/jobs/1">Engineer</a></body></html>'
+        out = _strip_for_extraction(html)
+        body_part = out.split("\n\nLINKS:\n")[0]
+        assert len(body_part) <= _MAX_BODY_CHARS
+        assert len(out) < len(html) / 2
+
+    def test_empty_input_returns_empty_string(self):
+        from scripts.verify.extractor import _strip_for_extraction
+
+        assert _strip_for_extraction("") == ""
+
+    def test_malformed_html_degrades_to_raw_bytes_rather_than_raising(self):
+        from scripts.verify.extractor import _strip_for_extraction
+
+        # Not actually malformed enough to break selectolax, but confirms the
+        # function never raises on a real page — matches normalize_html's posture.
+        weird = "<div><a href='/x'>unterminated"
+        out = _strip_for_extraction(weird)
+        assert "/x" in out or "unterminated" in out  # degrades, does not crash
+
+    def test_extract_careers_sends_stripped_form_not_raw_html(self):
+        raw = _RawCareersExtraction(jobs=[])
+        client = _mock_client(raw)
+
+        html = _fixture("careers_page.html")
+        extract_careers(html, client=client)
+
+        _, kwargs = client.messages.parse.call_args
+        sent = kwargs["messages"][0]["content"]
+        assert "<div" not in sent  # markup gone
+        assert "5023394008" in sent  # the job id survives

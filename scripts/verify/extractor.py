@@ -3,11 +3,15 @@
 ADR-0008 (docs/decisions/0008-verify-layer-extraction.md) is the spec. Three decisions
 from that ADR shape this module:
 
-1. **Raw HTML in, never normalized text.** `scripts/watch/normalize.py` strips every
-   attribute (including `href`) to build a stable hash for the watch layer. That is
-   correct for hashing and wrong for extraction: the job id that ADR-0007 Decision 1
-   depends on lives in the href, so this module must never call `normalize_html` on
-   its way to the model.
+1. **Raw HTML in, never `normalize_html`'s output.** `scripts/watch/normalize.py` strips
+   every attribute (including `href`) to build a stable hash for the watch layer — that
+   destroys the job id ADR-0007 Decision 1 depends on, so this module never calls it.
+   What IS sent to the model is `_strip_for_extraction`'s href-preserving reduction (Task
+   2.1c, ADR-0008 Decision 1 amendment, 2026-08-05): drop script/style/svg/etc., keep
+   anchor hrefs paired with their link text. Measured 84-99% token reduction with the
+   job ids fully preserved — this is NOT the watch layer's normalizer; it is a separate,
+   extraction-specific reduction gated on reproducing the raw-HTML extraction baseline
+   exactly (Task 2.1a Step 5: 50/50 stable ids on Greenhouse, 16 jobs on railway.app).
 2. **Structured outputs, not prompt-and-parse.** `client.messages.parse(...)` with a
    Pydantic `output_format` constrains and validates the response inside the API.
    No "respond with only JSON" + `json.loads` retry loop, and no assistant-turn
@@ -33,6 +37,7 @@ import anthropic
 from anthropic import Anthropic
 from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict
+from selectolax.parser import HTMLParser
 
 load_dotenv()
 
@@ -48,24 +53,26 @@ MAX_TOKENS = 8192
 # rather than assuming this text is long enough forever).
 _CAREERS_SYSTEM_PROMPT = """You are a structured-data extractor for company careers pages.
 
-You will be given the raw HTML of a single careers/jobs listing page. Your job is to
-identify every open job posting on the page and extract, for each one:
+You will be given a reduced representation of a careers/jobs listing page: the page's
+visible body text, followed by a "LINKS:" section listing every link on the page as
+`link text <href>`. This is NOT the raw page — non-content markup has already been
+stripped — but every link's href is preserved exactly as it appeared in the HTML.
+Your job is to identify every open job posting and extract, for each one:
 
 - title: the job title exactly as displayed (e.g. "Senior Backend Engineer").
 - location: the location as displayed, if the page shows one (e.g. "Remote - US",
   "San Francisco, CA"). Use null if no location is shown for that posting.
-- url: the href of the link that points at that specific job posting's detail or
-  application page, exactly as it appears in the HTML `href` attribute. Do not
-  invent, normalize, or resolve a relative URL to absolute — copy the attribute
-  value verbatim. Use null only if the posting has genuinely no link.
+- url: the href from the matching entry in the LINKS section, exactly as it appears
+  there — copy it verbatim. Do not invent, normalize, or resolve a relative URL to
+  absolute. Use null only if the posting has genuinely no matching link.
 
 Rules that matter for correctness:
 
-1. Extract HTML attributes, not just visible text. The href of each job's anchor tag
-   is load-bearing: many job boards (Greenhouse, Lever, and similar ATS platforms)
-   encode a stable numeric job id in that URL, and that id is how this page's changes
-   get tracked over time. Losing it by paraphrasing or reconstructing the URL from
-   visible text defeats the entire point of this extraction.
+1. The href for each job is load-bearing: many job boards (Greenhouse, Lever, and
+   similar ATS platforms) encode a stable numeric job id in that URL, and that id is
+   how this page's changes get tracked over time. Losing it by paraphrasing or
+   reconstructing the URL from the link text defeats the entire point of this
+   extraction — always copy url from the LINKS section, never reconstruct it.
 
 2. A page with zero open roles (e.g. "no open positions right now") is a completely
    legitimate result. Return an empty jobs list. Do not treat this as a failure, and
@@ -218,6 +225,73 @@ def _derive_identity(raw: _RawJob) -> tuple[str, bool]:
     return fallback_key, True
 
 
+# Non-content tags whose text/attributes never carry a job. Superset of
+# scripts/watch/normalize.py's _DROP_TAGS: extraction also drops <head>, <link>,
+# and <meta>, which normalize_html leaves (harmless there — .text() never reads
+# them anyway) but which are pure noise once we're emitting an href-annotated
+# text blob.
+_DROP_TAGS = (
+    "script",
+    "style",
+    "noscript",
+    "svg",
+    "iframe",
+    "template",
+    "canvas",
+    "head",
+    "link",
+    "meta",
+)
+
+# Cap on the non-link body text carried alongside the link list, characters not
+# tokens (a token-precise cap needs a tokenizer call per page; this is a coarse,
+# free guard against a pathological page with megabytes of body prose and no
+# links). Generous relative to every page measured in the ADR-0008 appendix.
+_MAX_BODY_CHARS = 20_000
+
+
+def _strip_for_extraction(html: str) -> str:
+    """Href-preserving reduction: drop non-content tags, keep every anchor's
+    link text paired with its href, cap incidental body text.
+
+    Measured (ADR-0008 Decision 1 amendment, Task 2.1c):
+      greenhouse/anthropic  33,411 -> ~5,236 tokens  (84% cut), job ids survive
+      railway.app          179,561 -> ~2,662 tokens  (99% cut), job ids survive
+
+    This is NOT scripts.watch.normalize.normalize_html and must never become it:
+    that function is documented to exclude every attribute for hashing stability.
+    This one exists specifically to KEEP the href that carries a fact's identity
+    key (ADR-0007 Decision 1) while discarding the surrounding markup weight.
+    """
+    if not html:
+        return ""
+
+    try:
+        tree = HTMLParser(html)
+        for tag in _DROP_TAGS:
+            for node in tree.css(tag):
+                node.decompose()
+
+        root = tree.body if tree.body is not None else tree.root
+        if root is None:
+            return html
+
+        links: list[str] = []
+        for anchor in root.css("a"):
+            href = anchor.attributes.get("href", "")
+            text = anchor.text(separator=" ", strip=True)
+            if text or href:
+                links.append(f"{text} <{href}>")
+
+        body_text = " ".join(root.text(separator=" ").split())[:_MAX_BODY_CHARS]
+        return body_text + "\n\nLINKS:\n" + "\n".join(links)
+    except Exception:  # noqa: BLE001
+        # Same posture as normalize_html: a parse failure must degrade to sending
+        # the raw bytes, never abort the extraction over one malformed page.
+        logger.warning("HTML strip-for-extraction failed; sending raw HTML", exc_info=True)
+        return html
+
+
 def _default_client() -> Anthropic:
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
@@ -239,6 +313,8 @@ def extract_careers(html: str, *, client: Anthropic | None = None) -> CareersFac
     if client is None:
         client = _default_client()
 
+    reduced = _strip_for_extraction(html)
+
     try:
         response = client.messages.parse(
             model=MODEL,
@@ -251,7 +327,7 @@ def extract_careers(html: str, *, client: Anthropic | None = None) -> CareersFac
                     "cache_control": {"type": "ephemeral"},
                 },
             ],
-            messages=[{"role": "user", "content": html}],
+            messages=[{"role": "user", "content": reduced}],
             output_format=_RawCareersExtraction,
         )
     except (anthropic.APIStatusError, anthropic.APIConnectionError) as exc:
