@@ -30,6 +30,7 @@ def upgrade() -> None:
         sa.Column("owner_login", sa.String(length=255), nullable=False),
         sa.Column("html_url", sa.Text(), nullable=False),
         sa.Column("created_at_gh", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("pushed_at_gh", sa.DateTime(timezone=True), nullable=True),
         sa.Column("stars_at_first_seen", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("archived", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"]),

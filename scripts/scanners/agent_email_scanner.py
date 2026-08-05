@@ -42,6 +42,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Protocol
 
+import requests
 from pydantic import BaseModel, ConfigDict
 
 from scripts.api_client import APIError, BaseAPIClient
@@ -83,7 +84,12 @@ _DEFAULT_JS_MANIFEST = "package.json"
 
 _PER_PAGE = 100
 _MAX_PAGES = 3  # cap, per brief — 300 results/query even though the API allows 1000
-_TRUNCATION_CEILING = 1000
+# The point WE truncate, not the API's 1000-result ceiling. A pair with
+# total_count=500 already loses 200 matches to _MAX_PAGES before it ever gets
+# near the API's own limit — warning only above 1000 would silently discard
+# anything in [301, 1000) with no truncated_pairs entry (ADR-0006 Consequences:
+# truncation must never be silent).
+_TRUNCATION_CEILING = _MAX_PAGES * _PER_PAGE
 
 
 def _utcnow() -> datetime:
@@ -237,6 +243,7 @@ class RepoObservationRecord(BaseModel):
     owner_login: str
     html_url: str
     created_at_gh: datetime | None = None
+    pushed_at_gh: datetime | None = None
     stars_at_first_seen: int = 0
     archived: bool = False
 
@@ -279,7 +286,10 @@ class ScanStats:
     failed_queries: list[str] = field(default_factory=list)
 
 
-def _build_signal(rec: RepoObservationRecord) -> Signal:
+def _build_signal(rec: RepoObservationRecord, first_seen_at: datetime) -> Signal:
+    """ADR-0006 Decision 5: the payload carries created_at, pushed_at, AND
+    first_seen_at so "new to us" is never misreadable as "shipped this week" —
+    a repo can be new to the ledger while its pushed_at is months old."""
     return Signal(
         signal_type="agent_email_repo",
         company_name=rec.owner_login,
@@ -289,6 +299,8 @@ def _build_signal(rec: RepoObservationRecord) -> Signal:
         metadata={
             "full_name": rec.full_name,
             "created_at": rec.created_at_gh.isoformat() if rec.created_at_gh else None,
+            "pushed_at": rec.pushed_at_gh.isoformat() if rec.pushed_at_gh else None,
+            "first_seen_at": first_seen_at.isoformat(),
             "stars": rec.stars_at_first_seen,
         },
     )
@@ -358,7 +370,13 @@ def scan_with_stats(config: ScannerConfig, ledger: LedgerPort) -> tuple[ScanResu
 
         try:
             found, hits, used, truncated = _search_pair(client, query)
-        except APIError as exc:
+        except (APIError, requests.RequestException) as exc:
+            # requests.RequestException (e.g. ConnectionError, or a second
+            # consecutive Timeout — BaseAPIClient only retries a timeout once,
+            # outside any try, so it can propagate raw) is not an APIError and
+            # was leaking past this handler, aborting the remaining ~53 queries
+            # on a run that already took 6-15 minutes. Per-query isolation
+            # requires catching both (cf. Task 1.3b finding).
             logger.warning("Search query failed, skipping: %s — %s", query, exc)
             failed_queries.append(query)
             errors.append(f"{query}: {exc}")
@@ -367,7 +385,9 @@ def scan_with_stats(config: ScannerConfig, ledger: LedgerPort) -> tuple[ScanResu
         search_requests += used
         raw_hits += hits
         if truncated:
-            logger.warning("Query exceeded 1000-result truncation ceiling: %s", query)
+            logger.warning(
+                "Query total_count exceeds truncation ceiling (%d): %s", _TRUNCATION_CEILING, query
+            )
             truncated_pairs.append(query)
 
         for candidate in found:
@@ -375,6 +395,8 @@ def scan_with_stats(config: ScannerConfig, ledger: LedgerPort) -> tuple[ScanResu
 
     after_dedup = len(candidates)
 
+    # GitHub rarely indexes forks in code search; 0/2320 dropped in the
+    # 2026-08-04 live run. Kept as declared intent, not a load-bearing filter.
     non_fork = {fn: c for fn, c in candidates.items() if not c.fork}
     after_fork_drop = len(non_fork)
 
@@ -392,15 +414,35 @@ def scan_with_stats(config: ScannerConfig, ledger: LedgerPort) -> tuple[ScanResu
     for full_name in new_full_names:
         candidate = org_owned[full_name]
         try:
-            repo_data = client.get_repo(full_name)
+            # Counted before the call resolves, not after: a failed enrichment
+            # still consumes real core-bucket quota, and undercounting errs in
+            # the reassuring direction during exactly the 403 storm where the
+            # number matters.
             core_requests += 1
-        except APIError as exc:
+            repo_data = client.get_repo(full_name)
+        except (APIError, requests.RequestException) as exc:
             logger.warning("Enrichment failed, skipping: %s — %s", full_name, exc)
             errors.append(f"enrich {full_name}: {exc}")
+            if seeding_run:
+                # A seeding run enriches at full width (Decision 5) and is the
+                # run most exposed to this: if a partially-failed seeding run
+                # does NOT record the candidate, the next run sees it as
+                # "new to us" and emits a false signal for a repo that was
+                # already present during seeding. The ledger's question is
+                # only "have we seen this repo" — that needs nothing from
+                # GET /repos, and a seeding run emits nothing regardless, so
+                # the missing stars/created_at/pushed_at cost nothing.
+                new_records.append(
+                    RepoObservationRecord(
+                        full_name=full_name,
+                        owner_login=candidate.owner_login,
+                        html_url=candidate.html_url,
+                    )
+                )
             continue
 
-        created_at_raw = repo_data.get("created_at")
-        created_at_gh = _parse_gh_datetime(created_at_raw)
+        created_at_gh = _parse_gh_datetime(repo_data.get("created_at"))
+        pushed_at_gh = _parse_gh_datetime(repo_data.get("pushed_at"))
 
         new_records.append(
             RepoObservationRecord(
@@ -408,6 +450,7 @@ def scan_with_stats(config: ScannerConfig, ledger: LedgerPort) -> tuple[ScanResu
                 owner_login=candidate.owner_login,
                 html_url=candidate.html_url,
                 created_at_gh=created_at_gh,
+                pushed_at_gh=pushed_at_gh,
                 stars_at_first_seen=repo_data.get("stargazers_count", 0),
                 archived=bool(repo_data.get("archived", False)),
             )
@@ -420,7 +463,7 @@ def scan_with_stats(config: ScannerConfig, ledger: LedgerPort) -> tuple[ScanResu
         for rec in new_records:
             if rec.archived:
                 continue
-            signals.append(_build_signal(rec))
+            signals.append(_build_signal(rec, first_seen_at=started_at))
 
     completed_at = _utcnow()
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import requests
 
 from scripts.api_client import APIError
 from scripts.config_loader import ScannerConfig
@@ -389,6 +390,9 @@ class TestTruncationWarning:
         )
         assert stats.truncated_pairs == []
 
+    # See TestTruncationAtOurOwnCap below for the total_count=500 regression
+    # (the gap between our own 300-result page cap and the API's 1000 ceiling).
+
 
 # ---------------------------------------------------------------------------
 # Per-query isolation — one query's APIError does not abort the scan
@@ -421,6 +425,43 @@ class TestEnrichmentIsolation:
         assert len(result.signals_found) == 1
         assert result.signals_found[0].company_name == "acme"
         assert any("broken-repo" in e for e in result.errors)
+
+
+class TestEnrichmentTransportErrorIsolation:
+    """`except APIError` alone cannot catch requests.RequestException — a
+    second consecutive Timeout (BaseAPIClient only retries a timeout once,
+    outside any try — api_client.py's timeout branch re-raises on a second
+    failure) was leaking past the enrichment handler. See
+    TestTransportErrorIsolation below for the equivalent search-loop case."""
+
+    def test_timeout_on_enrichment_does_not_abort_run(self):
+        config = make_scanner_config()
+        ledger = FakeLedger(seed={"x/y"})
+        items = [
+            make_search_item("acme/broken-repo"),
+            make_search_item("acme/good-repo"),
+        ]
+
+        def get_repo_side_effect(full_name):
+            if full_name == "acme/broken-repo":
+                raise requests.Timeout("timed out twice")
+            return make_repo_response(full_name)
+
+        with patch("scripts.scanners.agent_email_scanner.get_config") as mock_get_config:
+            mock_get_config.return_value = MagicMock(github_token="fake")
+            with patch("scripts.scanners.agent_email_scanner.GitHubClient") as MockClient:
+                mock_client = MockClient.return_value
+                mock_client.search_code.side_effect = [make_search_response(items)]
+                mock_client.get_repo.side_effect = get_repo_side_effect
+                result, stats = scan_with_stats(config, ledger)
+
+        assert stats.enriched == 1
+        assert len(result.signals_found) == 1
+        assert any("broken-repo" in e for e in result.errors)
+
+
+# See TestSeedingRunFloodRegression below for the seeding-run
+# partial-enrichment-failure regression (RUN1/RUN2 sequence).
 
 
 class TestPerQueryIsolation:
@@ -590,3 +631,157 @@ class TestGitHubClient:
             mock_get.assert_called_once()
             call_args = mock_get.call_args
             assert call_args[0][0] == "/repos/acme/repo"
+
+
+# ---------------------------------------------------------------------------
+# Fix round 1 regressions (review of commit 28b7333)
+# ---------------------------------------------------------------------------
+
+
+class TestTruncationAtOurOwnCap:
+    """The warning must fire at the point WE truncate (_MAX_PAGES * _PER_PAGE),
+    not at the API's 1000-result ceiling. A pair with total_count=500 loses 200
+    matches to the page cap and must not do so silently (ADR-0006 Consequences).
+    """
+
+    def test_total_count_500_is_reported_as_truncated(self):
+        full_page = [make_search_item(f"org{i}/repo{i}") for i in range(100)]
+
+        def search(query, page=1, per_page=100):
+            return make_search_response(full_page if page <= 3 else [], total=500)
+
+        ledger = FakeLedger(seed={"sentinel/seen"})
+        _result, stats = _run_scan(
+            make_scanner_config(),
+            ledger,
+            search_side_effect=search,
+            repo_side_effect=lambda fn: make_repo_response(fn),
+        )
+
+        assert stats.truncated_pairs, (
+            "total_count=500 with a 3-page cap discards 200 matches and must be "
+            f"flagged; truncated_pairs was {stats.truncated_pairs}"
+        )
+        assert stats.raw_hits == 300
+
+
+class TestSearchTransportErrorIsolation:
+    """Search-path counterpart to TestTransportErrorIsolation (enrichment path).
+
+    requests.RequestException is not an APIError. BaseAPIClient leaks
+    ConnectionError and a second consecutive Timeout, so a bare `except APIError`
+    let one TCP reset abort the remaining queries mid-run.
+    """
+
+    def test_connection_error_on_one_query_does_not_abort_the_run(self):
+        import requests
+
+        calls = {"n": 0}
+
+        def search(query, page=1, per_page=100):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise requests.ConnectionError("connection reset by peer")
+            return make_search_response([make_search_item("goodorg/repo")])
+
+        ledger = FakeLedger(seed={"sentinel/seen"})
+        result, stats = _run_scan(
+            make_scanner_config(
+                {
+                    "python_frameworks": ["langgraph"],
+                    "python_email_libs": ["resend", "sendgrid"],
+                    "python_manifests": ["pyproject.toml"],
+                    "js_frameworks": [],
+                    "js_email_libs": [],
+                }
+            ),
+            ledger,
+            search_side_effect=search,
+            repo_side_effect=lambda fn: make_repo_response(fn),
+        )
+
+        assert len(stats.failed_queries) == 1
+        assert any("connection reset" in e for e in result.errors)
+        # The surviving query still produced its signal — the run was not aborted.
+        assert stats.emitted == 1
+
+
+class TestSeedingRunFloodRegression:
+    """A seeding run whose enrichment partially fails must still RECORD the
+    candidates it saw. Otherwise the next run sees them as new-to-us and emits
+    a flood of false signals for repos that were present during seeding —
+    corrupting the Phase 3 detection-lag record.
+    """
+
+    def test_partially_failed_seeding_does_not_flood_the_next_run(self):
+        items = [make_search_item(f"org{i}/repo") for i in range(5)]
+
+        def search(query, page=1, per_page=100):
+            return make_search_response(items if page == 1 else [])
+
+        quota_dead = {"v": True}
+
+        def enrich(full_name):
+            idx = int(full_name[3])
+            if quota_dead["v"] and idx >= 2:
+                raise APIError(status_code=403, message="quota exhausted", url=full_name)
+            return make_repo_response(full_name)
+
+        ledger = FakeLedger()
+        cfg = make_scanner_config()
+
+        _r1, s1 = _run_scan(cfg, ledger, search_side_effect=search, repo_side_effect=enrich)
+        assert s1.seeding_run is True
+        assert s1.emitted == 0
+        assert len(ledger.recorded) == 5, (
+            "a seeding run must record every org candidate it saw, including "
+            f"those whose enrichment failed; recorded {len(ledger.recorded)}"
+        )
+
+        quota_dead["v"] = False  # quota recovers before the next run
+        _r2, s2 = _run_scan(cfg, ledger, search_side_effect=search, repo_side_effect=enrich)
+        assert s2.seeding_run is False
+        assert s2.emitted == 0, (
+            f"repos present during seeding must never emit as new-to-us; emitted {s2.emitted}"
+        )
+
+
+class TestPayloadCarriesBothTimeNotions:
+    """ADR-0006 Decision 5: the payload carries created_at and pushed_at
+    alongside first_seen_at, so "new to us" is never misread as "shipped now".
+    """
+
+    def test_signal_metadata_has_created_pushed_and_first_seen(self):
+        def search(query, page=1, per_page=100):
+            return make_search_response([make_search_item("acme/agent")] if page == 1 else [])
+
+        ledger = FakeLedger(seed={"sentinel/seen"})
+        result, _stats = _run_scan(
+            make_scanner_config(),
+            ledger,
+            search_side_effect=search,
+            repo_side_effect=lambda fn: make_repo_response(fn),
+        )
+
+        assert len(result.signals_found) == 1
+        meta = result.signals_found[0].metadata
+        assert meta["created_at"] == "2026-01-01T00:00:00+00:00"
+        assert meta["pushed_at"] == "2026-08-01T00:00:00+00:00"
+        assert meta["first_seen_at"] is not None
+
+
+class TestConfigExampleKeepsScannerDisabled:
+    """scan() takes a required `ledger` arg and cannot be dispatched by
+    scanner_runner's one-arg convention. config.example must keep it disabled so
+    it never presents as "enabled, 0 signals forever" — which reads as a quiet
+    market, the exact ambiguity ADR-0006 exists to remove.
+    """
+
+    def test_agent_email_scanner_is_disabled_in_config_example(self):
+        from pathlib import Path
+
+        import yaml
+
+        repo_root = Path(__file__).resolve().parents[2]
+        cfg = yaml.safe_load((repo_root / "config.example" / "config.yaml").read_text())
+        assert cfg["scanners"]["agent_email"]["enabled"] is False

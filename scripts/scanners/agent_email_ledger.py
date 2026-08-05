@@ -63,8 +63,17 @@ class SqlAlchemyRepoLedger:
                     owner_login=obs.owner_login,
                     html_url=obs.html_url,
                     created_at_gh=obs.created_at_gh,
+                    pushed_at_gh=obs.pushed_at_gh,
                     stars_at_first_seen=obs.stars_at_first_seen,
                     archived=obs.archived,
                 )
             )
-        self._session.commit()
+        try:
+            self._session.commit()
+        except Exception:
+            # Without this the Session stays in a failed-transaction state and
+            # every subsequent use raises PendingRollbackError. Invisible via
+            # the CLI (throwaway session) but fatal for the deployed worker,
+            # which holds one Session for the whole run.
+            self._session.rollback()
+            raise

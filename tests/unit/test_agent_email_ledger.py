@@ -106,3 +106,22 @@ class TestRecord:
         ledger.record([_record("acme/repo")])
         with pytest.raises(Exception):
             ledger.record([_record("acme/repo")])
+
+
+def test_record_rolls_back_so_session_stays_usable(session, tenant_id):
+    """Without an explicit rollback the Session stays in a failed-transaction
+    state and every later use raises PendingRollbackError — fatal for the
+    deployed worker, which holds one Session for the whole run.
+    """
+    ledger = SqlAlchemyRepoLedger(session, tenant_id)
+    rec = RepoObservationRecord(
+        full_name="acme/agent", owner_login="acme", html_url="https://github.com/acme/agent"
+    )
+    ledger.record([rec])
+
+    # Same (tenant_id, full_name) again -> unique constraint violation.
+    with pytest.raises(Exception):
+        ledger.record([rec])
+
+    # The Session must still be usable rather than poisoned.
+    assert ledger.known(["acme/agent"]) == {"acme/agent"}

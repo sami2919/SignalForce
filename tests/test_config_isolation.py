@@ -63,6 +63,21 @@ def test_app_config_cache_is_cleared_between_tests(monkeypatch) -> None:
     assert get_config().github_token == "sentinel-value-abc"
 
 
+def test_agent_email_scanner_is_disabled_by_default_in_config_example(monkeypatch) -> None:
+    """Pins the scanner_runner incompatibility: agent_email.scan() requires a
+    ledger argument, unlike scanner_runner's `scan(ScannerConfig) -> ScanResult`
+    convention (Task 2.2 report). If this ever flips to enabled: true, someone
+    must first wire a ledger through scanner_runner's config-only dispatch —
+    dispatching it as-is would raise a TypeError for every scheduled run."""
+    from scripts import config_loader
+
+    monkeypatch.setenv("SIGNALFORCE_CONFIG_DIR", str(REPO_ROOT / "config.example"))
+    cfg = config_loader.load_config()
+    agent_email_cfg = cfg.scanners.get("agent_email")
+    assert agent_email_cfg is not None
+    assert agent_email_cfg.enabled is False
+
+
 def test_no_real_credentials_visible_to_tests() -> None:
     """Catches the whole class: a Neon password or API key reaching a test."""
     from scripts.config import AppConfig, get_config

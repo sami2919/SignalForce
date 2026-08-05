@@ -168,6 +168,7 @@ class RepoObservation(Base):
     owner_login: Mapped[str] = mapped_column(String(255), nullable=False)
     html_url: Mapped[str] = mapped_column(Text, nullable=False)
     created_at_gh: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    pushed_at_gh: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     stars_at_first_seen: Mapped[int] = mapped_column(Integer, default=0)
     archived: Mapped[bool] = mapped_column(Boolean, default=False)
 
