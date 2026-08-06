@@ -83,7 +83,7 @@ def select_holdout(account_ids: list[int], size: int, seed: int) -> list[int]:
     return sorted(ranked[:size])
 
 
-def _load_active_account_ids(tenant_id: int, session: Session) -> list[int]:
+def load_active_account_ids(tenant_id: int, session: Session) -> list[int]:
     """Distinct account ids with at least one active AccountSource, for this tenant."""
     rows = session.execute(
         select(AccountSource.account_id)
@@ -155,7 +155,7 @@ async def run_deep_scan(tenant_id: int, *, holdout_size: int = 5, seed: int = 42
     """
     # --- Phase 1: sync DB read ---
     with get_session() as session:
-        account_ids = _load_active_account_ids(tenant_id, session)
+        account_ids = load_active_account_ids(tenant_id, session)
         holdout_account_ids = select_holdout(account_ids, size=holdout_size, seed=seed)
         sources = _load_sources_for_accounts(tenant_id, holdout_account_ids, session)
 

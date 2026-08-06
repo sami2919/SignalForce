@@ -38,6 +38,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from scripts.logging_config import configure_logging
+from scripts.measure.daily_postprocess import run_daily_postprocess
 from scripts.registry.resolver import resolve_sources
 from scripts.registry.store import StoreResult, ensure_tenant, store_resolution
 from scripts.storage.models import AccountSource, Probe, ScanRun
@@ -342,7 +343,27 @@ def _cli_scan() -> int:
             "error": run.error,
         }
     print(json.dumps(payload, indent=2))
-    return 0 if payload["status"] == "completed" else 1
+    watch_ok = payload["status"] == "completed"
+
+    # Phase 3 wiring (ADR-0013): health rollup + anomaly check, recall
+    # report, retention pruning. Independently wrapped inside
+    # run_daily_postprocess -- a failure here must not retroactively affect
+    # the watch pass's own already-finalized scan_runs status above, but
+    # must still be visible in the exit code.
+    with get_session() as session:
+        postprocess_report = run_daily_postprocess(tenant_id, session, now=_utcnow())
+    print(
+        json.dumps(
+            {
+                "health_ok": postprocess_report.health_ok,
+                "recall_ok": postprocess_report.recall_ok,
+                "retention_ok": postprocess_report.retention_ok,
+            },
+            indent=2,
+        )
+    )
+
+    return 0 if (watch_ok and postprocess_report.all_ok) else 1
 
 
 def _cli_resolve(domains: list[str]) -> int:

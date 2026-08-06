@@ -81,7 +81,7 @@ def _distinct_candidate_days(
     return sorted({(source_type, _as_date(raw_date)) for source_type, raw_date in rows})
 
 
-def _load_outcomes_for_day(
+def load_outcomes_for_day(
     tenant_id: int, source_type: str, run_date: date, session: Session
 ) -> list[ProbeOutcome]:
     start, end = _day_bounds(run_date)
@@ -103,7 +103,7 @@ def _load_outcomes_for_day(
     ]
 
 
-def _find_rollup(
+def find_rollup(
     tenant_id: int, source_type: str, run_date: date, session: Session
 ) -> SourceHealthRecord | None:
     return session.execute(
@@ -123,14 +123,14 @@ def _persist_rollup(session: Session, record: SourceHealthRecord) -> None:
     session.commit()
 
 
-def _ensure_rollup(tenant_id: int, source_type: str, run_date: date, session: Session) -> bool:
+def ensure_rollup(tenant_id: int, source_type: str, run_date: date, session: Session) -> bool:
     """Attempt to create today's rollup. Returns True only if newly created --
     NOT a safety guarantee the row exists afterward. Callers must independently
-    re-confirm via `_find_rollup` before pruning (ADR-0012 Decision 1)."""
-    if _find_rollup(tenant_id, source_type, run_date, session) is not None:
+    re-confirm via `find_rollup` before pruning (ADR-0012 Decision 1)."""
+    if find_rollup(tenant_id, source_type, run_date, session) is not None:
         return False
 
-    outcomes = _load_outcomes_for_day(tenant_id, source_type, run_date, session)
+    outcomes = load_outcomes_for_day(tenant_id, source_type, run_date, session)
     health = compute_health(outcomes, source_type=source_type, run_date=run_date)
     record = SourceHealthRecord(
         tenant_id=tenant_id,
@@ -211,9 +211,9 @@ def rollup_and_prune(
     confirmed_days: list[tuple[str, date]] = []
 
     for source_type, run_date in candidate_days:
-        if _ensure_rollup(tenant_id, source_type, run_date, session):
+        if ensure_rollup(tenant_id, source_type, run_date, session):
             rows_rolled_up += 1
-        if _find_rollup(tenant_id, source_type, run_date, session) is not None:
+        if find_rollup(tenant_id, source_type, run_date, session) is not None:
             confirmed_days.append((source_type, run_date))
         else:
             skipped_days += 1

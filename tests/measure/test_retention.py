@@ -316,13 +316,13 @@ def test_candidate_days_are_processed_in_deterministic_sorted_order(session, ten
     _probe(session, tenant, careers, run, fetched_at=day, changed=False)
 
     seen_order: list[tuple[str, date]] = []
-    original = retention_module._ensure_rollup
+    original = retention_module.ensure_rollup
 
     def _spy(tenant_id, source_type, run_date, session):
         seen_order.append((source_type, run_date))
         return original(tenant_id, source_type, run_date, session)
 
-    monkeypatch.setattr(retention_module, "_ensure_rollup", _spy)
+    monkeypatch.setattr(retention_module, "ensure_rollup", _spy)
 
     rollup_and_prune(tenant.id, session, now=NOW)
 
