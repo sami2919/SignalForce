@@ -84,6 +84,19 @@ primary_region = "sjc"          # co-located with Neon's AWS us-west-2 (Oregon)
 #   --vm-memory 1024 is required, not optional: 100 concurrency x the 8MB body
 #   cap is 800MB worst case. Fly's 256MB default would OOM mid-pass.
 #
+# A THIRD THING BIT ON 2026-08-06, adding ANTHROPIC_API_KEY for ADR-0014's verify-layer
+# wiring: `fly secrets set`/`import` DOES update the app-wide secret store immediately
+# and auto-restarts machines in the `app` process group (the web machine) to pick it
+# up -- but it does NOT touch standalone scheduled machines (signalforce-worker,
+# signalforce-holdout). A plain `fly machine start` on one of those after a secrets
+# change is NOT enough; it resumes from that machine's last-updated config snapshot,
+# which does not include the new secret. The fix is an explicit
+# `fly machine update <id> --image <current-image> --yes` (even with the same image)
+# on EVERY standalone scheduled machine after ANY secrets change -- confirmed by
+# reproducing the failure twice (ANTHROPIC_API_KEY missing at runtime, both after
+# `fly secrets import` alone and after a plain machine restart) before the explicit
+# `fly machine update` fixed it.
+#
 # It must NOT be an in-process scheduler on the web machine: with
 # min_machines_running = 0 the web machine suspends and an in-process scheduler
 # would silently stop firing. See ADR-0003 Decision 2.
