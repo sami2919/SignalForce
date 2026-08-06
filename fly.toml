@@ -39,15 +39,35 @@ primary_region = "sjc"          # co-located with Neon's AWS us-west-2 (Oregon)
 # `fly scale count 1` after the fact. For a single-user read-only dashboard
 # HA buys nothing and doubles rootfs storage cost.
 #
-# The scheduled worker is NOT defined here — its entrypoint arrives in Phase 1.
-# When it does, create it as a scheduled machine (starts, runs, exits — you pay
-# only for runtime):
+# Scheduled workers are NOT defined here — they're created as standalone
+# machines (starts, runs, exits — you pay only for runtime), not part of
+# `fly deploy`'s process group. `fly deploy` does NOT update them; after any
+# deploy that changes worker or holdout code, re-point each at the new image
+# with `fly machine update <id> --image registry.fly.io/signalforce:<tag>`.
+#
+# signalforce-worker (daily, Phase 1 — deployed 2026-08-04):
 #
 #   fly machine run registry.fly.io/signalforce:<deployment-tag> \
 #     --app signalforce --name signalforce-worker --region sjc \
 #     --schedule daily --vm-memory 1024 --vm-cpus 1 --restart no \
 #     -e TENANT_SLUG=agentmail -e LOG_LEVEL=INFO -e PYTHONUNBUFFERED=1 \
 #     --entrypoint "/bin/sh -c" "python -m scripts.watch.runner scan"
+#
+#   As of ADR-0013 (2026-08-06), this same entrypoint also runs Phase 3's
+#   health rollup + anomaly check, recall report, and retention pruning
+#   after the watch pass — see scripts/measure/daily_postprocess.py.
+#
+# signalforce-holdout (hourly, ADR-0010 Task 3.1 — deployed 2026-08-06):
+#
+#   fly machine run registry.fly.io/signalforce:<deployment-tag> \
+#     --app signalforce --name signalforce-holdout --region sjc \
+#     --schedule hourly --vm-memory 1024 --vm-cpus 1 --restart no \
+#     -e TENANT_SLUG=agentmail -e LOG_LEVEL=INFO -e PYTHONUNBUFFERED=1 \
+#     --entrypoint "/bin/sh -c" "python -m scripts.measure.holdout"
+#
+#   Runs hourly, not daily, because ADR-0010 Decision 1's whole point is a
+#   faster-than-watch cadence — a same-cadence deep scan can only measure
+#   detection lag in multiples of 24h, defeating its purpose.
 #
 # TWO THINGS THAT BIT ON THE FIRST ATTEMPT (2026-08-04):
 #
