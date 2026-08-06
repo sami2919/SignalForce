@@ -159,6 +159,25 @@ against real career pages (Task 1.2's own measurement: this exact class of sourc
 detectably) will not be rare. The fix costs a `groupby` and a `zip`; the plan's shortcut buys
 nothing worth that risk.
 
+**Correction, 2026-08-06 — matching is nearest-neighbor by proximity, not positional or
+chronological-order.** Independent review of the first implementation (commit `f98afe5`) found the
+`zip`-after-sort described above still mispairs when a false-positive watch detection lands
+*before* the real change: `deep=[h100]`, `watch=[h0 false positive, h104 genuine catch]` — zip
+pairs h100 with h0, producing a physically implausible `+100h` lag while flagging the genuine h104
+catch as extraneous. A first attempted fix (two-pointer merge, rejecting any watch event
+chronologically before its candidate deep event) resolved that but introduced a regression:
+`test_lag_is_positive_when_watch_was_faster` — deep=[h12], watch=[h0], watch legitimately beating
+deep to the change — now reported a phantom miss (`p50_lag_hours=None`), because deep running more
+*often* only makes it more often faster, not *always* faster. Chosen instead: assign each watch
+event in a key's group to its nearest deep event by absolute time distance; each deep event takes
+whichever assigned watch event is closest as its match, and any others assigned to it are
+extraneous. This resolves both the original zip defect and the two-pointer regression, since
+proximity — not order — is what actually distinguishes a genuine (possibly early) catch from a
+false positive. Also fixed in the same round: `p95_lag_hours` was computed directly on signed
+`lag`, which reports the *best* detection instead of the worst whenever lags run predominantly
+negative (the expected regime: deep hourly, watch daily). Fixed via `_tail_percentiles()`, which
+sorts on `badness = -lag` and negates the result back to `lag` units.
+
 ## What this does NOT decide
 
 - **Deployment/scheduling of the deep scan.** Decision 1 explicitly defers this — a follow-on
