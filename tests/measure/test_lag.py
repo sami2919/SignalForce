@@ -104,10 +104,11 @@ def test_two_real_changes_both_caught_are_matched_to_the_correct_watch_event_eac
 
     assert report.caught_count == 2
     assert report.missed_count == 0
-    # lags: (0-4)=-4h, (100-106)=-6h. Nearest-rank percentile over
-    # sorted([-6.0, -4.0]) at pct=0.5: idx=min(int(2*0.5),1)=1 -> -4.0.
-    assert report.p50_lag_hours == -4.0
-    assert report.p95_lag_hours == -4.0
+    # lags: (0-4)=-4h, (100-106)=-6h. Tail-correct percentile is computed
+    # over badness=-lag: sorted([4.0, 6.0]), nearest-rank idx=min(int(2*pct),1)=1
+    # for both 0.50 and 0.95 at n=2 -> badness=6.0 -> lag=-6.0 for both.
+    assert report.p50_lag_hours == -6.0
+    assert report.p95_lag_hours == -6.0
 
 
 def test_matching_is_chronological_not_input_order():
@@ -166,6 +167,50 @@ def test_different_keys_do_not_interfere_with_each_other():
     assert report.deep_count == 2
     assert report.caught_count == 1
     assert report.missed_count == 1
+
+
+# ---------------------------------------------------------------------------
+# Nearest-neighbor matching (second review correction, 2026-08-06) --
+# proximity, not chronological order, decides which watch event is genuine.
+# ---------------------------------------------------------------------------
+
+
+def test_early_false_positive_does_not_steal_the_match_from_the_genuine_late_catch():
+    """The exact IMPORTANT-2 scenario from review: one real change at h100,
+    an early false-positive watch detection at h0, and the genuine catch at
+    h104. A positional zip pairs h100 with h0 (a physically implausible
+    +100h lag) and flags h104 as extraneous -- backwards. Nearest-neighbor
+    assignment must pair h100 with the CLOSER h104 and flag h0 as
+    extraneous instead.
+    """
+    deep = [_dc(1, "careers", 100)]
+    watch = [_dc(1, "careers", 0), _dc(1, "careers", 104)]
+
+    report = compute_recall(deep, watch)
+
+    assert report.caught_count == 1
+    assert report.missed_count == 0
+    assert report.p50_lag_hours == -4.0  # 100 - 104
+    assert report.extraneous_watch_count == 1
+    assert report.extraneous_watch[0].detected_at == NOW
+
+
+def test_watch_beating_deep_to_a_real_change_is_still_a_genuine_catch():
+    """Regression test for the two-pointer version's regression: a watch
+    event chronologically BEFORE its matching deep event is not
+    automatically illegitimate -- deep running more often makes it usually
+    but not always faster. With only one event on each side there is no
+    ambiguity to resolve, so they must be paired regardless of order.
+    """
+    deep = [_dc(1, "careers", 12)]
+    watch = [_dc(1, "careers", 0)]
+
+    report = compute_recall(deep, watch)
+
+    assert report.caught_count == 1
+    assert report.missed_count == 0
+    assert report.extraneous_watch_count == 0
+    assert report.p50_lag_hours == 12.0
 
 
 # ---------------------------------------------------------------------------
