@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -132,6 +133,31 @@ class HoldoutScan(Base):
 
     tenant: Mapped[Tenant] = relationship()
     account_source: Mapped[AccountSource] = relationship()
+
+
+class SourceHealthRecord(Base):
+    """Persisted rollup of one (tenant, source_type, day)'s probe outcomes (ADR-0012).
+
+    Named `*Record` to distinguish it from `scripts.measure.health.SourceHealth`,
+    the pure Pydantic aggregate `compute_health` returns -- that struct has no
+    DB coupling; this table is where `scripts.measure.retention.rollup_and_prune`
+    persists it before pruning the raw `probes` rows it was computed from.
+    `parse_success_rate`/`zero_result_rate` stay NULL until the verify layer
+    gets a caller (ADR-0011 Decision 1) -- this table doesn't change that scope.
+    """
+
+    __tablename__ = "source_health"
+    __table_args__ = (UniqueConstraint("tenant_id", "source_type", "run_date"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    run_date: Mapped[date] = mapped_column(Date, nullable=False)
+    fetch_success_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    parse_success_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    zero_result_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sample_size: Mapped[int] = mapped_column(Integer, default=0)
+
+    tenant: Mapped[Tenant] = relationship()
 
 
 class SignalEvent(Base):
