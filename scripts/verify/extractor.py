@@ -513,6 +513,22 @@ def extract_careers(html: str, *, client: Anthropic | None = None) -> CareersFac
     Raises `ExtractorError` on any API failure. Never returns an empty `CareersFacts`
     to signal a failure — a page with genuinely zero open roles and a failed
     extraction call must never look the same to a caller.
+
+    Thin wrapper over `extract_careers_with_usage` — see that function for a variant
+    that also returns token usage (needed by scripts/verify/wiring.py for cost
+    tracking, ADR-0014 Decision 5). This function's own behavior is unchanged by
+    that split; it simply discards the usage half.
+    """
+    facts, _usage = extract_careers_with_usage(html, client=client)
+    return facts
+
+
+def extract_careers_with_usage(
+    html: str, *, client: Anthropic | None = None
+) -> tuple[CareersFacts, object]:
+    """Same as `extract_careers`, but also returns the raw Anthropic `usage` object
+    (the same one `extract_careers` already logs internally) for callers that need
+    to compute a per-call cost — see scripts/verify/wiring.py.
     """
     if client is None:
         client = _default_client()
@@ -579,7 +595,7 @@ def extract_careers(html: str, *, client: Anthropic | None = None) -> CareersFac
         )
 
     _warn_on_identity_collisions(jobs)
-    return CareersFacts(jobs=tuple(jobs))
+    return CareersFacts(jobs=tuple(jobs)), usage
 
 
 if __name__ == "__main__":

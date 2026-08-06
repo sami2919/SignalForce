@@ -160,6 +160,32 @@ class SourceHealthRecord(Base):
     tenant: Mapped[Tenant] = relationship()
 
 
+class FactSnapshot(Base):
+    """The most recently confirmed fact snapshot for one source (ADR-0014).
+
+    One row per `account_source_id`, upserted in place -- NOT append-only.
+    `diff_facts` (scripts/verify/differ.py) only ever needs the single most
+    recent snapshot as "previous"; this table holds exactly that and nothing
+    more, the same "don't build storage ahead of a real read need" call
+    ADR-0011/0013 already made for parse_success_rate and recall/anomaly
+    persistence. `payload` is a plain JSON column (not MutableDict-wrapped,
+    Task 0.1's finding) -- always assign a whole new dict, never mutate one
+    fetched from a row in place.
+    """
+
+    __tablename__ = "fact_snapshots"
+    __table_args__ = (UniqueConstraint("account_source_id"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    account_source_id: Mapped[int] = mapped_column(ForeignKey("account_sources.id"), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    payload: Mapped[dict] = mapped_column(JSONType, default=dict)
+
+    tenant: Mapped[Tenant] = relationship()
+    account_source: Mapped[AccountSource] = relationship()
+
+
 class SignalEvent(Base):
     """A signal is a DIFF, not a snapshot."""
 

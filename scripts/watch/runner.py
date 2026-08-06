@@ -43,6 +43,7 @@ from scripts.registry.resolver import resolve_sources
 from scripts.registry.store import StoreResult, ensure_tenant, store_resolution
 from scripts.storage.models import AccountSource, Probe, ScanRun
 from scripts.storage.session import get_session
+from scripts.verify.wiring import run_verify_stage
 from scripts.watch.fetcher import ProbeResult, SourceRef, fetch_all
 
 logger = logging.getLogger(__name__)
@@ -119,8 +120,10 @@ async def run_watch_pass(
     `on_confirmed_change`, if provided, is invoked once per source with
     `(source_id, body)` for every CONFIRMED content change (ADR-0008
     Decision 2 amendment) — never for a phase-2-only mismatch that phase 3's
-    confirm fetch rejects, and never for a first-ever baseline probe. Nothing
-    passes this yet; Task 2.3 is the first real consumer.
+    confirm fetch rejects, and never for a first-ever baseline probe.
+    `_cli_scan` is the real consumer (ADR-0014): it collects these bodies
+    and hands them to `scripts.verify.wiring.run_verify_stage` after this
+    pass returns.
     """
     # --- Phase 1: sync DB read ---
     with get_session() as session:
@@ -319,8 +322,11 @@ def _cli_scan() -> int:
     with get_session() as session:
         tenant_id = ensure_tenant(tenant_slug, tenant_slug, session)
 
+    retained_bodies: dict[int, str] = {}
     try:
-        run_id = asyncio.run(run_watch_pass(tenant_id))
+        run_id = asyncio.run(
+            run_watch_pass(tenant_id, on_confirmed_change=retained_bodies.__setitem__)
+        )
     except Exception as exc:  # noqa: BLE001
         logger.error("watch pass failed", extra={"error": str(exc)})
         return 1
@@ -345,6 +351,21 @@ def _cli_scan() -> int:
     print(json.dumps(payload, indent=2))
     watch_ok = payload["status"] == "completed"
 
+    # Verify layer (ADR-0014): extraction + diff + signal_events for
+    # confirmed careers-page changes, bounded by a daily budget. Each
+    # source is independently isolated inside run_verify_stage itself;
+    # this try/except is the outer safety net for anything structural
+    # (e.g. a DB error) escaping that -- must not affect the watch pass's
+    # own already-recorded status above.
+    verify_ok = True
+    with get_session() as session:
+        try:
+            verify_report = run_verify_stage(tenant_id, session, run_id, retained_bodies, _utcnow())
+            print(json.dumps(verify_report.model_dump(), indent=2))
+        except Exception as exc:  # noqa: BLE001
+            logger.error("verify stage failed", extra={"error": str(exc)})
+            verify_ok = False
+
     # Phase 3 wiring (ADR-0013): health rollup + anomaly check, recall
     # report, retention pruning. Independently wrapped inside
     # run_daily_postprocess -- a failure here must not retroactively affect
@@ -363,7 +384,7 @@ def _cli_scan() -> int:
         )
     )
 
-    return 0 if (watch_ok and postprocess_report.all_ok) else 1
+    return 0 if (watch_ok and verify_ok and postprocess_report.all_ok) else 1
 
 
 def _cli_resolve(domains: list[str]) -> int:
