@@ -114,10 +114,27 @@ def _load_sources_for_accounts(
 
 
 def _most_recent_prior_scan(source_id: int, session: Session) -> HoldoutScan | None:
+    """The most recent scan for this source that actually succeeded.
+
+    Fixed on review, 2026-08-06: the original query ordered by fetched_at
+    with no filter, so a failed fetch (content_hash=None) between two real
+    content states reset the comparison baseline to nothing instead of
+    falling back to the last known-good hash. Reproduced: scan N-1 succeeds
+    with hash A, scan N fails, scan N+1 succeeds with hash B (a genuine
+    change) -- the unfiltered query returned scan N's row, whose
+    content_hash is None, so `changed` computed False for a real A->B
+    change. That is the deep scan silently UNDER-counting the exact thing
+    it exists to catch, and it is not rare: a transient fetch failure
+    between two successful scans is routine over an indefinite hourly
+    cadence, not an edge case.
+    """
     return (
         session.execute(
             select(HoldoutScan)
-            .where(HoldoutScan.account_source_id == source_id)
+            .where(
+                HoldoutScan.account_source_id == source_id,
+                HoldoutScan.content_hash.is_not(None),
+            )
             .order_by(HoldoutScan.fetched_at.desc())
             .limit(1)
         )

@@ -291,6 +291,24 @@ async def test_last_hash_is_never_touched(session_factory, _patch_client):
 
 
 @pytest.mark.asyncio
+async def test_inactive_sources_are_excluded_from_the_deep_scan(session_factory, _patch_client):
+    # Mutation-confirmed gap: removing the active=True filter passed every
+    # other test in this file. A deactivated source (e.g. one the watch
+    # layer gave up on after 5 consecutive failures) must not be
+    # fetched or scored as ground truth.
+    tenant_id, source_ids = _make_tenant_and_sources(
+        session_factory, ["https://acme.com/careers"], active=False
+    )
+
+    _patch_client["handler"] = _static_handler(PAGE_A)
+    await run_deep_scan(tenant_id, holdout_size=5, seed=42)
+
+    session = session_factory()
+    rows = session.query(HoldoutScan).filter(HoldoutScan.account_source_id == source_ids[0]).all()
+    assert rows == []
+
+
+@pytest.mark.asyncio
 async def test_watch_pass_still_runs_unmodified_against_holdout_accounts(
     session_factory, _patch_client
 ):
@@ -439,3 +457,46 @@ async def test_one_failing_source_does_not_abort_the_deep_scan(session_factory, 
     assert by_source[source_ids[0]].error is not None
     assert by_source[source_ids[1]].error is None
     assert by_source[source_ids[1]].changed is False
+
+
+@pytest.mark.asyncio
+async def test_a_failed_fetch_between_two_real_states_does_not_hide_the_change(
+    session_factory, _patch_client
+):
+    """Fixed on review, 2026-08-06: _most_recent_prior_scan grabbed the
+    literal most recent HoldoutScan row with no content_hash filter, so a
+    failed fetch between two successful scans reset the comparison baseline
+    to None instead of falling back to the last known-good hash. Reproduced:
+    scan 1 succeeds (PAGE_A), scan 2 fails, scan 3 succeeds with genuinely
+    different content (PAGE_B) -- scan 3 must report changed=True against
+    scan 1's hash, not silently compare against scan 2's null hash and
+    report no change. This is the deep scan's whole reason to exist: it
+    must never under-count a real change.
+    """
+    tenant_id, source_ids = _make_tenant_and_sources(session_factory, ["https://acme.com/careers"])
+
+    _patch_client["handler"] = _static_handler(PAGE_A)
+    await run_deep_scan(tenant_id, holdout_size=1, seed=42)  # scan 1: succeeds, hash(A)
+
+    def failing_handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text=ROBOTS_ALLOW)
+        raise httpx.ConnectError("boom")
+
+    _patch_client["handler"] = failing_handler
+    await run_deep_scan(tenant_id, holdout_size=1, seed=42)  # scan 2: fails
+
+    _patch_client["handler"] = _static_handler(PAGE_B)
+    await run_deep_scan(tenant_id, holdout_size=1, seed=42)  # scan 3: succeeds, hash(B) != hash(A)
+
+    session = session_factory()
+    rows = (
+        session.query(HoldoutScan)
+        .filter(HoldoutScan.account_source_id == source_ids[0])
+        .order_by(HoldoutScan.fetched_at)
+        .all()
+    )
+    assert len(rows) == 3
+    assert rows[0].changed is False  # first-ever scan: seeds silently
+    assert rows[1].content_hash is None  # the failed fetch
+    assert rows[2].changed is True  # THE REGRESSION: must detect A->B despite the gap
