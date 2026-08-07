@@ -236,6 +236,17 @@ def account_detail(request: Request, account_id: int) -> HTMLResponse:
 # ---------------------------------------------------------------------------
 
 
+def _count_deactivated_sources(tenant_id: int, session: Session) -> int:
+    """ADR-0024: the count half of CRITICAL GAP #4's fix -- re-resolution
+    (ADR-0004 Decision 6) already gives a deactivated source a way back,
+    but nothing surfaced that any existed until this."""
+    return session.execute(
+        select(func.count())
+        .select_from(AccountSource)
+        .where(AccountSource.tenant_id == tenant_id, AccountSource.active.is_(False))
+    ).scalar_one()
+
+
 def _load_health_rows(tenant_id: int, session: Session) -> list[dict[str, object]]:
     cutoff = (_utcnow() - timedelta(days=_HEALTH_TRAILING_DAYS)).date()
     rows = (
@@ -271,11 +282,19 @@ def health(request: Request) -> HTMLResponse:
         if tenant_id is None:
             recall_report = None
             health_rows: list[dict[str, object]] = []
+            deactivated_sources = None
         else:
             recall_report = compute_recall_for_tenant(tenant_id, session, _utcnow())
             health_rows = _load_health_rows(tenant_id, session)
+            deactivated_sources = _count_deactivated_sources(tenant_id, session)
         return templates.TemplateResponse(
-            request, "health.html", {"recall": recall_report, "health_rows": health_rows}
+            request,
+            "health.html",
+            {
+                "recall": recall_report,
+                "health_rows": health_rows,
+                "deactivated_sources": deactivated_sources,
+            },
         )
 
 

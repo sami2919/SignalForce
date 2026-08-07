@@ -370,6 +370,67 @@ def test_health_page_with_no_tenant_renders_empty_state(client, monkeypatch):
     assert resp.status_code == 200
 
 
+def test_health_page_shows_zero_deactivated_sources_when_none_are(client, seeded_db):
+    """ADR-0024. seeded_db's one AccountSource is active=True -- the count
+    must show a real 0, not omit the metric or render it as '—' (that's
+    reserved for the no-tenant case)."""
+    resp = client.get("/dashboard/health")
+    assert "Deactivated sources" in resp.text
+    assert ">0<" in resp.text
+
+
+def test_health_page_counts_deactivated_sources(client, seeded_db, session_factory):
+    """ADR-0024 Decision 1 -- the whole point of this metric: a source that
+    stopped being probed must be visible, not silently absent from the
+    page. Uses seeded_db's quiet_id account, which has no source of its
+    own yet, so this is unambiguously the row being counted."""
+    session = session_factory()
+    session.add(
+        AccountSource(
+            tenant_id=seeded_db["tenant_id"],
+            account_id=seeded_db["quiet_id"],
+            source_type="careers",
+            url="https://quiet.com/careers",
+            active=False,
+            consecutive_failures=5,
+        )
+    )
+    session.commit()
+    session.close()
+
+    resp = client.get("/dashboard/health")
+    assert "Deactivated sources" in resp.text
+    assert ">1<" in resp.text
+
+
+def test_deactivated_sources_are_scoped_to_the_current_tenant(client, seeded_db, session_factory):
+    """Mutation-confirmed: dropping the tenant_id filter survived every
+    other test, since they all use a single tenant. A deactivated source
+    belonging to a DIFFERENT tenant must not inflate this tenant's count."""
+    session = session_factory()
+    other_tenant = Tenant(slug="other", name="Other")
+    session.add(other_tenant)
+    session.commit()
+    other_account = Account(tenant_id=other_tenant.id, domain="other.com", name="Other Co")
+    session.add(other_account)
+    session.commit()
+    session.add(
+        AccountSource(
+            tenant_id=other_tenant.id,
+            account_id=other_account.id,
+            source_type="careers",
+            url="https://other.com/careers",
+            active=False,
+            consecutive_failures=5,
+        )
+    )
+    session.commit()
+    session.close()
+
+    resp = client.get("/dashboard/health")
+    assert ">0<" in resp.text
+
+
 # ---------------------------------------------------------------------------
 # /dashboard/runs
 # ---------------------------------------------------------------------------

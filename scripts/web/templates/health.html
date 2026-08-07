@@ -27,6 +27,10 @@
     {% if recall.missed_count %}
       <p class="muted">{{ recall.missed_count }} missed, {{ recall.extraneous_watch_count }} extraneous watch detections in the trailing window.</p>
     {% endif %}
+    <div class="metric">
+      <span class="value {{ 'badge-warn' if deactivated_sources else '' }}">{{ deactivated_sources if deactivated_sources is not none else "—" }}</span>
+      <span class="label">Deactivated sources</span>
+    </div>
   {% endif %}
 </section>
 
