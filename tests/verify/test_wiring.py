@@ -15,10 +15,10 @@ import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
-from scripts.storage.models import Account, AccountSource, Base, ScanRun, SignalEvent, Tenant
+from scripts.storage.models import Account, AccountSource, Base, ScanRun, Score, SignalEvent, Tenant
 from scripts.verify import wiring as wiring_module
 from scripts.verify.extractor import CareersFacts, ExtractorError, JobFact
-from scripts.verify.gate import VerifyBudget
+from scripts.verify.gate import VerifyBudget, select_for_verification
 from scripts.verify.wiring import run_verify_stage
 
 NOW = datetime(2026, 8, 7, tzinfo=timezone.utc)
@@ -91,6 +91,54 @@ def test_no_retained_bodies_yields_empty_report(session, tenant):
     assert report.candidates == 0
     assert report.selected == 0
     assert report.extracted == 0
+
+
+def test_gate_receives_the_most_recently_stored_account_score(session, tenant, monkeypatch):
+    """ADR-0016 Decision 5: the gate must see a real, previously-computed
+    score, not the 0.0 placeholder -- checked by spying on the exact
+    ChangeRef objects passed into select_for_verification."""
+    source = _make_source(session, tenant)
+    run = _make_scan_run(session, tenant)
+    session.add(
+        Score(tenant_id=tenant.id, account_id=source.account_id, score=77.0, computed_at=NOW)
+    )
+    session.commit()
+    monkeypatch.setattr(
+        wiring_module, "extract_careers_with_usage", lambda html: (CareersFacts(jobs=()), _usage())
+    )
+
+    seen_refs = []
+
+    def _spy(changes, budget):
+        seen_refs.extend(changes)
+        return select_for_verification(changes, budget)
+
+    monkeypatch.setattr(wiring_module, "select_for_verification", _spy)
+
+    run_verify_stage(tenant.id, session, run.id, {source.id: "<html/>"}, NOW)
+
+    assert len(seen_refs) == 1
+    assert seen_refs[0].account_score == 77.0
+
+
+def test_gate_falls_back_to_zero_for_an_account_with_no_score_yet(session, tenant, monkeypatch):
+    source = _make_source(session, tenant)
+    run = _make_scan_run(session, tenant)
+    monkeypatch.setattr(
+        wiring_module, "extract_careers_with_usage", lambda html: (CareersFacts(jobs=()), _usage())
+    )
+
+    seen_refs = []
+
+    def _spy(changes, budget):
+        seen_refs.extend(changes)
+        return select_for_verification(changes, budget)
+
+    monkeypatch.setattr(wiring_module, "select_for_verification", _spy)
+
+    run_verify_stage(tenant.id, session, run.id, {source.id: "<html/>"}, NOW)
+
+    assert seen_refs[0].account_score == 0.0
 
 
 def test_non_careers_sources_are_excluded_from_candidates(session, tenant, monkeypatch):

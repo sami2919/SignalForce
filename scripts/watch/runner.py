@@ -41,6 +41,7 @@ from scripts.logging_config import configure_logging
 from scripts.measure.daily_postprocess import run_daily_postprocess
 from scripts.registry.resolver import resolve_sources
 from scripts.registry.store import StoreResult, ensure_tenant, store_resolution
+from scripts.scoring.wiring import run_scoring_stage
 from scripts.storage.models import AccountSource, Probe, ScanRun
 from scripts.storage.session import get_session
 from scripts.verify.wiring import run_verify_stage
@@ -366,6 +367,19 @@ def _cli_scan() -> int:
             logger.error("verify stage failed", extra={"error": str(exc)})
             verify_ok = False
 
+    # Scoring (ADR-0016): scores every account from a trailing window of
+    # signal_events -- including whatever the verify stage above just
+    # emitted. Runs after verify for that reason. One more independently
+    # wrapped stage, same posture as verify and Phase 3 postprocess below.
+    scoring_ok = True
+    with get_session() as session:
+        try:
+            scoring_report = run_scoring_stage(tenant_id, session, _utcnow())
+            print(json.dumps(scoring_report.model_dump(), indent=2))
+        except Exception as exc:  # noqa: BLE001
+            logger.error("scoring stage failed", extra={"error": str(exc)})
+            scoring_ok = False
+
     # Phase 3 wiring (ADR-0013): health rollup + anomaly check, recall
     # report, retention pruning. Independently wrapped inside
     # run_daily_postprocess -- a failure here must not retroactively affect
@@ -384,7 +398,7 @@ def _cli_scan() -> int:
         )
     )
 
-    return 0 if (watch_ok and verify_ok and postprocess_report.all_ok) else 1
+    return 0 if (watch_ok and verify_ok and scoring_ok and postprocess_report.all_ok) else 1
 
 
 def _cli_resolve(domains: list[str]) -> int:

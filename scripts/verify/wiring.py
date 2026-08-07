@@ -23,6 +23,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from scripts.scoring.wiring import load_latest_account_score
 from scripts.storage.models import AccountSource, FactSnapshot, ScanRun, SignalEvent
 from scripts.verify.differ import DiffOutcome, diff_facts
 from scripts.verify.extractor import (
@@ -129,7 +130,18 @@ def run_verify_stage(
 ) -> VerifyStageReport:
     sources_by_id = _careers_sources(tenant_id, list(retained_bodies.keys()), session)
 
-    changes = [ChangeRef(source_id=src_id, source_type="careers") for src_id in sources_by_id]
+    # ADR-0016 Decision 5: the gate uses the most recently STORED score --
+    # never a same-run one. Today's Score doesn't exist until the scoring
+    # stage runs (after this one), computed from signals this very stage is
+    # about to emit -- there is no way to close that loop same-run.
+    changes = [
+        ChangeRef(
+            source_id=src_id,
+            source_type="careers",
+            account_score=load_latest_account_score(tenant_id, source.account_id, session),
+        )
+        for src_id, source in sources_by_id.items()
+    ]
     selected = select_for_verification(changes, budget)
 
     extracted = 0
