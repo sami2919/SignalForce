@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from scripts.logging_config import configure_logging
 from scripts.web.routes_dashboard import router as dashboard_router
 from scripts.web.routes_health import router as health_router
+from scripts.web.routes_webhooks import router as webhooks_router
 
 
 def create_app() -> FastAPI:
@@ -24,6 +25,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(health_router)
     app.include_router(dashboard_router)
+    app.include_router(webhooks_router)
     return app
 
 

@@ -23,6 +23,7 @@ dependencies = [
     "uvicorn[standard]>=0.32",
     "httpx>=0.27",
     "selectolax>=0.3",
+    "svix>=1.24",
 ]
 
 [tool.setuptools.packages.find]
