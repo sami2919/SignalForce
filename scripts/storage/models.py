@@ -286,3 +286,81 @@ class ScanRun(Base):
     tenant: Mapped[Tenant] = relationship()
     probes: Mapped[list[Probe]] = relationship(back_populates="scan_run")
     signal_events: Mapped[list[SignalEvent]] = relationship(back_populates="scan_run")
+
+
+class Persona(Base):
+    """Persisted persona definitions (ADR-0019). Same shape as
+    `scripts.scoring.personas.PersonaDefinition` -- converting a row into that
+    pure input is a direct field copy."""
+
+    __tablename__ = "personas"
+    __table_args__ = (UniqueConstraint("tenant_id", "name"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    title_patterns: Mapped[list] = mapped_column(JSONType, default=list)
+    seniority_min: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    tenant: Mapped[Tenant] = relationship()
+
+
+class Audience(Base):
+    """Persisted audience predicates (ADR-0019). Same shape as
+    `scripts.scoring.audiences.evaluate`'s predicate dict -- a row's `predicate`
+    column is passed to `evaluate` directly, unchanged."""
+
+    __tablename__ = "audiences"
+    __table_args__ = (UniqueConstraint("tenant_id", "name"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    predicate: Mapped[dict] = mapped_column(JSONType, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    tenant: Mapped[Tenant] = relationship()
+
+
+class Contact(Base):
+    """A person at an account (ADR-0019)."""
+
+    __tablename__ = "contacts"
+    __table_args__ = (UniqueConstraint("tenant_id", "email"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id"), nullable=False)
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), default="")
+    title: Mapped[str] = mapped_column(String(255), default="")
+    persona_id: Mapped[int | None] = mapped_column(ForeignKey("personas.id"), nullable=True)
+
+    tenant: Mapped[Tenant] = relationship()
+    account: Mapped[Account] = relationship()
+    persona: Mapped[Persona | None] = relationship()
+
+
+class Outreach(Base):
+    """One outbound message and its outcome (ADR-0019).
+
+    `agentmail_thread_id` is UNIQUE -- Task 5.2's reply webhook looks up a row
+    by this field on every inbound reply; the constraint turns "multiple rows
+    matched" from a silent correctness bug into a database-enforced
+    impossibility. `audience_id` is nullable -- a one-off outreach that isn't
+    the product of a formal audience predicate is a real, expected case.
+    """
+
+    __tablename__ = "outreach"
+    __table_args__ = (UniqueConstraint("agentmail_thread_id"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    contact_id: Mapped[int] = mapped_column(ForeignKey("contacts.id"), nullable=False)
+    audience_id: Mapped[int | None] = mapped_column(ForeignKey("audiences.id"), nullable=True)
+    agentmail_inbox_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    agentmail_thread_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    replied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reply_classification: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    triggering_signal_ids: Mapped[list] = mapped_column(JSONType, default=list)
+
+    tenant: Mapped[Tenant] = relationship()
+    contact: Mapped[Contact] = relationship()
+    audience: Mapped[Audience | None] = relationship()

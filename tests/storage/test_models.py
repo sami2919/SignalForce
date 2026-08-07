@@ -5,7 +5,11 @@ from sqlalchemy.orm import sessionmaker
 from scripts.storage.models import (
     Account,
     AccountSource,
+    Audience,
     Base,
+    Contact,
+    Outreach,
+    Persona,
     Probe,
     ScanRun,
     Score,
@@ -180,3 +184,193 @@ def test_scan_run_persists_with_running_status_and_nullable_finished_at(session)
     row = session.query(ScanRun).one()
     assert row.status == "running"
     assert row.finished_at is None
+
+
+# ---------------------------------------------------------------------------
+# ADR-0019: Persona, Audience, Contact, Outreach
+# ---------------------------------------------------------------------------
+
+
+def test_persona_round_trips_title_patterns(session):
+    t = Tenant(slug="t1", name="T1")
+    session.add(t)
+    session.commit()
+
+    persona = Persona(
+        tenant=t, name="Growth Marketer", title_patterns=["growth", "demand gen"], seniority_min=1
+    )
+    session.add(persona)
+    session.commit()
+
+    row = session.query(Persona).one()
+    assert row.title_patterns == ["growth", "demand gen"]
+    assert row.seniority_min == 1
+
+
+def test_persona_name_is_unique_per_tenant(session):
+    t = Tenant(slug="t1", name="T1")
+    session.add(t)
+    session.commit()
+    session.add(Persona(tenant=t, name="Growth Marketer", title_patterns=[], seniority_min=1))
+    session.commit()
+
+    session.add(Persona(tenant=t, name="Growth Marketer", title_patterns=[], seniority_min=2))
+    with pytest.raises(Exception):
+        session.commit()
+
+
+def test_audience_round_trips_predicate(session):
+    t = Tenant(slug="t1", name="T1")
+    session.add(t)
+    session.commit()
+
+    predicate = {"and": [{"has_signal": "hiring"}, {"min_score": 60}]}
+    audience = Audience(tenant=t, name="Hot leads", predicate=predicate)
+    session.add(audience)
+    session.commit()
+
+    row = session.query(Audience).one()
+    assert row.predicate == predicate
+
+
+def test_contact_links_to_account_and_optional_persona(session):
+    t = Tenant(slug="t1", name="T1")
+    a = Account(tenant=t, domain="acme.com", name="Acme")
+    session.add_all([t, a])
+    session.commit()
+    persona = Persona(tenant=t, name="Growth Marketer", title_patterns=["growth"], seniority_min=1)
+    session.add(persona)
+    session.commit()
+
+    contact = Contact(
+        tenant=t,
+        account=a,
+        email="jane@acme.com",
+        name="Jane Doe",
+        title="Growth Lead",
+        persona=persona,
+    )
+    session.add(contact)
+    session.commit()
+
+    row = session.query(Contact).one()
+    assert row.email == "jane@acme.com"
+    assert row.persona.name == "Growth Marketer"
+
+
+def test_contact_without_a_persona_is_allowed(session):
+    t = Tenant(slug="t1", name="T1")
+    a = Account(tenant=t, domain="acme.com", name="Acme")
+    session.add_all([t, a])
+    session.commit()
+
+    contact = Contact(tenant=t, account=a, email="jane@acme.com")
+    session.add(contact)
+    session.commit()
+
+    row = session.query(Contact).one()
+    assert row.persona_id is None
+
+
+def test_contact_email_is_unique_per_tenant(session):
+    t = Tenant(slug="t1", name="T1")
+    a = Account(tenant=t, domain="acme.com", name="Acme")
+    session.add_all([t, a])
+    session.commit()
+    session.add(Contact(tenant=t, account=a, email="jane@acme.com"))
+    session.commit()
+
+    session.add(Contact(tenant=t, account=a, email="jane@acme.com"))
+    with pytest.raises(Exception):
+        session.commit()
+
+
+def test_outreach_round_trips_triggering_signal_ids(session):
+    from datetime import datetime, timezone
+
+    t = Tenant(slug="t1", name="T1")
+    a = Account(tenant=t, domain="acme.com", name="Acme")
+    session.add_all([t, a])
+    session.commit()
+    contact = Contact(tenant=t, account=a, email="jane@acme.com")
+    session.add(contact)
+    session.commit()
+
+    outreach = Outreach(
+        tenant=t,
+        contact=contact,
+        agentmail_inbox_id="ib_123",
+        agentmail_thread_id="th_456",
+        sent_at=datetime.now(timezone.utc),
+        triggering_signal_ids=[1, 2, 3],
+    )
+    session.add(outreach)
+    session.commit()
+
+    row = session.query(Outreach).one()
+    assert row.triggering_signal_ids == [1, 2, 3]
+    assert row.audience_id is None
+    assert row.replied_at is None
+
+
+def test_outreach_agentmail_thread_id_is_globally_unique(session):
+    from datetime import datetime, timezone
+
+    t = Tenant(slug="t1", name="T1")
+    a = Account(tenant=t, domain="acme.com", name="Acme")
+    session.add_all([t, a])
+    session.commit()
+    contact1 = Contact(tenant=t, account=a, email="jane@acme.com")
+    contact2 = Contact(tenant=t, account=a, email="john@acme.com")
+    session.add_all([contact1, contact2])
+    session.commit()
+
+    session.add(
+        Outreach(
+            tenant=t,
+            contact=contact1,
+            agentmail_inbox_id="ib_123",
+            agentmail_thread_id="th_dup",
+            sent_at=datetime.now(timezone.utc),
+        )
+    )
+    session.commit()
+
+    session.add(
+        Outreach(
+            tenant=t,
+            contact=contact2,
+            agentmail_inbox_id="ib_123",
+            agentmail_thread_id="th_dup",
+            sent_at=datetime.now(timezone.utc),
+        )
+    )
+    with pytest.raises(Exception):
+        session.commit()
+
+
+def test_outreach_with_an_audience_links_back_to_the_predicate(session):
+    from datetime import datetime, timezone
+
+    t = Tenant(slug="t1", name="T1")
+    a = Account(tenant=t, domain="acme.com", name="Acme")
+    session.add_all([t, a])
+    session.commit()
+    contact = Contact(tenant=t, account=a, email="jane@acme.com")
+    audience = Audience(tenant=t, name="Hot leads", predicate={"min_score": 60})
+    session.add_all([contact, audience])
+    session.commit()
+
+    outreach = Outreach(
+        tenant=t,
+        contact=contact,
+        audience=audience,
+        agentmail_inbox_id="ib_123",
+        agentmail_thread_id="th_789",
+        sent_at=datetime.now(timezone.utc),
+    )
+    session.add(outreach)
+    session.commit()
+
+    row = session.query(Outreach).one()
+    assert row.audience.predicate == {"min_score": 60}
