@@ -141,6 +141,50 @@ def test_a_score_already_in_range_is_not_flagged_as_clamped(monkeypatch, caplog)
 
 
 # ---------------------------------------------------------------------------
+# _combine's actual formula, pinned. The tests above only check relative
+# orderings (recent > old, breadth > single) -- robust to almost any
+# monotonic transformation, so they don't catch a mutation that just rescales
+# everything uniformly. Mutation-confirmed: removing the is_icp split, the
+# sqrt dampening, or the distinct-vs-total-count breadth check all survived
+# the ordering-only tests above. These pin exact values by hand.
+# ---------------------------------------------------------------------------
+
+
+def test_icp_and_intent_signals_are_weighted_differently():
+    """ICP_WEIGHT=0.4, INTENT_WEIGHT=0.6 must actually apply -- an is_icp
+    signal and an otherwise-identical intent signal must score differently,
+    not just both count the same."""
+    icp_only = score_account([_sig("stack", 0, weight=1.0, is_icp=True)], now=NOW)
+    intent_only = score_account([_sig("hiring", 0, weight=1.0, is_icp=False)], now=NOW)
+
+    assert icp_only.score == pytest.approx(12.65, abs=1e-2)
+    assert intent_only.score == pytest.approx(15.49, abs=1e-2)
+    assert intent_only.score > icp_only.score  # 0.6 > 0.4
+
+
+def test_three_signals_of_the_same_type_get_no_breadth_bonus():
+    """Breadth is rewarded per DISTINCT signal_type, not per signal count --
+    three "hiring" signals must score as one undifferentiated pool, not get
+    the same breadth credit as three different signal types."""
+    same_type = score_account(
+        [_sig("hiring", 0, 0.3), _sig("hiring", 0, 0.3), _sig("hiring", 0, 0.3)], now=NOW
+    )
+    assert same_type.score == pytest.approx(14.70, abs=1e-2)
+
+
+def test_three_distinct_types_score_higher_than_three_of_the_same_type():
+    """Isolates the breadth multiplier specifically: identical total weight,
+    only signal_type diversity differs."""
+    same_type = score_account(
+        [_sig("hiring", 0, 0.3), _sig("hiring", 0, 0.3), _sig("hiring", 0, 0.3)], now=NOW
+    )
+    distinct_types = score_account(
+        [_sig("hiring", 0, 0.3), _sig("funding", 0, 0.3), _sig("stack", 0, 0.3)], now=NOW
+    )
+    assert distinct_types.score > same_type.score
+
+
+# ---------------------------------------------------------------------------
 # ADR-0015 Decision 1: _combine receives typed ScoreComponent objects.
 # ---------------------------------------------------------------------------
 

@@ -100,8 +100,25 @@ def _combine(components: list[ScoreComponent]) -> float:
     that only fires at 3+ distinct types? Each choice says something different
     about what you believe a "buying window" is.
     """
-    # TODO(sami): ~10 lines. This is the opinion at the center of the product.
-    raise NotImplementedError("_combine is Task 4.1's one hand-written piece — see its docstring")
+    if not components:
+        return 0.0
+
+    icp_sum = sum(c.decayed_weight for c in components if c.is_icp)
+    intent_sum = sum(c.decayed_weight for c in components if not c.is_icp)
+    weighted_sum = ICP_WEIGHT * icp_sum + INTENT_WEIGHT * intent_sum
+
+    # sqrt dampens a single huge signal from dominating on its own -- doubling
+    # one signal's weight does not double its contribution.
+    base = math.sqrt(weighted_sum) * 20.0
+
+    # Breadth is rewarded structurally, not just arithmetically: a flat +15%
+    # per additional DISTINCT signal_type (not per signal), so three signals
+    # of the same type get no breadth credit, but hiring+funding+stack does --
+    # "three weak signals converging" means three different KINDS of evidence.
+    distinct_types = len({c.signal_type for c in components})
+    breadth_multiplier = 1.0 + 0.15 * (distinct_types - 1)
+
+    return base * breadth_multiplier
 
 
 def score_account(signals: list[SignalInput], now: datetime) -> ScoreResult:
