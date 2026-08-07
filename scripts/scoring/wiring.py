@@ -65,7 +65,7 @@ def _load_account_ids(tenant_id: int, session: Session) -> list[int]:
     return sorted(rows)
 
 
-def _load_signal_inputs(
+def load_signal_inputs(
     tenant_id: int,
     account_id: int,
     window_start: datetime,
@@ -111,7 +111,7 @@ def run_scoring_stage(
     warned: set[str] = set()
     scores_persisted = 0
     for account_id in account_ids:
-        signals = _load_signal_inputs(tenant_id, account_id, window_start, session, warned=warned)
+        signals = load_signal_inputs(tenant_id, account_id, window_start, session, warned=warned)
         result = score_account(signals, now=now)
         session.add(
             Score(

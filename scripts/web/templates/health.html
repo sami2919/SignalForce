@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Health — SignalForce{% endblock %}
+{% block nav_health %}active{% endblock %}
+{% block content %}
+<h1>Source Health</h1>
+
+<section>
+  {% if recall is none %}
+    <p class="empty">No tenant configured — nothing to measure.</p>
+  {% else %}
+    <div class="metric">
+      <span class="value">{{ "%.0f%%"|format(recall.recall * 100) if recall.recall is not none else "—" }}</span>
+      <span class="label">Recall</span>
+    </div>
+    <div class="metric">
+      <span class="value">{{ recall.caught_count }}/{{ recall.deep_count }}</span>
+      <span class="label">Caught / ground truth</span>
+    </div>
+    <div class="metric">
+      <span class="value">{{ "%.1fh"|format(recall.p50_lag_hours) if recall.p50_lag_hours is not none else "—" }}</span>
+      <span class="label">Detection lag (p50)</span>
+    </div>
+    <div class="metric">
+      <span class="value">{{ "%.1fh"|format(recall.p95_lag_hours) if recall.p95_lag_hours is not none else "—" }}</span>
+      <span class="label">Detection lag (p95)</span>
+    </div>
+    {% if recall.missed_count %}
+      <p class="muted">{{ recall.missed_count }} missed, {{ recall.extraneous_watch_count }} extraneous watch detections in the trailing window.</p>
+    {% endif %}
+  {% endif %}
+</section>
+
+<section>
+  <h2>Per-source fetch health (trailing {{ 14 }} days)</h2>
+  {% if not health_rows %}
+    <p class="empty">No source health data yet.</p>
+  {% else %}
+  <table>
+    <thead>
+      <tr><th>Source type</th><th>Fetch success rate</th><th>Parse success rate</th><th>Zero-result rate</th><th>Sample size</th></tr>
+    </thead>
+    <tbody>
+      {% for row in health_rows %}
+      <tr>
+        <td>{{ row.source_type }}</td>
+        <td class="{{ 'badge-warn' if row.latest.fetch_success_rate is not none and row.latest.fetch_success_rate < 0.9 else 'badge-ok' }}">
+          {{ "%.0f%%"|format(row.latest.fetch_success_rate * 100) if row.latest.fetch_success_rate is not none else "—" }}
+        </td>
+        <td class="muted">{{ "%.0f%%"|format(row.latest.parse_success_rate * 100) if row.latest.parse_success_rate is not none else "not yet available" }}</td>
+        <td class="muted">{{ "%.0f%%"|format(row.latest.zero_result_rate * 100) if row.latest.zero_result_rate is not none else "not yet available" }}</td>
+        <td class="muted">{{ row.latest.sample_size }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+{% endblock %}
