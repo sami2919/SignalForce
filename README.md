@@ -1,26 +1,217 @@
 # SignalForce
 
-> The open-source GTM engineer toolkit — signal-based prospecting, configurable for any ICP
+> **An open-source GTM intelligence engine that uses Fireworks AI to turn raw signals into structured account intelligence.**
 
-![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue) ![License MIT](https://img.shields.io/badge/license-MIT-green) ![Tests 567 passing](https://img.shields.io/badge/tests-567%20passing-brightgreen) ![Coverage 77%](https://img.shields.io/badge/coverage-77%25-brightgreen) ![Claude tool_use](https://img.shields.io/badge/Claude-tool__use%20schema-8A2BE2)
+![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue) ![License MIT](https://img.shields.io/badge/license-MIT-green) ![Tests 604 passing](https://img.shields.io/badge/tests-604%20passing-brightgreen) ![Fireworks AI](https://img.shields.io/badge/inference-Fireworks%20AI-orange)
+
+SignalForce monitors public activity — GitHub repos, job postings, funding rounds, research papers, LinkedIn, G2 reviews — to find companies *actively* investing in a problem, then uses **Fireworks AI** as the inference layer to generate structured account intelligence: fit scores, why-now reasoning, pain points, buyer personas, and outreach angles.
+
+Built as a Fireworks-powered GTM workflow demo.
 
 ---
 
 **Stop sending cold emails nobody reads.** SignalForce monitors public activity — GitHub repos, job postings, funding rounds, research papers, LinkedIn — to find companies actively investing in the problem you solve, then generates outreach that references their actual work.
 
-**Config-driven, not hardcoded.** Every keyword, ICP tier, scoring weight, and signal source is defined in YAML you control. The Python scripts are a dumb signal collection layer — they fetch and filter based on your config. The intelligence lives in the Claude Code skills layer, which does intent scoring (recency-weighted, multi-source breadth multipliers) and writes contextual outreach. Ships with 5 ready-to-use verticals to prove the point:
+SignalForce uses Fireworks to convert raw GTM signals into structured account intelligence for AI companies with inference-heavy workloads.
 
-| Vertical | Example signals |
-|----------|----------------|
-| **Cybersecurity** — API security, DAST, PCI-DSS, OWASP | `examples/cybersecurity/` |
-| **Data Infrastructure** — dbt, Spark, Airflow, data mesh | `examples/data-infra/` |
-| **Developer Tools** — DevEx hiring, SDK repos, Series A | `examples/devtools/` |
-| **RL Infrastructure** — RLHF, sim-to-real, reward modeling | `examples/rl-infrastructure/` |
-| **MAP Migration** — Marketo/HubSpot ceiling, warehouse-native readiness | `examples/map-migration/` |
+What it does:
 
-Copy any example to `config/`, edit the keywords, and you're targeting a completely different market.
+- Scans for signals using a Fireworks-targeted ICP (production AI apps, inference latency/cost, open-source models, AI infrastructure hiring)
+- Uses Fireworks AI as the inference layer to analyze each account
+- Returns structured JSON: fit score, intent level, matched signals, why-now reasoning, fireworks relevance, recommended persona, outbound angle, LinkedIn message, cold email
+- Prints a polished terminal demo and saves results to `outputs/fireworks_icp_demo.json`
 
-**Two modes.** Run it hands-on with Claude Code skills (research, review, and refine at every step) or fully autonomous via n8n workflows on a daily schedule.
+Run it:
+
+```bash
+git clone https://github.com/sami2919/signalforce-fireworks.git
+cd signalforce-fireworks && pip install -e ".[dev]"
+
+export FIREWORKS_API_KEY=your_key_here
+python scripts/demo_fireworks_icp.py
+```
+
+---
+
+## Fireworks AI Demo
+
+The Fireworks demo configures SignalForce around companies building production AI applications where inference matters: speed, cost, scale, open-source model flexibility, and model customization.
+
+### The workflow
+
+1. Loads a Fireworks-style ICP ([`configs/icps/fireworks_ai.yaml`](configs/icps/fireworks_ai.yaml)).
+2. Reads raw company signals from seeded demo accounts ([`examples/fireworks-demo/accounts.json`](examples/fireworks-demo/accounts.json)).
+3. Uses Fireworks to generate structured account intelligence.
+4. Outputs fit score, why-now reasoning, likely pain points, buyer persona, and outreach angle.
+5. Saves structured JSON to `outputs/fireworks_icp_demo.json`.
+
+### Run the demo
+
+```bash
+export FIREWORKS_API_KEY=your_key_here
+python scripts/demo_fireworks_icp.py
+```
+
+Or via the CLI:
+
+```bash
+python -m scripts.marops.cli fireworks-demo
+```
+
+### Example output
+
+```
+🔥 SignalForce x Fireworks ICP Demo
+
+  Using Fireworks as the inference layer to turn raw GTM signals
+  into structured account intelligence.
+
+  Loaded ICP:          fireworks_ai
+  Loaded demo accounts: 3
+
+  Top Fireworks-fit accounts:
+
+  1. Voice AI Support Startup — 94/100
+     Intent:           Urgent
+     Why now:           Real-time voice workflows make inference latency a direct product bottleneck.
+     Fireworks fit:     Fireworks can help serve low-latency inference for streaming AI interactions.
+     Persona:           Head of AI Infrastructure
+     Outbound angle:    Low-latency inference for production voice AI
+     LinkedIn message:  Saw your team is hiring around real-time AI and streaming responses. Curious if inference latency has become a bottleneck as usage grows.
+     Cold email:        Scaling real-time AI inference
+
+  2. Cursor-like AI Coding Platform — 88/100
+     ...
+
+  3. Enterprise RAG Platform — 82/100
+     ...
+
+  Saved structured output to outputs/fireworks_icp_demo.json
+```
+
+### Why Fireworks?
+
+Fireworks is a strong fit for this workflow because GTM automation needs fast, structured outputs that can plug into systems like Slack, HubSpot, or outbound tools.
+
+SignalForce uses Fireworks to convert raw signals into predictable JSON fields:
+
+- `fit_score`
+- `intent_level`
+- `matched_signals`
+- `why_now`
+- `fireworks_relevance`
+- `recommended_persona`
+- `outbound_angle`
+- `linkedin_message`
+- `cold_email_subject`
+- `cold_email_body`
+
+This demonstrates Fireworks powering a real business workflow, not just a chatbot.
+
+### Fireworks ICP configuration
+
+The ICP config at [`configs/icps/fireworks_ai.yaml`](configs/icps/fireworks_ai.yaml) defines what makes a company a strong Fireworks-fit account:
+
+| Category | What it targets |
+|---|---|
+| **Ideal segments** | AI-native startups, developer tools, AI coding assistants, AI agents, voice AI, customer support AI, RAG/search, enterprise AI platforms, ML infrastructure, workflow automation AI |
+| **Buyer personas** | CTO, VP Engineering, Head of AI, Head of Infrastructure, Head of ML Platform, Staff ML Engineer, Founding AI Engineer |
+| **Positive signals** | Inference/ML infrastructure hiring, GitHub activity around vLLM/Triton/CUDA/agents, website mentions of low-latency/production AI, recent funding + AI product launches |
+| **Scoring weights** | AI product signal (30), inference/latency signal (25), hiring signal (20), open-source model signal (15), funding/growth signal (10) |
+| **Outbound angles** | Latency, cost, model flexibility, scale — each with trigger keywords and a pre-written angle |
+
+### Seeded demo accounts
+
+Three seeded accounts cover diverse AI inference use cases ([`examples/fireworks-demo/accounts.json`](examples/fireworks-demo/accounts.json)):
+
+| Account | Industry | Key signals |
+|---|---|---|
+| Cursor-like AI Coding Platform | AI coding assistant | Low-latency code generation, open-source model evals, ML infra hiring |
+| Voice AI Support Startup | Voice AI | Sub-second latency, streaming responses, Series A raised |
+| Enterprise RAG Platform | Enterprise AI search | Multi-model support, inference cost content, enterprise expansion |
+
+---
+
+## How It Works
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      SIGNAL INPUT                                │
+│  Seeded accounts (or live scanners: GitHub, jobs, funding, etc) │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ raw company signals
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    ICP CONFIG                                     │
+│  configs/icps/fireworks_ai.yaml                                   │
+│  Segments, personas, signals, scoring weights, outbound angles   │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ prompt + schema
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    FIREWORKS AI INFERENCE                         │
+│  scripts/fireworks_client.py → OpenAI-compatible API             │
+│  scripts/marops/fireworks_icp_schema.py → FireworksICPBrief      │
+│  Model: accounts/fireworks/models/glm-5p2                        │
+│  → Structured JSON validated by Pydantic schema                  │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ FireworksICPBrief objects (ranked)
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    OUTPUT                                         │
+│  Polished terminal display + outputs/fireworks_icp_demo.json     │
+│  fit_score, intent_level, matched_signals, why_now,              │
+│  fireworks_relevance, persona, angle, LinkedIn, cold email       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**The Python scripts collect and structure signals** — Fireworks AI does the reasoning: analyzing accounts against the ICP, scoring fit, identifying pain points, and generating outreach copy. The output is validated JSON that can plug into Slack, HubSpot, or outbound tools.
+
+---
+
+## Architecture
+
+```
+scripts/
+├── fireworks_client.py              # Core Fireworks AI client (OpenAI-compatible)
+├── demo_fireworks_icp.py            # Single-command demo script
+├── config.py                        # AppConfig with Fireworks env vars
+├── api_client.py                    # Base HTTP client with retry/backoff
+├── icp_fit_scorer.py                # Keyword-based ICP fit scoring
+├── intent_scorer.py                 # Signal intent scoring
+├── signal_aggregator.py             # Multi-source signal aggregation
+├── signal_stacker.py                # Signal stacking + ranking
+├── models.py                        # Core Signal + CompanyProfile models
+├── marops/
+│   ├── fireworks_icp_schema.py      # FireworksICPBrief Pydantic schema
+│   ├── fireworks_briefer.py         # Fireworks-powered brief generator
+│   ├── briefer.py                   # Claude-powered brief generator (alternative)
+│   ├── cli.py                       # CLI (--backend fireworks / fireworks-demo)
+│   ├── models.py                    # MarOps brief models
+│   └── renderer.py                  # Jinja2 HTML renderer
+└── scanners/
+    ├── github_scanner.py            # GitHub repo detection
+    ├── job_scanner.py               # Job posting scanner
+    ├── funding_scanner.py           # Funding round scanner
+    ├── arxiv_scanner.py             # Research paper scanner
+    ├── hf_scanner.py                # HuggingFace model scanner
+    └── linkedin_scanner.py          # LinkedIn activity scanner
+
+configs/
+└── icps/
+    └── fireworks_ai.yaml            # Fireworks ICP configuration
+
+examples/
+├── fireworks-demo/
+│   └── accounts.json                # Seeded demo accounts
+└── fireworks-agents/                # Reference implementation
+
+tests/
+├── test_fireworks_client.py         # 15 tests — client, config, agents
+├── test_fireworks_briefer.py        # 7 tests — brief generation, JSON parsing
+├── test_fireworks_icp_config.py     # 17 tests — config, accounts, schema
+└── ...                              # 565 more tests across the engine
+```
 
 ---
 
@@ -28,213 +219,123 @@ Copy any example to `config/`, edit the keywords, and you're targeting a complet
 
 ```bash
 # 1. Clone and install
-git clone https://github.com/sami2919/SignalForce.git
-cd SignalForce
+git clone https://github.com/sami2919/signalforce-fireworks.git
+cd signalforce-fireworks
 pip install -e ".[dev]"
 
-# 2. Configure your ICP (pick one):
-#    Option A — Setup wizard (recommended):
-#    Open Claude Code and run /setup
-#    It asks what you sell and who you sell to, then generates everything.
-#
-#    Option B — Copy an example config for your vertical:
-cp -r examples/rl-infrastructure/ config/
-#    (also available: examples/cybersecurity/, examples/devtools/, examples/data-infra/)
+# 2. Add your Fireworks API key
+export FIREWORKS_API_KEY=your_key_here
 
-# 3. Add your API keys
-cp .env.example .env
-# Edit .env with your GitHub token (required) + other API keys (optional)
+# 3. Run the demo
+python scripts/demo_fireworks_icp.py
 
-# 4. Verify
-pytest --tb=short -q   # 567 tests, should all pass
+# 4. Verify tests
+pytest --tb=short -q   # 604 tests, should all pass
 ```
 
-Open Claude Code and run `/signal-scanner` to find your first target accounts.
-
----
-
-## Your Weekly Workflow
-
-Here's what a typical week looks like using SignalForce:
-
-| When | What | Skill |
-|------|------|-------|
-| **Monday morning** | Scan for new signals across all sources | `/signal-scanner` |
-| **Monday** | Research top 10 A-tier accounts | `/prospect-researcher` |
-| **Tuesday** | Find verified contacts at qualified accounts | `/contact-finder` |
-| **Tuesday** | Generate personalized outreach sequences | `/email-writer` or `/resource-offer` |
-| **Wednesday** | Add LinkedIn touches to high-priority prospects | `/multi-channel-writer` |
-| **Thursday** | Follow up on meetings from the week | `/meeting-followup` |
-| **Friday** | Review pipeline metrics, plan next week | `/pipeline-tracker` |
-
-Or set up the n8n workflows and let it run autonomously — signals detected at 7am, contacts enriched by 8am, sequences launched by 9am, every day.
-
----
-
-## How It Works
-
-Three decoupled layers move data from raw public signals to enrolled sequences and CRM deals.
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        SIGNAL SOURCES                            │
-│  GitHub Repos  ArXiv Papers  HF Models  Jobs  Funding  LinkedIn │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │ raw API responses / activity data
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    CONFIG LOADER + SCANNERS                       │
-│  config_loader.py reads config/config.yaml                       │
-│  scanners/github_scanner  scanners/arxiv_scanner                 │
-│  scanners/hf_scanner  scanners/job_scanner                       │
-│  scanners/funding_scanner  scanners/linkedin_scanner             │
-│                   → Signal objects (typed JSON)                  │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │ ScanResult JSON → CompanyProfile (ranked)
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    CLAUDE CODE SKILLS                             │
-│  signal-scanner  prospect-researcher  contact-finder             │
-│  email-writer  resource-offer  multi-channel-writer              │
-│  linkedin-content  meeting-followup  pipeline-tracker            │
-│  champion-tracker  deliverability-manager  compliance-manager    │
-│  setup  validate                                                 │
-│                   → Human-in-the-loop GTM workflow               │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │ contacts + email copy + deal events
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    n8n AUTOMATION                                 │
-│  daily-signal-scan → enrichment-pipeline                         │
-│  → sequence-launcher → crm-sync                                  │
-│  Instantly.ai sequences, HubSpot deals, Slack alerts             │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-**The Python scripts don't make decisions** — they collect raw signals from public APIs based on whatever keywords you configure. The Claude Code skills layer does the reasoning: intent scoring with configurable weights and recency decay, ICP fit grading, multi-source signal stacking, and contextual copywriting. Same scripts also power the n8n workflows — no code duplication between human-driven and automated paths.
-
----
-
-## Beyond Prospecting: Lifecycle Campaign Briefs
-
-The same signal engine can point at marketing operations instead of sales prospecting.
-The `marops` module turns a YAML campaign config into a complete **lifecycle campaign
-brief** — Salesforce + warehouse segmentation, a multi-touch sequence with non-overlapping
-agent assignments (execution / QA / optimization), optimization triggers, and a pipeline
-projection with a downside scenario.
-
-It is a deterministic generator, not a mockup: the brief shape is encoded as a Claude
-`tool_use` JSON schema in [`scripts/marops/briefer.py`](scripts/marops/briefer.py), so the
-model physically cannot return an off-shape object. Pydantic validates the result, and a
-Jinja2 template renders it as a self-contained HTML artifact. ~30 seconds and ~$0.002 per
-brief with prompt caching.
-
-```bash
-# Option A — generate live (needs an Anthropic key):
-export ANTHROPIC_API_KEY=...
-python -m scripts.marops.cli hubspot-ceiling   # → out/hubspot-ceiling.html
-
-# Option B — no key, no wait: open a pre-generated brief:
-open demo/hubspot-ceiling.html
-```
-
-The example configs in `examples/marops/` target a fictional warehouse-native MAP vendor
-("Lumera") and a fictional prospect ("Meridian Analytics") so you can see the full shape
-end-to-end. Swap in your own platform's segment and channel model to make it yours.
-
----
-
-## Available Skills
-
-Invoke skills in Claude Code with `/skill-name`.
-
-| Skill | When to Use |
-|-------|-------------|
-| `/setup` | First-time setup — configure your ICP, signal keywords, and voice rules |
-| `/validate` | Verify your config is complete and all API keys are working |
-| `/signal-scanner` | Weekly: run all scanners, stack signals, get a ranked account table |
-| `/prospect-researcher` | Before outreach: deep-dive a company, score ICP fit, map decision-makers |
-| `/contact-finder` | After qualification: waterfall enrichment for verified email + LinkedIn |
-| `/email-writer` | After enrichment: generate 3-variant signal-based outreach sequences |
-| `/resource-offer` | Blueprint-first alternative: offer a resource before asking for a meeting |
-| `/multi-channel-writer` | Staggered Email + LinkedIn sequences for dual-channel outreach |
-| `/linkedin-content` | Organic LinkedIn posts to build credibility before cold outreach lands |
-| `/meeting-followup` | After a call: extract outcome, generate follow-up emails, update CRM |
-| `/pipeline-tracker` | Weekly: funnel metrics, HubSpot sync, Slack analytics digest |
-| `/champion-tracker` | Weekly: monitor job changes, route warm re-engagement |
-| `/deliverability-manager` | Domain setup: DNS records, warmup schedules, blacklist monitoring |
-| `/compliance-manager` | Monthly: CAN-SPAM/GDPR/CCPA/CASL audit checklist |
-
----
-
-## Configuration
-
-Your target market, signal keywords, ICP tiers, and voice rules live in `config/`:
-
-```
-config/               # gitignored — your active config
-├── config.yaml       # scanner keywords, scoring weights, ICP tier definitions
-└── gtm-context.md    # product positioning, voice rules, qualification criteria
-```
-
-`config.yaml` controls what the scanners look for:
-
-```yaml
-company:
-  name: "My Company"
-  product: "What you sell in one line"
-  category: "Your market category"
-
-icp:
-  tiers:
-    - name: "Tier 1 — Enterprise"
-      description: "Large orgs with dedicated teams"
-      signals: ["large team", "Series B+"]
-    - name: "Tier 2 — Mid-Market"
-      description: "Growing companies building capability"
-      signals: ["growing team", "Series A"]
-  maturity_stages: ["EXPLORING", "BUILDING", "SCALING", "EMBEDDED"]
-  target_titles: ["Head of Platform", "Staff Engineer", "VP Engineering"]
-
-scanners:
-  github:
-    enabled: true
-    module: scripts.scanners.github_scanner
-    keywords: ["your-domain-keyword"]
-    topics: ["your-github-topic"]
-    libraries: ["key-library-1", "key-library-2"]
-  arxiv:
-    enabled: true
-    module: scripts.scanners.arxiv_scanner
-    queries: ["your research area", "related technique"]
-  jobs:
-    enabled: true
-    module: scripts.scanners.job_scanner
-    titles: ["Your Target Role 1", "Your Target Role 2"]
-    skills: ["key-skill-1", "key-skill-2"]
-
-scoring:
-  intent_weights:   # higher = stronger buying signal
-    github: 2.5
-    arxiv: 3.0
-    jobs: 2.0
-    funding: 1.5
-    linkedin: 3.0
-```
-
-`gtm-context.md` is a natural-language file loaded by every skill — it tells Claude about your product, your ICP, your voice rules, and your disqualification criteria.
-
-See `config.example/` for a fully annotated reference configuration, or run `/setup` in Claude Code for a guided setup wizard.
 
 ### Environment Variables
 
-All API keys live in `.env` (gitignored). Copy `.env.example` and fill in your keys. Only `GITHUB_TOKEN` is required to run the scanners. Enrichment and CRM keys can be added incrementally.
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `FIREWORKS_API_KEY` | Yes | — | Fireworks AI API key |
+| `FIREWORKS_BASE_URL` | No | `https://api.fireworks.ai/inference/v1` | Fireworks inference endpoint |
+| `FIREWORKS_MODEL` | No | `accounts/fireworks/models/glm-5p2` | Fireworks model ID |
+| `GITHUB_TOKEN` | No | — | GitHub API token (for live scanners) |
+| `ANTHROPIC_API_KEY` | No | — | Alternative Claude backend |
+
+Copy `.env.example` to `.env` and fill in your keys.
 
 ---
 
-## Custom Scanners
+## Fireworks Integration Details
 
-SignalForce ships with six built-in scanners. You can add your own by implementing the scanner interface:
+### The key pattern
+
+Fireworks model IDs contain slashes (`accounts/fireworks/models/glm-5p2`). Passing that directly as an OpenAI Agents SDK model name triggers `UserError: Unknown prefix: accounts`. The workaround in `scripts/fireworks_client.py`:
+
+```python
+from openai import AsyncOpenAI
+from agents import Agent, OpenAIChatCompletionsModel, Runner, set_tracing_disabled
+
+set_tracing_disabled(True)  # Tracing posts to OpenAI; we're using Fireworks
+
+client = AsyncOpenAI(
+    base_url="https://api.fireworks.ai/inference/v1",
+    api_key=fireworks_api_key,
+)
+
+agent = Agent(
+    name="SignalAnalyzer",
+    instructions="You analyze sales signals and rank accounts.",
+    model=OpenAIChatCompletionsModel(
+        model="accounts/fireworks/models/glm-5p2",
+        openai_client=client,  # ← explicit client avoids the prefix error
+    ),
+    tools=[my_function_tool],
+)
+
+result = Runner.run_sync(agent, "Analyze these accounts...")
+```
+
+### Using the Fireworks client
+
+```python
+from scripts.fireworks_client import (
+    build_fireworks_agent,
+    run_agent_sync,
+    fireworks_completion,
+)
+
+# Agent-based (with tools):
+agent = build_fireworks_agent(
+    name="MyAgent",
+    instructions="You are a helpful assistant.",
+    tools=[my_tool],
+)
+result = run_agent_sync(agent, "Hello")
+
+# Simple completion (no agents SDK):
+text = fireworks_completion(prompt="Write a poem.", temperature=0.7)
+```
+
+### FireworksICPBrief schema
+
+The structured output schema ([`scripts/marops/fireworks_icp_schema.py`](scripts/marops/fireworks_icp_schema.py)):
+
+| Field | Type | Validation |
+|-------|------|------------|
+| `account_name` | `str` | — |
+| `fit_score` | `int` | 0–100 |
+| `intent_level` | `Literal` | Low / Medium / High / Urgent |
+| `matched_signals` | `list[str]` | Non-empty |
+| `why_now` | `str` | — |
+| `fireworks_relevance` | `str` | — |
+| `likely_pain_points` | `list[str]` | Non-empty |
+| `recommended_persona` | `str` | — |
+| `outbound_angle` | `str` | — |
+| `linkedin_message` | `str` | Under 500 characters |
+| `cold_email_subject` | `str` | — |
+| `cold_email_body` | `str` | — |
+
+---
+
+## Signal Scanners
+
+SignalForce ships with six built-in scanners for live signal collection:
+
+| Scanner | Source | Key Required |
+|---------|--------|-------------|
+| GitHub | Repo detection | `GITHUB_TOKEN` |
+| ArXiv | Research paper tracking | Optional (Semantic Scholar) |
+| HuggingFace | Model upload detection | No (public API) |
+| Jobs | Job posting scanner | `SERPAPI_KEY` |
+| Funding | Funding round scanner | `SERPAPI_KEY` |
+| LinkedIn | LinkedIn activity | `SERPAPI_KEY` |
+
+Each scanner returns typed `Signal` objects with configurable keywords, scoring weights, and ICP tier definitions.
+
+### Custom Scanners
 
 ```python
 # scripts/scanners/my_scanner.py
@@ -256,109 +357,29 @@ def scan(config: ScannerConfig) -> ScanResult:
     )
 ```
 
-Then register the module path in `config.yaml`:
+---
 
-```yaml
-scanners:
-  my_source:
-    enabled: true
-    module: scripts.scanners.my_scanner
-    keywords: ["what-to-search-for"]
+## Tests
+
+```bash
+# Run all 604 tests
+pytest --tb=short -q
+
+# Run just the Fireworks tests (39 tests)
+pytest tests/test_fireworks_client.py tests/test_fireworks_briefer.py tests/test_fireworks_icp_config.py -v
 ```
 
-The scanner runner picks it up automatically — works in both Claude Code skills and n8n workflows.
+Test coverage:
 
----
-
-## External APIs
-
-| API | Purpose | Key Required |
-|-----|---------|-------------|
-| GitHub API | Repo detection | Yes (`GITHUB_TOKEN`) |
-| Semantic Scholar | ArXiv paper tracking | Optional (rate limited without) |
-| HuggingFace Hub | Model upload detection | No (public API) |
-| Apollo.io | Contact enrichment (waterfall step 1) | Yes (`APOLLO_API_KEY`) |
-| Hunter.io | Contact enrichment (waterfall step 2) | Yes (`HUNTER_API_KEY`) |
-| Prospeo | LinkedIn email enrichment (waterfall step 3) | Yes (`PROSPEO_API_KEY`) |
-| ZeroBounce | Email verification | Yes (`ZEROBOUNCE_API_KEY`) |
-| Anthropic API | Email copy generation in sequence-launcher | Yes (`ANTHROPIC_API_KEY`) |
-| Instantly.ai | Sequence enrollment and delivery events | Yes (`INSTANTLY_API_KEY`) |
-| HubSpot | Deal and contact CRM | Yes (`HUBSPOT_ACCESS_TOKEN`) |
-
----
-
-## Start Free, Scale When Ready
-
-You don't need to pay for anything to start finding target accounts. Add paid tools incrementally as you scale.
-
-**$0/month — Signal detection + account research:**
-| What you get | Tool | Cost |
-|---|---|---|
-| GitHub repo scanning | GitHub API | Free (personal access token) |
-| Research paper tracking | Semantic Scholar | Free (rate-limited) |
-| Model upload detection | HuggingFace Hub | Free (public API) |
-| Intent scoring + ranking | SignalForce engine | Free (open source) |
-| ICP config + skills | Claude Code | Free ([Claude Code](https://docs.anthropic.com/en/docs/claude-code) is free to use) |
-
-This gives you: ranked target accounts with real buying signals, ICP scoring, and the full skill-based research workflow. You can look up contacts manually on LinkedIn and send emails from your own inbox.
-
-**~$60/month — Add email sequencing:**
-| What you add | Tool | Cost |
-|---|---|---|
-| Automated email sequences | Instantly.ai | $37/mo |
-| CRM deal tracking | HubSpot | Free tier |
-| Workflow automation | n8n (self-hosted) | Free |
-| Email copy generation | Claude API | ~$10-20/mo |
-
-**~$200/month — Full automation:**
-| What you add | Tool | Cost |
-|---|---|---|
-| Contact enrichment | Apollo.io | $49/mo (or free tier: 50/mo) |
-| Email verification | ZeroBounce | $16/mo |
-| Backup enrichment | Hunter.io / Prospeo | ~$50/mo |
-| n8n Cloud (no self-hosting) | n8n | $24/mo |
-
-Start with the free tier. Run `/signal-scanner` and `/prospect-researcher` for a week. If the signals are good, add Instantly for sequencing. Add enrichment APIs when manual contact lookup becomes the bottleneck.
-
----
-
-## Results
-
-Target metrics at steady state (Month 3):
-
-| Metric | Target | Industry Median |
-|--------|--------|----------------|
-| Open rate | 45–65% | 20–30% |
-| Reply rate | 12–20% | 3–5% |
-| Positive reply rate | 5–8% | 1–2% |
-| Meetings booked/month | 15–30 | — |
-| Cost per meeting | $25–50 | — |
-
-Signal-based outreach targets 12–20% reply rate because every email references a specific, recent, real action the prospect took — not a static list attribute.
-
-See [`docs/results-framework.md`](docs/results-framework.md) for full metric definitions, monthly ramp targets, and diagnostic playbooks.
-
----
-
-## Cost
-
-| Tier | Monthly Cost | Sequences/Week |
-|------|-------------|----------------|
-| Minimal | ~$61–81 | 10–20 |
-| Standard | ~$206–226 | 80–150 |
-| Premium | ~$670–740 | 150+ |
-
-The Minimal tier runs on n8n Cloud ($24/mo) + Instantly.ai ($37/mo) + Claude API (~$10–20/mo). All signal scanners use free APIs. See [`docs/cost-analysis.md`](docs/cost-analysis.md) for a tool-by-tool breakdown.
+- **Fireworks client** — config resolution, client construction, agent building, completion helper, AppConfig integration
+- **Fireworks briefer** — brief generation, JSON parsing, markdown stripping, error handling, why-now context
+- **Fireworks ICP config** — config fields, signal categories, scoring weights, outbound angles, seed accounts, schema validation (fit_score range, linkedin_message length, non-empty lists, intent_level values)
 
 ---
 
 ## Contributing
 
-See [`docs/architecture.md`](docs/architecture.md) for full system design documentation.
-
-**Adding a new scanner:** Implement `scan(ScannerConfig) -> ScanResult` in `scripts/scanners/`, add the module path to `config.yaml`, add tests mocking all HTTP calls.
-
-**Adding a new skill:** Create `skills/your-skill/SKILL.md` with YAML frontmatter (`name`, `description`). The `description` must start with "Use when..." — this is how Claude selects the right skill.
+**Adding a new scanner:** Implement `scan(ScannerConfig) -> ScanResult` in `scripts/scanners/`, add the module path to your config, add tests mocking all HTTP calls.
 
 **Code conventions:** Pydantic models with `frozen=True` for all data structures. Type hints required. Ruff for formatting (`ruff format . && ruff check . --fix`). 80% minimum test coverage.
 

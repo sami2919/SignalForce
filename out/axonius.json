@@ -1,0 +1,275 @@
+{
+  "prospect": "Axonius",
+  "prospect_url": "https://www.axonius.com",
+  "vertical": "Cybersecurity asset management \u2014 late-stage ($2.6B valuation), enterprise GTM motion",
+  "campaign_name": "Pardot Replacement \u2192 Warehouse-Native MAP Adoption",
+  "objective": "Land Axonius as a net-new Conversion customer while the post-Series-E expansion window is open. Three signal types stacked in the scan window: a $200M Series E at a $2.6B valuation (headcount and marketing investment scaling), a 2-star Pardot G2 review naming broken attribution and unreliable Salesforce sync, and a live marketing-operations job posting. Highest ICP fit in the scan (10.0) \u2014 Pardot pain plus warehouse signals. Buying committee is the Marketing Ops lead plus the Head of Data. Shelf life ~6 days from the freshest signal.\n",
+  "lifecycle_stage": "Prospect \u00b7 New \u2014 active buying window, high urgency",
+  "segment": {
+    "name": "Pardot-Pain Late-Stage SaaS \u2014 Axonius Single-Account",
+    "salesforce_filters": [
+      "Account.Name = 'Axonius'",
+      "Account.Industry = 'Technology'",
+      "Account.NumberOfEmployees >= 500",
+      "Account.AnnualRevenue >= 50000000",
+      "Account.Marketing_Automation_Platform__c IN ('Pardot', 'Marketo')",
+      "Account.CRM_Platform__c = 'Salesforce'",
+      "Account.Funding_Stage__c = 'Series E'",
+      "Account.Last_Funding_Amount__c >= 200000000",
+      "Account.ICP_Score__c >= 9.0",
+      "Contact.Title LIKE '%Marketing Operations%' OR Contact.Title LIKE '%Head of Data%' OR Contact.Title LIKE '%VP Marketing%'",
+      "Opportunity.StageName NOT IN ('Closed Won', 'Closed Lost')"
+    ],
+    "warehouse_traits": [
+      "g2_review_sentiment_score <= 2 WHERE product = 'Pardot' AND review_age_days <= 30",
+      "g2_review_keywords_matched IN ('broken attribution', 'unreliable sync', 'data exports', 'workarounds') AND review_source = 'G2'",
+      "job_posting_active = TRUE WHERE job_title LIKE '%Marketing Operations%' AND required_skills INCLUDES ('Salesforce', 'Snowflake', 'BigQuery') AND job_board = 'Greenhouse'",
+      "funding_event_type = 'Series E' AND funding_event_date >= DATEADD(day, -30, CURRENT_DATE()) AND funding_amount_usd >= 200000000",
+      "intent_topic_spike IN ('marketing automation replacement', 'Pardot alternative', 'warehouse-native MAP') AND intent_surge_percentile >= 80",
+      "mops_hiring_velocity_90d >= 2",
+      "martech_stack_includes('Pardot') = TRUE",
+      "data_stack_includes_warehouse = TRUE"
+    ],
+    "exclusions": [
+      "Account.Conversion_Trial_Status__c IN ('Active', 'Converted')",
+      "Account.Marketo_Trial_Status__c = 'Active'",
+      "Account.Do_Not_Contact__c = TRUE",
+      "Contact.HasOptedOutOfEmail = TRUE",
+      "account_suppression_list = 'competitor_customers'",
+      "opportunity_stage_active_closed = TRUE"
+    ],
+    "estimated_size": "1 account / 2 contacts (Marketing Ops Lead + Head of Data)"
+  },
+  "touches": [
+    {
+      "step": 1,
+      "channel": "email",
+      "agent": "execution",
+      "timing": "Day 0 \u2014 send within 2 hours of brief activation, Tuesday\u2013Thursday 9\u201311 AM recipient local time",
+      "subject": "{{contact.first_name}}, Axonius's Pardot replacement window is now",
+      "body_brief": "Open with the G2 review signal as social proof, not accusation: someone on a team like theirs publicly called out broken attribution, unreliable Salesforce sync, and 40% MOPs time lost to workarounds \u2014 5 days ago. Name Axonius's Series E and the new enterprise-vertical expansion as the forcing function: the stack they outgrew just became the stack that will slow the next phase. Position Conversion as warehouse-native MAP built for exactly the Salesforce + Snowflake/BigQuery motion their new MOPs hire will own. Single CTA: 15-minute live data sync demo scoped to Axonius's current Pardot pain points.",
+      "personalization_tokens": [
+        "{{contact.first_name}}",
+        "{{account.name}}",
+        "{{account.funding_round}} (${{account.last_funding_amount_formatted}} Series E)",
+        "{{account.marketing_automation_platform}}",
+        "{{warehouse.g2_review_excerpt}}",
+        "{{warehouse.g2_review_age_days}}-day-old G2 review",
+        "{{warehouse.job_posting_title}} job posting on Greenhouse",
+        "{{sender.ae_first_name}} (Account Executive, Conversion)"
+      ],
+      "qa_rules": [
+        "Suppress send if Contact.HasOptedOutOfEmail = TRUE",
+        "Suppress send if Account.Conversion_Trial_Status__c IN ('Active', 'Converted')",
+        "Validate {{account.marketing_automation_platform}} resolves to 'Pardot' \u2014 block send if NULL or resolves to competitor",
+        "Validate {{warehouse.g2_review_excerpt}} is non-NULL and \u2264 280 characters; flag for human review if truncated mid-sentence",
+        "Spam-gate check: subject line must not contain ALL-CAPS words or more than one punctuation mark",
+        "Deduplication: confirm no email touch delivered to same Contact.Id within prior 72 hours",
+        "Verify {{account.funding_round}} token resolves correctly; block if funding_event_date > 30 days ago (signal stale)"
+      ],
+      "success_metric": "Email open rate \u2265 45%; CTA click-through to demo booking page \u2265 12%"
+    },
+    {
+      "step": 2,
+      "channel": "ae_task",
+      "agent": "execution",
+      "timing": "Day 1 \u2014 24 hours after Step 1 send; task fires only if Step 1 email was opened but CTA not clicked",
+      "subject": "AE LinkedIn + phone blitz \u2014 Axonius MOPs Lead & Head of Data",
+      "body_brief": "AE task brief: reach out to both the Marketing Ops Lead and Head of Data via LinkedIn DM and phone. Reference the same signal stack the email used \u2014 the live Greenhouse job posting requiring warehouse fluency is the strongest warm-open (it signals they are actively building toward this). Mention that the new hire will inherit whatever MAP decision gets made now. Do NOT send a generic product pitch; open with the hiring signal and ask one question: 'Is the MAP decision already in flight, or is the new hire owning it?' Log outcome in Salesforce Activity. Do not leave a voicemail on first call; LinkedIn DM only if no answer.",
+      "personalization_tokens": [
+        "{{contact.first_name}} (MOPs Lead)",
+        "{{contact_2.first_name}} (Head of Data)",
+        "{{account.name}}",
+        "{{warehouse.job_posting_title}} on {{warehouse.job_posting_board}}",
+        "{{warehouse.job_posting_date_relative}} (e.g. 'posted 7 days ago')",
+        "{{account.funding_round}} Series E context",
+        "{{sender.ae_first_name}} personal LinkedIn URL"
+      ],
+      "qa_rules": [
+        "Task must be assigned to the named AE owner on the Axonius account record \u2014 block if Account.OwnerId is NULL or maps to queue",
+        "Confirm both Contact records exist in Salesforce with Title fields populated before firing task",
+        "Verify Step 1 email open event is confirmed in engagement log before triggering; do not fire if Step 1 was suppressed",
+        "Task due date must be set to same calendar day as trigger \u2014 reject if default 7-day Salesforce task deadline is applied",
+        "Log task type as 'Outbound \u2014 Signal-Triggered' in Task.Type__c field for attribution tracking"
+      ],
+      "success_metric": "AE LinkedIn DM reply rate or call connect rate \u2265 30%; Salesforce Task.Status__c updated to 'Completed' within 24 hours of creation"
+    },
+    {
+      "step": 3,
+      "channel": "in_app_banner",
+      "agent": "execution",
+      "timing": "Day 2 \u2014 serve banner if any Axonius contact visits Conversion.com or the product demo environment; frequency cap 1 impression per contact per 48 hours",
+      "subject": "Axonius: See your Pardot data in Conversion in 15 minutes",
+      "body_brief": "Short, high-signal banner \u2014 no more than two sentences plus CTA button. Lead with the warehouse-native angle: 'Your Snowflake data, your Salesforce pipeline, one attribution layer \u2014 no exports.' Reference the G2 pain point implicitly ('built for teams done with workarounds'). CTA button text: 'Book the 15-min sync demo.' Banner should render in both light and dark mode and be dismissible with suppression cookie set on dismiss.",
+      "personalization_tokens": [
+        "{{account.name}}",
+        "{{contact.first_name}}",
+        "{{account.marketing_automation_platform}} (renders as 'Pardot' in banner headline)",
+        "{{warehouse.intent_topic_primary}} (maps to 'marketing automation replacement')"
+      ],
+      "qa_rules": [
+        "Banner suppressed if Contact.HasOptedOutOfEmail = TRUE or global suppression flag is active (privacy opt-out covers in-app personalization per consent model)",
+        "Frequency cap enforced: no more than 1 impression per Contact.Id per 48-hour window \u2014 QA agent must check impression log before serve",
+        "Validate account identity resolution: banner fires ONLY if visitor IP/cookie maps to confirmed Axonius domain (axonius.com) \u2014 block on ambiguous resolution",
+        "Confirm CTA deep-link URL is valid and routes to Axonius-prefilled demo booking page (UTM params: utm_source=in_app, utm_campaign=pardot-replacement, utm_account=axonius)",
+        "A/B variant must be selected by optimization agent before execution agent serves \u2014 do not serve control variant by default if test is active"
+      ],
+      "success_metric": "Banner CTR \u2265 8%; demo booking conversion from banner click \u2265 20%"
+    },
+    {
+      "step": 4,
+      "channel": "email",
+      "agent": "execution",
+      "timing": "Day 3 \u2014 send only if no demo booked by Day 3 00:00 recipient local time; send at 8:00 AM recipient local time",
+      "subject": "The MOPs hire you're onboarding will ask why you kept Pardot",
+      "body_brief": "Reframe the urgency around the hiring signal, not just the funding event. The new marketing-ops hire requiring Salesforce + warehouse fluency is a forcing function: they will evaluate the MAP stack on Day 30. Show the cost of the status quo in concrete terms \u2014 the G2 reviewer called out 40% of MOPs time on workarounds; at a scaled post-Series-E headcount that compounds fast. Introduce one proof point: a named customer case study of a similarly staged company (Series C\u2013E, Salesforce + Snowflake stack) that replaced Pardot with Conversion and reclaimed attribution fidelity within 60 days. Close with urgency framing: 'The buying window on this is weeks, not quarters \u2014 your next hire will own whatever you decide now.' CTA: same demo booking link, but with secondary option to download the Pardot-to-Conversion migration guide (gated via Salesforce form-fill).",
+      "personalization_tokens": [
+        "{{contact.first_name}}",
+        "{{account.name}}",
+        "{{warehouse.job_posting_title}} (the live MOPs role)",
+        "{{warehouse.g2_review_excerpt}} (40% workaround stat)",
+        "{{account.last_funding_amount_formatted}} Series E",
+        "{{content.case_study_title}} (dynamically matched by vertical = cybersecurity or closest funded SaaS comp)",
+        "{{content.case_study_company_stage}} (e.g. 'Series D, 600-person SaaS team')",
+        "{{sender.ae_first_name}}",
+        "{{link.demo_booking_url}}",
+        "{{link.migration_guide_url}}"
+      ],
+      "qa_rules": [
+        "Hard gate: suppress if demo is already booked (check Opportunity.StageName = 'Meeting Scheduled' or calendar booking webhook event)",
+        "Suppress if Contact.HasOptedOutOfEmail = TRUE",
+        "Validate {{content.case_study_title}} token resolves to a published, live URL \u2014 block send if 404 detected on asset link",
+        "Validate {{link.migration_guide_url}} resolves and form-fill is functional in staging before send",
+        "Confirm Step 1 email was delivered (not bounced) before sending Step 4 \u2014 suppress and flag for AE if hard bounce on Step 1",
+        "Subject line spam-gate: flag 'kept Pardot' phrasing for deliverability check \u2014 confirm sender domain reputation score \u2265 85 before send",
+        "Deduplication: no more than 2 emails delivered to same Contact.Id within this campaign sequence in any 7-day window"
+      ],
+      "success_metric": "Email reply rate \u2265 8%; demo booking conversion from this touch \u2265 10%; migration guide download \u2265 15% of clicks"
+    },
+    {
+      "step": 5,
+      "channel": "linkedin",
+      "agent": "execution",
+      "timing": "Day 5 \u2014 send if no demo booked and no reply to Steps 1 or 4; send between 9 AM\u201312 PM recipient local time",
+      "subject": "LinkedIn InMail: Axonius + Conversion \u2014 one attribution layer, zero Pardot exports",
+      "body_brief": "Final touch before shelf-life expiry (Day 6). Short-form InMail from the AE, not a marketing alias \u2014 personal tone, direct ask. Open by acknowledging the Series E and what it means for the marketing org's mandate. Name the warehouse-native MAP angle in one sentence. Create urgency with shelf-life framing without being manipulative: 'I have a technical scoping slot open this week specifically for teams mid-Pardot-evaluation.' Close with one question CTA to lower friction: 'Worth 15 minutes this week?' No attachments, no links other than the AE's calendar link. Character limit \u2264 300 words.",
+      "personalization_tokens": [
+        "{{contact.first_name}}",
+        "{{account.name}}",
+        "{{account.last_funding_amount_formatted}} Series E",
+        "{{account.marketing_automation_platform}} (Pardot)",
+        "{{sender.ae_first_name}}",
+        "{{sender.ae_linkedin_profile_url}}",
+        "{{sender.ae_calendar_link}} (scoped to 15-min technical demo slot)"
+      ],
+      "qa_rules": [
+        "Suppress if demo already booked or Opportunity.StageName has advanced past 'Prospecting'",
+        "Suppress if any inbound reply (email or LinkedIn) detected from this contact in the prior 5 days \u2014 do not send if conversation is already active",
+        "Confirm AE LinkedIn Sales Navigator seat is active and InMail credits are available (\u22651 credit) before task fires",
+        "Validate {{sender.ae_calendar_link}} is live and has availability within the next 5 business days \u2014 block if calendar shows no open slots",
+        "Word count QA: flag InMail body if > 300 words \u2014 optimization agent must approve override",
+        "Confirm contact LinkedIn profile URL is resolved and active in Sales Navigator before send \u2014 do not send to stale/inactive profiles"
+      ],
+      "success_metric": "InMail acceptance + reply rate \u2265 25%; demo booked from this touch \u2265 10%; overall sequence demo-booked rate \u2265 30% by Day 6"
+    }
+  ],
+  "optimization_triggers": [
+    {
+      "condition": "Demo booked at any step (calendar booking webhook fires OR Opportunity.StageName = 'Meeting Scheduled')",
+      "action": "Immediately suppress all remaining touches for that Contact.Id; optimization agent re-segments contact into 'Active Opportunity \u2014 Demo Booked' cohort; AE task created with pre-call research brief including full signal stack (Series E, G2 review excerpt, job posting details)"
+    },
+    {
+      "condition": "warehouse.intent_topic_spike fires for 'Pardot alternative' OR 'marketing automation replacement' with surge_percentile >= 90 at any point during campaign runtime",
+      "action": "Optimization agent pulls forward next scheduled touch by 24 hours; subject line variant B (urgency-forward) allocated 80% send share via bandit reallocation; AE notified via Slack alert with intent spike data"
+    },
+    {
+      "condition": "Step 1 or Step 4 email hard-bounces (bounce_type = 'hard') OR Contact.Email validity score drops below 0.7 in warehouse",
+      "action": "QA agent suppresses email channel for affected Contact.Id; execution agent reroutes remaining email touches to LinkedIn InMail equivalent; AE task fired immediately to source validated contact email via LinkedIn or ZoomInfo enrichment"
+    },
+    {
+      "condition": "G2 review velocity increases (new \u22642-star Pardot review posted referencing Axonius domain or reviewer profile linked to axonius.com) during campaign window",
+      "action": "Optimization agent inserts new social-proof personalization variant citing freshest review into Steps 4 and 5 body; QA agent validates new review token resolves correctly before variant goes live"
+    },
+    {
+      "condition": "AE task (Step 2) marked 'Completed \u2014 Positive Response' in Salesforce within 48 hours AND no demo yet booked",
+      "action": "Optimization agent suppresses Step 3 in_app_banner and Step 4 email; execution agent fires a tailored follow-up AE task with specific talk-track based on AE-logged objection or interest signal from Step 2 call notes"
+    },
+    {
+      "condition": "Campaign Day 6 reached with zero touches replied to, zero demo booked, and Account.ICP_Score__c remains >= 9.0",
+      "action": "Optimization agent re-queues account into a 14-day re-engagement hold pool; QA agent logs full touch history to Salesforce Campaign Member record; AE receives end-of-window summary task with recommendation to escalate to VP-level contact or await next signal trigger"
+    },
+    {
+      "condition": "New hiring signal detected: additional marketing-ops, data-engineering, or RevOps job posting goes live on Greenhouse or LinkedIn for Axonius during campaign window",
+      "action": "Optimization agent refreshes {{warehouse.job_posting_title}} token in all pending touches to reference newest posting; sequence shelf-life extended by 3 days; AE task updated with new hiring context"
+    }
+  ],
+  "pipeline_projection": {
+    "expected_renewals": "N/A \u2014 net-new prospect. Expected outcome: 1 demo booked within 6-day window (target probability 55%), converting to 1 active opportunity at $80K\u2013$140K ACV (Conversion enterprise tier, Axonius headcount 500\u20131000, full MAP replacement + warehouse connector bundle). Full close probability within 90 days given active buying window: 35%. Expected pipeline contribution: $112,000 ACV (probability-weighted).",
+    "ae_efficiency": "AE time investment: ~2.5 hours total across 5-touch sequence (30 min Step 2 blitz, 45 min pre-call research if demo books, 15 min Salesforce logging). Automated touches (Steps 1, 3, 4, 5) require zero AE time post-brief activation. AE-to-pipeline leverage ratio: $112K weighted pipeline / 2.5 AE hours = $44,800 per AE hour \u2014 well above $15K/hr efficiency floor.",
+    "campaign_runtime": "6 days from brief activation (signal shelf-life constraint). Full 5-touch sequence completes by Day 5. Day 6 is optimization-trigger evaluation and re-queue or escalation decision. Reactivation window: 14-day hold pool if no response, re-triggered on next intent spike or new hiring signal.",
+    "downside": "Downside scenario (probability 45%): no demo booked within 6-day window. Causes: (a) both target contacts are unresponsive or on PTO during window, (b) MAP decision is already in legal/procurement with a competitor, (c) Axonius freezes MarTech spend pending board-approved post-Series-E budget cycle. Downside impact: $0 pipeline in this window; $112K ACV deferred to re-engagement pool. Mitigation: Step 5 LinkedIn touch extends reach to alternate committee members; AE escalation trigger on Day 6 preserves relationship. Floor outcome: Axonius account is enriched in Salesforce with full signal history and re-queued for next trigger \u2014 no sunk cost beyond 2.5 AE hours and automated send costs."
+  },
+  "meta": {
+    "campaign_name": "Pardot Replacement \u2192 Warehouse-Native MAP Adoption",
+    "target_account": "Axonius",
+    "target_account_url": "https://www.axonius.com",
+    "vertical": "Cybersecurity Asset Management",
+    "lifecycle_stage": "Prospect \u00b7 New",
+    "buying_window_urgency": "HIGH \u2014 6-day shelf life from freshest signal (G2 review, 5 days ago)",
+    "icp_score": "10.0",
+    "buying_committee": [
+      "Marketing Operations Lead",
+      "Head of Data"
+    ],
+    "signal_stack": [
+      "FUNDING_EVENT: $200M Series E at $2.6B valuation (12 days ago, Crunchbase)",
+      "G2_REVIEW_VELOCITY: 2-star Pardot review citing broken attribution, unreliable Salesforce sync, 40% MOPs time on workarounds (5 days ago, G2)",
+      "HIRING: Live MOPs job posting requiring Salesforce + warehouse fluency (7 days ago, Greenhouse)"
+    ],
+    "campaign_author": "Senior MarOps Architect \u2014 Conversion Platform",
+    "brief_created_at": "2025-07-14",
+    "platform": "Conversion",
+    "agent_role_summary": {
+      "execution": "Owns send timing, channel selection, personalization token injection for Steps 1, 2, 3, 4, 5",
+      "qa": "Owns suppression logic, spam-gate checks, token validation, deduplication, bounce handling across all steps",
+      "optimization": "Owns A/B variant selection, bandit reallocation, cohort re-segmentation, trigger-based sequence mutation"
+    },
+    "model": "claude-sonnet-4-6",
+    "generated_at": "2026-05-29T23:44:57+00:00",
+    "cache_read_input_tokens": 1226,
+    "cache_creation_input_tokens": 1048,
+    "input_tokens": 23,
+    "output_tokens": 5657
+  },
+  "why_now": {
+    "timing_score": "HIGH",
+    "signals": [
+      {
+        "signal_type": "funding_event",
+        "description": "$200M Series E at a $2.6B valuation. Expanding into new enterprise verticals means marketing-automation investment scales with headcount \u2014 fresh budget for a stack upgrade.",
+        "days_ago": 12,
+        "source": "Crunchbase",
+        "timing_tier": "MEDIUM",
+        "shelf_life_days": 2
+      },
+      {
+        "signal_type": "g2_review_velocity",
+        "description": "2-star G2 review of Pardot: 'Pardot feels like it was built for a different era. Attribution is broken, reporting requires constant data exports, and the Salesforce sync is unreliable. Our MOPs team is spending 40% of their time on workarounds. Replacing it.'",
+        "days_ago": 5,
+        "source": "G2",
+        "timing_tier": "HIGH",
+        "shelf_life_days": 9
+      },
+      {
+        "signal_type": "hiring",
+        "description": "Live marketing-operations job posting requiring Salesforce plus warehouse fluency \u2014 pulled from the job-board scan this morning. The one signal in this stack collected live, not seeded.",
+        "days_ago": 7,
+        "source": "Greenhouse",
+        "timing_tier": "HIGH",
+        "shelf_life_days": 7
+      }
+    ],
+    "shelf_life_days": 2,
+    "rationale": "3 signals detected in the last 12 days. Buying window closes in ~2 days."
+  }
+}

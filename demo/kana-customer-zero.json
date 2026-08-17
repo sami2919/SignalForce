@@ -1,0 +1,82 @@
+[
+  {
+    "company": "Warmly",
+    "grade": "A",
+    "combined_score": 21.599999978917392,
+    "icp_fit": 4.0,
+    "signal_count": 3,
+    "signal_types": [
+      "job_posting",
+      "linkedin_activity",
+      "funding_event"
+    ],
+    "why_now": "Growth Engineer Own HubSpot automation, lifecycle experimentation, Clay workflows, and AI- AI-first demand generation and personalization AI marketing personalization growth. Signals observed: active hiring signal, leadership activity signal, budget window signal.",
+    "recommended_titles": [
+      "VP Marketing Operations",
+      "Director of Lifecycle Marketing",
+      "Head of Growth"
+    ],
+    "outbound_route": "Clay -> Instantly + Valley",
+    "message_angle": "Remove the MOPs bottleneck while keeping the existing stack intact",
+    "experiment_tag": "ops-bottleneck-linkedin-v1",
+    "hubspot_sync": "Create company + lead, attach signal summary, set experiment tag, assign owner, and open LinkedIn follow-up task in HubSpot",
+    "next_action": "Research champion in Clay, launch LinkedIn touch today, email follow-up within 24h.",
+    "source_urls": [
+      "https://jobs.example.com/warmly-growth-engineer",
+      "https://linkedin.example.com/warmly-ai-marketing",
+      "https://funding.example.com/warmly-series-a"
+    ]
+  },
+  {
+    "company": "UserGems",
+    "grade": "A",
+    "combined_score": 10.724999996139156,
+    "icp_fit": 5.5,
+    "signal_count": 2,
+    "signal_types": [
+      "job_posting",
+      "funding_event"
+    ],
+    "why_now": "UserGems expands GTM investment Fresh capital for revenue team buildout and new outbound e Demand Generation Manager Own SEMRush research, paid social testing, and campaign automati. Signals observed: active hiring signal, budget window signal.",
+    "recommended_titles": [
+      "CMO",
+      "VP Growth",
+      "Head of Revenue Operations"
+    ],
+    "outbound_route": "Clay -> Instantly",
+    "message_angle": "Remove the MOPs bottleneck while keeping the existing stack intact",
+    "experiment_tag": "ops-bottleneck-email-v1",
+    "hubspot_sync": "Create company + lead, attach signal summary, set experiment tag, assign owner, and enroll in outbound sequence from HubSpot source of truth",
+    "next_action": "Research champion in Clay, verify contact path, launch outbound test within 24h.",
+    "source_urls": [
+      "https://funding.example.com/usergems-growth",
+      "https://jobs.example.com/usergems-demandgen"
+    ]
+  },
+  {
+    "company": "HockeyStack",
+    "grade": "A",
+    "combined_score": 10.709999991322233,
+    "icp_fit": 4.0,
+    "signal_count": 2,
+    "signal_types": [
+      "job_posting",
+      "linkedin_activity"
+    ],
+    "why_now": "Lifecycle Marketing Manager Scale outbound and lifecycle campaigns, own content distributi SEO, category creation, and answer-engine discoverability SEO AEO content. Signals observed: active hiring signal, leadership activity signal.",
+    "recommended_titles": [
+      "VP Marketing Operations",
+      "Director of Lifecycle Marketing",
+      "Head of Growth"
+    ],
+    "outbound_route": "Clay -> Instantly + Valley",
+    "message_angle": "Close the content + AEO gap without adding manual campaign work",
+    "experiment_tag": "ops-bottleneck-linkedin-v1",
+    "hubspot_sync": "Create company + lead, attach signal summary, set experiment tag, assign owner, and open LinkedIn follow-up task in HubSpot",
+    "next_action": "Research champion in Clay, launch LinkedIn touch today, email follow-up within 24h.",
+    "source_urls": [
+      "https://jobs.example.com/hockeystack-lifecycle",
+      "https://linkedin.example.com/hockeystack-seo"
+    ]
+  }
+]

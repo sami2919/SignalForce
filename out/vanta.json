@@ -1,0 +1,300 @@
+{
+  "prospect": "Vanta",
+  "prospect_url": "https://www.vanta.com",
+  "vertical": "Security & compliance automation (SOC 2 / ISO / continuous monitoring) \u2014 late-stage, enterprise-scale GTM",
+  "campaign_name": "HubSpot Segmentation Ceiling \u2192 Warehouse-Native MAP Adoption",
+  "objective": "Land Vanta as a net-new Conversion customer while the post-Series-D stack-evaluation window is open. Three signal types stacked in the scan window: a $150M Series D (fresh budget plus a mandate to scale lifecycle), a 3-star HubSpot G2 review citing segmentation limits and a push toward Snowflake-native audiences, and a live marketing-operations job posting. Buying committee is the VP/Director of Marketing Ops plus the Head of Data. Move fast \u2014 shelf life ~6 days from the freshest signal.\n",
+  "lifecycle_stage": "Prospect \u00b7 New \u2014 active buying window, high urgency",
+  "segment": {
+    "name": "HubSpot-Ceiling_WarehouseNative-MAP_Vanta",
+    "salesforce_filters": [
+      "Account.Name = 'Vanta'",
+      "Account.Industry = 'Technology'",
+      "Account.NumberOfEmployees >= 200",
+      "Account.AnnualRevenue >= 10000000",
+      "Account.Current_MAP_Vendor__c = 'HubSpot'",
+      "Account.Data_Warehouse_Platform__c = 'Snowflake'",
+      "Account.CRM_Platform__c = 'Salesforce'",
+      "Account.Last_Funding_Round__c = 'Series D'",
+      "Account.Last_Funding_Date__c >= LAST_N_DAYS:30",
+      "Account.Lifecycle_Stage__c = 'Prospect'",
+      "Account.Buying_Stage__c = 'Active Evaluation'",
+      "Contact.Title LIKE '%Marketing Operations%' OR Contact.Title LIKE '%Head of Data%' OR Contact.Title LIKE '%Director of Marketing%' OR Contact.Title LIKE '%VP Marketing%'",
+      "Contact.LeadSource IN ('Outbound', 'Intent', 'G2 Review Signal')"
+    ],
+    "warehouse_traits": [
+      "g2_review_signal.vendor = 'HubSpot' AND g2_review_signal.star_rating <= 3 AND g2_review_signal.review_body ILIKE '%segmentation%' AND g2_review_signal.days_since_review <= 7",
+      "intent_topic.category = 'Marketing Automation Platform Evaluation' AND intent_topic.surge_score >= 70",
+      "intent_topic.category = 'Snowflake Native Audiences' AND intent_topic.surge_score >= 60",
+      "hiring_signal.department = 'Marketing Operations' AND hiring_signal.required_skills ILIKE '%Salesforce%' AND hiring_signal.required_skills ILIKE '%Snowflake%' AND hiring_signal.days_since_posted <= 10",
+      "funding_event.round = 'Series D' AND funding_event.amount_usd >= 150000000 AND funding_event.days_since_announced <= 14",
+      "technographic.tool = 'Snowflake' AND technographic.confirmed = true",
+      "technographic.tool = 'Salesforce' AND technographic.confirmed = true",
+      "product_engagement.conversion_trial_active = false",
+      "product_engagement.marketo_trial_active = false"
+    ],
+    "exclusions": [
+      "Account.Current_Trial_Vendor__c IN ('Conversion', 'Marketo')",
+      "Account.Competitor_Customer__c = true",
+      "Contact.HasOptedOutOfEmail = true",
+      "Contact.Unsubscribed_All__c = true",
+      "Account.DQ_Reason__c != null",
+      "g2_review_signal.vendor = 'Conversion' AND g2_review_signal.star_rating >= 4"
+    ],
+    "estimated_size": "1 target account \u00b7 3\u20135 contacts (VP/Dir Marketing Ops, Head of Data, CMO-adjacent stakeholders)"
+  },
+  "touches": [
+    {
+      "step": 1,
+      "channel": "email",
+      "agent": "execution",
+      "timing": "Day 0 \u00b7 08:45 recipient local time \u00b7 Tuesday or Wednesday send only",
+      "subject": "{{first_name}}, Vanta's Snowflake investment deserves a MAP that keeps up",
+      "body_brief": "Open by naming the specific G2 review signal: Vanta's team is already writing custom SQL to work around HubSpot's native segmentation limits \u2014 that's engineering time spent on plumbing, not pipeline. Bridge to the Series D mandate: with $150M to deploy and a scale-lifecycle charter, the cost of MAP fragility compounds fast. Introduce Conversion as the only MAP built warehouse-native \u2014 segmentation lives in Snowflake, not a proprietary data layer. Single CTA: 15-minute 'Snowflake audience live-build' demo \u2014 AE shares screen, pulls a real Vanta-shaped segment in <5 minutes with zero SQL handoff. Keep body under 180 words. No marketing footer imagery \u2014 plain-text format to maximize deliverability into ops personas.",
+      "personalization_tokens": [
+        "{{first_name}}",
+        "{{account_name}}",
+        "{{g2_review_snippet}}",
+        "{{funding_round_amount}}",
+        "{{funding_round_investor}}",
+        "{{map_vendor_current}}",
+        "{{warehouse_platform}}",
+        "{{ae_first_name}}",
+        "{{ae_calendar_link}}"
+      ],
+      "qa_rules": [
+        "BLOCK send if Contact.HasOptedOutOfEmail = true",
+        "BLOCK send if Account.Current_Trial_Vendor__c IN ('Conversion','Marketo')",
+        "VERIFY {{g2_review_snippet}} resolves to non-null string length > 20 chars before send",
+        "VERIFY {{funding_round_amount}} token renders as '$150M' \u2014 numeric format gate",
+        "VERIFY {{ae_calendar_link}} is a valid URL (regex: ^https://)",
+        "DEDUPE: suppress if Contact received any Conversion outbound email in last 14 days",
+        "SPAM-GATE: plain-text variant only \u2014 flag if HTML image tags detected in final render",
+        "SEND-WINDOW: hard block if local send time falls outside 07:00\u201317:00 recipient timezone"
+      ],
+      "success_metric": "Email open rate \u2265 45% \u00b7 Reply rate or CTA click \u2265 12% within 48 hours"
+    },
+    {
+      "step": 2,
+      "channel": "linkedin",
+      "agent": "execution",
+      "timing": "Day 1 \u00b7 30 minutes after Step 1 email confirmed delivered \u00b7 AE sends manual InMail via Sales Navigator",
+      "subject": "Snowflake-native segmentation \u2014 following up on the email",
+      "body_brief": "Short, human LinkedIn message from AE. Reference the email sent moments ago so the outreach feels coordinated, not spammy. Cite the HubSpot segmentation ceiling pain point by name \u2014 'saw the note about building custom SQL audiences.' Mention the Series D timing: 'congrats on the Sequoia round \u2014 seems like exactly the moment to lock in the right stack.' Offer a single soft ask: a 10-minute async Loom walkthrough OR a live call \u2014 let them choose. Hard limit: 300 characters for InMail preview pane optimization. Do not attach assets or decks.",
+      "personalization_tokens": [
+        "{{first_name}}",
+        "{{account_name}}",
+        "{{funding_round_investor}}",
+        "{{map_pain_point_summary}}",
+        "{{ae_first_name}}",
+        "{{ae_linkedin_profile_url}}",
+        "{{loom_demo_url}}"
+      ],
+      "qa_rules": [
+        "VERIFY AE has active Sales Navigator seat before routing \u2014 block task if seat_status != 'active'",
+        "VERIFY {{loom_demo_url}} resolves with HTTP 200 before message send",
+        "BLOCK if Contact.LinkedIn_Opted_Out__c = true",
+        "DEDUPE: suppress if Contact already has an open LinkedIn conversation thread with AE in last 7 days",
+        "CHARACTER-GATE: flag message body if preview-pane string (first 300 chars) ends mid-sentence",
+        "TIMING-LOCK: must fire within 90-minute window after Step 1 delivery confirmation \u2014 expire task if window missed"
+      ],
+      "success_metric": "InMail acceptance rate \u2265 35% \u00b7 Loom link click OR calendar booking within 72 hours"
+    },
+    {
+      "step": 3,
+      "channel": "ae_task",
+      "agent": "execution",
+      "timing": "Day 2 \u00b7 09:00 AE local time \u00b7 fires if no reply to Step 1 or Step 2 by EOD Day 1",
+      "subject": "AE Research Task: Map Vanta Buying Committee + Tailor Series D ROI Angle",
+      "body_brief": "Structured AE research and personalization task surfaced in Salesforce. Task body should include: (1) Confirm the live MarOps job posting is still active on Greenhouse \u2014 copy job ID and required skills into Opportunity Notes. (2) Identify if the Head of Data or VP Marketing Ops has posted on LinkedIn about Snowflake/data stack in last 30 days \u2014 note any quote for use in Step 4 email. (3) Pull Vanta's current HubSpot contract renewal date from ZoomInfo or LinkedIn \u2014 if <6 months, flag as 'renewal-pressure' account tag in Salesforce. (4) Draft a one-paragraph ROI note: at $150M raised, quantify what a 10% improvement in lifecycle conversion rate means in ARR terms using Vanta's estimated ACVs. Paste into Opportunity Notes for Step 4 personalization. Estimated task time: 20 minutes.",
+      "personalization_tokens": [
+        "{{account_name}}",
+        "{{opportunity_id}}",
+        "{{ae_first_name}}",
+        "{{greenhouse_job_posting_url}}",
+        "{{contact_linkedin_head_of_data}}",
+        "{{contact_linkedin_vp_marketing_ops}}",
+        "{{funding_round_amount}}",
+        "{{hubspot_contract_renewal_estimate}}"
+      ],
+      "qa_rules": [
+        "VERIFY Opportunity record exists in Salesforce with Stage != 'Closed Lost' before creating task",
+        "VERIFY {{greenhouse_job_posting_url}} is non-null \u2014 pull from hiring_signal warehouse trait",
+        "FLAG task to AE manager if not completed within 4 business hours of creation",
+        "BLOCK Step 4 from firing until Task.Status__c = 'Completed' and Opportunity.Research_Notes__c != null",
+        "DEDUPE: do not create duplicate task if an identical task was created in last 48 hours on same Opportunity"
+      ],
+      "success_metric": "AE task completed within 4 hours \u00b7 Opportunity Notes updated with ROI calc and renewal intel"
+    },
+    {
+      "step": 4,
+      "channel": "email",
+      "agent": "execution",
+      "timing": "Day 3 \u00b7 09:15 recipient local time \u00b7 fires only after Step 3 task marked Complete",
+      "subject": "{{first_name}} \u2014 what replacing the SQL workaround actually buys back",
+      "body_brief": "This email is the 'proof + ROI' beat. Open with a direct callback to the AE-researched hook: cite the Greenhouse job posting by title and note that hiring for Snowflake-fluent MarOps is expensive precisely because current tools force engineers into the loop. Transition to a concrete ROI frame: with Conversion, the audience that took a Vanta data engineer 3 days to build in SQL can be built by a marketer in 8 minutes \u2014 include the AE-calculated ROI note from Step 3 Opportunity Notes. Include one customer proof point from a comparable Series D / high-growth SaaS (use token, not hardcoded name, to allow QA substitution). Close with a specific calendar slot \u2014 two options, not an open-ended Calendly link \u2014 to reduce friction. Under 200 words. Plain text, same AE signature.",
+      "personalization_tokens": [
+        "{{first_name}}",
+        "{{account_name}}",
+        "{{greenhouse_job_title}}",
+        "{{ae_roi_note}}",
+        "{{comparable_customer_name}}",
+        "{{comparable_customer_metric}}",
+        "{{ae_first_name}}",
+        "{{ae_calendar_slot_1}}",
+        "{{ae_calendar_slot_2}}",
+        "{{map_vendor_current}}"
+      ],
+      "qa_rules": [
+        "BLOCK send if Task.Status__c != 'Completed' on linked Opportunity",
+        "VERIFY {{ae_roi_note}} token is non-null and length > 50 chars \u2014 hard block if empty",
+        "VERIFY {{comparable_customer_name}} is not 'Vanta' (no self-referential proof point)",
+        "VERIFY {{ae_calendar_slot_1}} and {{ae_calendar_slot_2}} are both future timestamps (> now)",
+        "BLOCK send if Contact.HasOptedOutOfEmail = true",
+        "DEDUPE: suppress if Contact replied to Step 1 email (reply = positive signal, route to AE directly)",
+        "SPAM-GATE: flag if word count exceeds 220 words in final render",
+        "SEND-WINDOW: hard block outside 07:00\u201317:00 recipient timezone"
+      ],
+      "success_metric": "Reply rate \u2265 18% \u00b7 Meeting booked rate \u2265 10% within 48 hours of send"
+    },
+    {
+      "step": 5,
+      "channel": "in_app_banner",
+      "agent": "execution",
+      "timing": "Day 5 \u00b7 fires if no meeting booked by EOD Day 4 \u00b7 displayed on Conversion free-tier or trial touchpoints; if no product session detected, fall back to email on Day 5 at 10:00 recipient local time",
+      "subject": "Vanta's Snowflake audiences \u2014 live in 8 minutes. Ready when you are.",
+      "body_brief": "Final urgency touch. If in-app: persistent top-of-screen banner on any Conversion marketing touchpoint or content page the contact visits. Message: 'You're one SQL query away from never writing one again. See Conversion pull a Snowflake audience in 8 minutes \u2014 built for teams at Vanta's scale.' CTA button: 'Book 15 min with {{ae_first_name}}'. If email fallback: short 5-sentence plain-text. Subject: 'Last note from me, {{first_name}} \u2014 the Snowflake demo is 8 minutes'. Body references the full signal stack (Series D budget window, G2 review, MarOps hiring) as a single sentence to reinforce urgency, then one CTA. No follow-up scheduled after this touch \u2014 AE takes over manually if no response.",
+      "personalization_tokens": [
+        "{{first_name}}",
+        "{{account_name}}",
+        "{{ae_first_name}}",
+        "{{ae_calendar_link}}",
+        "{{funding_round_amount}}",
+        "{{days_since_g2_review}}",
+        "{{signal_stack_summary}}"
+      ],
+      "qa_rules": [
+        "VERIFY contact has not booked a meeting (Opportunity.Meeting_Booked__c != true) before firing",
+        "VERIFY {{ae_calendar_link}} resolves with HTTP 200",
+        "CHANNEL-FALLBACK: confirm product session event in warehouse (page_view count > 0 in last 72h) before triggering in_app_banner; else route to email fallback automatically",
+        "BLOCK if Contact.HasOptedOutOfEmail = true (covers email fallback path)",
+        "DEDUPE: suppress if any positive reply or meeting booking detected across all prior steps",
+        "URGENCY-GATE: verify {{days_since_g2_review}} <= 10 \u2014 if review signal is stale, swap {{signal_stack_summary}} to leading with funding signal instead",
+        "FINAL-TOUCH FLAG: set Contact.Campaign_Sequence_Complete__c = true after this step fires regardless of engagement outcome"
+      ],
+      "success_metric": "Banner CTR \u2265 8% OR email fallback reply/click \u2265 10% \u00b7 Meeting booked from this touch \u2265 5%"
+    }
+  ],
+  "optimization_triggers": [
+    {
+      "condition": "Contact replies to any email touch with positive intent keywords ('interested', 'yes', 'let's talk', 'send me', 'tell me more') at any step",
+      "action": "Immediately pause all remaining automated touches. Route contact to AE with Slack alert including reply text, step number, and recommended next action: 'Skip to demo booking \u2014 do not send Step N+1.' Set Contact.Buying_Signal_Strength__c = 'Hot'."
+    },
+    {
+      "condition": "g2_review_signal.days_since_review exceeds 10 days at campaign runtime (signal going stale)",
+      "action": "Optimization agent rotates primary urgency anchor in Steps 1 and 4 from G2 review to hiring signal. Swap {{g2_review_snippet}} lead-in for {{greenhouse_job_posting_summary}} lead-in across all pending touches. Log variant swap as 'signal-rotation-hiring' in campaign analytics."
+    },
+    {
+      "condition": "funding_event.days_since_announced exceeds 14 days before campaign completes (budget window narrowing)",
+      "action": "Compress remaining touch cadence: collapse any Day 3\u20135 gaps to Day 2\u20133. Upgrade Step 5 from in_app_banner to direct AE phone task. Set campaign urgency flag to 'CRITICAL' and alert AE manager."
+    },
+    {
+      "condition": "hiring_signal.job_posting_status transitions to 'filled' or 'removed' during campaign runtime",
+      "action": "Remove hiring signal token from all unsent touches. Optimization agent re-weights body_brief emphasis to G2 review pain point and Series D ROI angle. Update {{signal_stack_summary}} token to exclude hiring reference."
+    },
+    {
+      "condition": "Intent surge score for 'Marketing Automation Platform Evaluation' drops below 50 mid-campaign (buying signal cooling)",
+      "action": "Pause Steps 4 and 5. Optimization agent triggers a re-segmentation check: if account intent score recovers above 60 within 5 days, resume sequence at next step. If not recovered, archive campaign and create a 30-day re-entry nurture task for AE."
+    },
+    {
+      "condition": "A new contact at Vanta matching Title LIKE '%Marketing Operations%' OR '%Head of Data%' is created in Salesforce mid-campaign",
+      "action": "Optimization agent clones Step 1 touch and re-enters new contact into sequence at Step 1 with same personalization tokens. Do not re-send to contacts already in sequence. Alert AE of buying committee expansion."
+    },
+    {
+      "condition": "Account.Current_Trial_Vendor__c is updated to 'Conversion' or 'Marketo' at any point during campaign",
+      "action": "Immediately suppress all remaining touches for all contacts at this account. Set Campaign_Status__c = 'Suppressed - Trial Active'. Alert AE to shift to trial-conversion playbook."
+    },
+    {
+      "condition": "Conference attendance signal detected for Vanta contact at a MarTech, SaaStr, or RevOps event within campaign window (sourced from intent data or LinkedIn event RSVPs)",
+      "action": "Optimization agent inserts a conference_meet touch: AE task to request an in-person or lounge meeting at the event. Personalize outreach with event name and booth/session reference. Reprioritize this as the primary CTA over remote demo booking for the duration of the event window."
+    }
+  ],
+  "pipeline_projection": {
+    "expected_renewals": "N/A \u2014 net-new prospect. Expected outcome: 1 qualified meeting booked within 6-day buying window \u2192 opportunity created at $80K\u2013$120K estimated ACV. Pipeline contribution: $100K ACV (midpoint). At 25% stage-1-to-close rate for Series D SaaS, expected closed ARR attribution: $25K. Full-sequence meeting booking rate benchmark: 15\u201320% for 3-signal stacked outbound.",
+    "ae_efficiency": "AE active time: ~35 minutes total (20-min Step 3 research task + 10-min LinkedIn InMail + 5-min calendar slot selection). All 5 touches otherwise fully automated. AE is unblocked for parallel outbound \u2014 estimated 4\u20136 additional accounts can run concurrently without AE capacity conflict. Zero manual email drafting required.",
+    "campaign_runtime": "6 days end-to-end (Day 0 send \u2192 Day 5 final touch). Matches estimated shelf life of freshest signal (MarOps job posting, 6 days old at launch). All triggers and fallbacks resolved within the window. Post-Day-5: AE manual ownership only.",
+    "downside": "Downside scenario: all 5 touches go unanswered, no meeting booked. Probability estimate: 65% (cold outbound base rate for VP+ personas). Outcomes: (1) Zero pipeline from this sequence \u2014 $0 ACV. (2) Vanta moves forward with a competitor MAP or extends HubSpot contract on renewal pressure. (3) If intent score drops below threshold trigger, campaign auto-archives with 30-day re-entry nurture \u2014 second-window opportunity preserved. (4) AE time cost: 35 minutes sunk with no return. Mitigation: optimization triggers for signal rotation and cadence compression reduce downside probability by an estimated 8\u201312 percentage points. Conference_meet trigger provides a non-digital recovery path if signal stack cools before Day 5."
+  },
+  "meta": {
+    "campaign_name": "HubSpot Segmentation Ceiling \u2192 Warehouse-Native MAP Adoption",
+    "prospect_account": "Vanta",
+    "prospect_website": "https://www.vanta.com",
+    "vertical": "Security & Compliance Automation (SOC 2 / ISO / Continuous Monitoring)",
+    "lifecycle_stage": "Prospect \u00b7 New",
+    "buying_window_shelf_life_days": 6,
+    "signal_stack": [
+      {
+        "type": "FUNDING_EVENT",
+        "detail": "$150M Series D led by Sequoia Capital",
+        "source": "Crunchbase",
+        "days_ago": 10
+      },
+      {
+        "type": "G2_REVIEW_VELOCITY",
+        "detail": "3-star HubSpot review citing segmentation ceiling and custom SQL audience workarounds; evaluating Snowflake-native alternatives",
+        "source": "G2",
+        "days_ago": 4
+      },
+      {
+        "type": "HIRING",
+        "detail": "Live MarOps job posting requiring Salesforce + Snowflake fluency",
+        "source": "Greenhouse",
+        "days_ago": 6
+      }
+    ],
+    "primary_personas": [
+      "VP / Director of Marketing Operations",
+      "Head of Data"
+    ],
+    "campaign_owner_role": "AE + MarOps",
+    "created_by": "Conversion MarOps Architect",
+    "brief_version": "1.0",
+    "model": "claude-sonnet-4-6",
+    "generated_at": "2026-05-30T00:12:52+00:00",
+    "cache_read_input_tokens": 0,
+    "cache_creation_input_tokens": 1226,
+    "input_tokens": 1048,
+    "output_tokens": 5724
+  },
+  "why_now": {
+    "timing_score": "HIGH",
+    "signals": [
+      {
+        "signal_type": "funding_event",
+        "description": "$150M Series D led by Sequoia. Fresh capital plus aggressive hiring means the marketing-ops team is under pressure to scale lifecycle campaigns \u2014 a budget-and-mandate window.",
+        "days_ago": 10,
+        "source": "Crunchbase",
+        "timing_tier": "MEDIUM",
+        "shelf_life_days": 4
+      },
+      {
+        "signal_type": "g2_review_velocity",
+        "description": "3-star G2 review of HubSpot: 'HubSpot works fine at our scale but we're hitting the ceiling on segmentation. Building custom SQL audiences because the native filters aren't flexible enough. Evaluating alternatives that work natively with our Snowflake data.'",
+        "days_ago": 4,
+        "source": "G2",
+        "timing_tier": "HIGH",
+        "shelf_life_days": 10
+      },
+      {
+        "signal_type": "hiring",
+        "description": "Live marketing-operations job posting requiring Salesforce plus warehouse fluency \u2014 pulled from the job-board scan this morning. The one signal in this stack collected live, not seeded.",
+        "days_ago": 6,
+        "source": "Greenhouse",
+        "timing_tier": "HIGH",
+        "shelf_life_days": 8
+      }
+    ],
+    "shelf_life_days": 4,
+    "rationale": "3 signals detected in the last 10 days. Buying window closes in ~4 days."
+  }
+}

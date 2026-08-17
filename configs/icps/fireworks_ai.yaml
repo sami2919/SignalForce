@@ -1,0 +1,183 @@
+name: fireworks_ai
+description: >
+  ICP for Fireworks AI: companies building production GenAI applications
+  that need fast, scalable, cost-efficient inference for open-source,
+  fine-tuned, or custom models.
+
+company_profile:
+  ideal_segments:
+    - AI-native startups
+    - Developer tools
+    - AI coding assistants
+    - AI agents
+    - Voice AI
+    - Customer support AI
+    - RAG/search products
+    - Enterprise AI platforms
+    - Data/ML infrastructure
+    - Workflow automation AI
+
+  company_stage:
+    - Seed
+    - Series A
+    - Series B
+    - Series C
+    - Growth
+    - Enterprise AI initiative
+
+  employee_count:
+    min: 20
+    max: 5000
+
+buyer_personas:
+  primary:
+    - CTO
+    - VP Engineering
+    - Head of AI
+    - Head of Infrastructure
+    - Head of ML Platform
+    - AI Platform Lead
+    - ML Infrastructure Lead
+    - Staff ML Engineer
+    - Founding AI Engineer
+
+  secondary:
+    - Head of Product
+    - Developer Experience Lead
+    - Applied AI Lead
+    - AI Product Lead
+
+positive_signals:
+  hiring:
+    - inference engineer
+    - ml infrastructure engineer
+    - ai platform engineer
+    - llm platform engineer
+    - applied ai engineer
+    - model serving
+    - gpu infrastructure
+    - distributed systems
+    - cuda
+    - kubernetes
+    - vllm
+    - ray
+    - tensorrt
+    - triton
+    - evals
+    - rag
+    - agents
+    - fine-tuning
+
+  github:
+    - inference
+    - model-serving
+    - llm
+    - agents
+    - rag
+    - evals
+    - vllm
+    - triton
+    - cuda
+    - transformers
+    - llama
+    - qwen
+    - deepseek
+    - mistral
+    - openai-compatible
+    - lora
+    - fine-tuning
+
+  website:
+    - AI agents
+    - AI copilot
+    - production AI
+    - real-time AI
+    - generative AI
+    - LLM-powered
+    - low latency
+    - high throughput
+    - model evaluation
+    - open-source models
+    - reduce inference cost
+    - fine-tuned models
+    - custom models
+    - multimodal AI
+
+  funding:
+    - recently raised Seed
+    - recently raised Series A
+    - recently raised Series B
+    - recently raised Series C
+    - hiring AI engineers after funding
+    - launching AI product after funding
+
+negative_signals:
+  - no AI product
+  - no technical team
+  - consulting-only company
+  - services agency
+  - basic ChatGPT wrapper
+  - no signs of production AI usage
+  - no engineering hiring
+  - crypto-only project with no clear product
+
+scoring:
+  weights:
+    ai_product_signal: 30
+    inference_or_latency_signal: 25
+    hiring_signal: 20
+    open_source_model_signal: 15
+    funding_or_growth_signal: 10
+
+  thresholds:
+    high_priority: 75
+    medium_priority: 55
+    low_priority: 35
+
+outbound_angles:
+  latency:
+    trigger_keywords:
+      - low latency
+      - real-time
+      - streaming
+      - voice
+      - chat
+      - copilot
+    angle: >
+      Fireworks can help teams serve fast, production-grade model inference
+      for real-time AI user experiences.
+
+  cost:
+    trigger_keywords:
+      - inference cost
+      - token cost
+      - gpu cost
+      - reduce cost
+      - margins
+    angle: >
+      Fireworks can help reduce inference costs while preserving access
+      to strong open-source and custom models.
+
+  model_flexibility:
+    trigger_keywords:
+      - open-source models
+      - llama
+      - qwen
+      - deepseek
+      - mistral
+      - fine-tuning
+      - lora
+    angle: >
+      Fireworks gives teams flexibility to run, fine-tune, and optimize
+      open models without being locked into a single closed provider.
+
+  scale:
+    trigger_keywords:
+      - production ai
+      - scale inference
+      - high throughput
+      - millions of users
+      - enterprise ai
+    angle: >
+      Fireworks is a strong fit when AI workloads move from prototype
+      to production and inference reliability becomes a core product need.

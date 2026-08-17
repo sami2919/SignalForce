@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ brief.title }}</title>
+  <style>
+    :root {
+      --bg: #101822;
+      --panel: #152230;
+      --panel-soft: #1c2d3f;
+      --ink: #edf2f7;
+      --muted: #a9b6c5;
+      --line: rgba(169, 182, 197, 0.22);
+      --accent: #7dd3fc;
+      --accent-2: #fca5a5;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(125, 211, 252, 0.15), transparent 26%),
+        linear-gradient(180deg, #0f1720, var(--bg));
+      color: var(--ink);
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+    }
+    .page {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 44px 24px 64px;
+    }
+    .hero, .panel {
+      background: linear-gradient(180deg, rgba(28,45,63,.98), rgba(21,34,48,.94));
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+    }
+    .hero {
+      padding: 32px;
+      margin-bottom: 18px;
+    }
+    .eyebrow {
+      text-transform: uppercase;
+      letter-spacing: .18em;
+      font-size: 12px;
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+    h1, h2, h3, p { margin: 0; }
+    h1 {
+      font-size: clamp(2rem, 4vw, 3.5rem);
+      line-height: .98;
+      max-width: 12ch;
+    }
+    .hero p {
+      margin-top: 16px;
+      max-width: 70ch;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px;
+    }
+    .panel {
+      padding: 22px;
+    }
+    .label {
+      color: var(--accent);
+      font-size: .78rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-bottom: 10px;
+    }
+    ul {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    li + li { margin-top: 8px; }
+    .agent {
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+      margin-top: 12px;
+    }
+    .agent:first-of-type {
+      border-top: 0;
+      padding-top: 0;
+      margin-top: 0;
+    }
+    .agent h3 {
+      font-size: 1.05rem;
+      margin-bottom: 4px;
+    }
+    .agent p { color: var(--muted); }
+    .owner {
+      color: var(--accent-2);
+      font-size: .85rem;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <div class="eyebrow">Kana Supporting Artifact</div>
+      <h1>{{ brief.title }}</h1>
+      <p>
+        Audience: {{ brief.audience }}. Objective: {{ brief.objective }}.
+        This brief is the secondary proof surface for the walk-in: not “I rebuilt Kana,”
+        but “I understand how Kana should use its own agents internally.”
+      </p>
+    </section>
+
+    <section class="grid">
+      <article class="panel">
+        <div class="label">Why Now</div>
+        <ul>
+          {% for item in brief.why_now %}
+          <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+      </article>
+
+      <article class="panel">
+        <div class="label">Agents</div>
+        {% for agent in brief.agents %}
+        <div class="agent">
+          <h3>{{ agent.name }}</h3>
+          <p>{{ agent.responsibility }}</p>
+          <p class="owner">Output: {{ agent.output }}</p>
+        </div>
+        {% endfor %}
+      </article>
+
+      <article class="panel">
+        <div class="label">Channel Plan</div>
+        <ul>
+          {% for step in brief.channel_plan %}
+          <li>{{ step.day }} · {{ step.channel }} · {{ step.goal }} · {{ step.owner }}</li>
+          {% endfor %}
+        </ul>
+      </article>
+
+      <article class="panel">
+        <div class="label">Experiments</div>
+        <ul>
+          {% for item in brief.experiments %}
+          <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+      </article>
+
+      <article class="panel">
+        <div class="label">HubSpot Writeback</div>
+        <ul>
+          {% for item in brief.hubspot_writeback %}
+          <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+      </article>
+
+      <article class="panel">
+        <div class="label">AEO Signals</div>
+        <ul>
+          {% for item in brief.aeo_signals %}
+          <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+      </article>
+
+      <article class="panel">
+        <div class="label">Success Metrics</div>
+        <ul>
+          {% for item in brief.success_metrics %}
+          <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+      </article>
+
+      <article class="panel">
+        <div class="label">Next 48 Hours</div>
+        <ul>
+          {% for item in brief.next_48_hours %}
+          <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+      </article>
+    </section>
+  </div>
+</body>
+</html>

@@ -1,0 +1,34 @@
+prospect: Axonius
+prospect_url: https://www.axonius.com
+vertical: "Cybersecurity asset management — late-stage ($2.6B valuation), enterprise GTM motion"
+campaign_name: "Pardot Replacement → Warehouse-Native MAP Adoption"
+lifecycle_stage: "Prospect · New — active buying window, high urgency"
+objective: >
+  Land Axonius as a net-new Lumera customer while the post-Series-E expansion window is
+  open. Three signal types stacked in the scan window: a $200M Series E at a $2.6B valuation
+  (headcount and marketing investment scaling), a 2-star Pardot G2 review naming broken
+  attribution and unreliable Salesforce sync, and a live marketing-operations job posting.
+  Highest ICP fit in the scan (10.0) — Pardot pain plus warehouse signals. Buying committee is
+  the Marketing Ops lead plus the Head of Data. Shelf life ~6 days from the freshest signal.
+segment_description: >
+  Late-stage B2B SaaS on Pardot or Marketo alongside Salesforce, showing active MAP pain:
+  frustrated G2 reviews citing broken attribution and sync failures, a MOPs team spending
+  significant time on workarounds, and recent marketing-ops or data hiring. Axonius fits all
+  three. Exclude accounts already in a Lumera or Marketo trial. Single-account brief.
+num_touches: 5
+
+why_now_signals:
+  - signal_type: funding_event
+    description: "$200M Series E at a $2.6B valuation. Expanding into new enterprise verticals means marketing-automation investment scales with headcount — fresh budget for a stack upgrade."
+    days_ago: 12
+    source: Crunchbase
+
+  - signal_type: g2_review_velocity
+    description: "2-star G2 review of Pardot: 'Pardot feels like it was built for a different era. Attribution is broken, reporting requires constant data exports, and the Salesforce sync is unreliable. Our MOPs team is spending 40% of their time on workarounds. Replacing it.'"
+    days_ago: 5
+    source: G2
+
+  - signal_type: hiring
+    description: "Live marketing-operations job posting requiring Salesforce plus warehouse fluency — pulled from the job-board scan this morning. The one signal in this stack collected live, not seeded."
+    days_ago: 7
+    source: Greenhouse

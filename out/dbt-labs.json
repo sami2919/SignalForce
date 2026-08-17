@@ -1,0 +1,286 @@
+{
+  "prospect": "dbt Labs",
+  "prospect_url": "https://www.getdbt.com",
+  "vertical": "Data transformation SaaS \u2014 open-source dbt Core + dbt Cloud, ~300 employees, Series D",
+  "campaign_name": "Warehouse-Native MAP Adoption \u2014 Data Team as Champion",
+  "objective": "Convert dbt Labs from a MAP-adjacent prospect to a Conversion platform trial. Their data team already lives in the warehouse \u2014 they have Snowflake, BigQuery, and dbt natively. The gap is their marketing team is almost certainly running HubSpot or Marketo on top of that warehouse without a native connection. The champion is their Marketing Data Engineer (active Greenhouse posting) \u2014 the person hired to paper over that exact gap.\n",
+  "lifecycle_stage": "evaluation",
+  "segment": {
+    "name": "dbt Labs \u2014 Marketing Data Engineer Champion + VP Marketing Economic Buyer",
+    "salesforce_filters": [
+      "Account.Name = 'dbt Labs'",
+      "Account.Industry = 'Technology'",
+      "Account.NumberOfEmployees >= 200 AND Account.NumberOfEmployees <= 500",
+      "Account.Funding_Stage__c = 'Series D'",
+      "Contact.Title LIKE '%Marketing Data Engineer%' OR Contact.Title LIKE '%VP Marketing%' OR Contact.Title LIKE '%VP of Marketing%'",
+      "Contact.LeadSource = 'Outbound \u2014 Intent Signal'",
+      "Opportunity.StageName NOT IN ('Closed Won', 'Closed Lost')",
+      "Account.Tech_Stack__c INCLUDES ('Snowflake', 'dbt', 'BigQuery')",
+      "Account.Current_MAP__c IN ('HubSpot', 'Marketo', 'Unknown')"
+    ],
+    "warehouse_traits": [
+      "github_org = 'dbt-labs' AND repo_last_pushed_at >= DATEADD(day, -7, CURRENT_DATE) AND repo_name IN ('dbt-mcp', 'dbt-duckdb')",
+      "greenhouse_job_posting_active = TRUE AND greenhouse_job_title ILIKE '%marketing data engineer%' AND greenhouse_job_description ILIKE '%dbt%' AND greenhouse_job_description ILIKE '%Snowflake%'",
+      "greenhouse_job_description ILIKE '%attribution%outside%HubSpot%' OR greenhouse_job_description ILIKE '%attribution%beyond%HubSpot%'",
+      "intent_topic IN ('marketing attribution', 'warehouse-native analytics', 'CDP replacement', 'reverse ETL') AND intent_score >= 65",
+      "contact_github_contributions_last_30d >= 1 AND contact_github_org = 'dbt-labs'"
+    ],
+    "exclusions": [
+      "Account.Conversion_Customer__c = TRUE",
+      "Account.Conversion_Trial_Active__c = TRUE",
+      "Contact.Email_Opt_Out__c = TRUE",
+      "Contact.Unsubscribed__c = TRUE",
+      "Account.Competitor__c = TRUE",
+      "Opportunity.StageName = 'Closed Lost' AND Opportunity.CloseDate >= LAST_N_DAYS:180"
+    ],
+    "estimated_size": "2\u20134 contacts (Marketing Data Engineer + VP Marketing as primary; up to 2 secondary data team contacts identified via GitHub org membership)"
+  },
+  "touches": [
+    {
+      "step": 1,
+      "channel": "email",
+      "agent": "execution",
+      "timing": "Day 0, 09:00 recipient local time, Tuesday or Wednesday send only",
+      "subject": "dbt-mcp + your HubSpot gap \u2014 a direct connection",
+      "body_brief": "Open by referencing the dbt-mcp repo push from {{github_repo_pushed_days_ago}} days ago as proof of dbt Labs' agent-native orientation. Transition to the MAP ceiling observation: the Greenhouse JD for {{greenhouse_job_title}} explicitly asks for someone to build attribution 'outside of HubSpot' \u2014 which is the exact sentence Conversion was built to delete. Explain in 3 sentences: Conversion's execution, QA, and optimization agents run directly on top of {{prospect_warehouse_stack}} with no ETL hop; segmentation is written in SQL the new hire already knows; no HubSpot sync required. Single CTA: 'See a 60-second Snowflake-native segment built live \u2014 reply to book.' Keep under 180 words. No decks, no PDF attachments.",
+      "personalization_tokens": [
+        "{{contact.first_name}}",
+        "{{github_repo_name}}",
+        "{{github_repo_pushed_days_ago}}",
+        "{{greenhouse_job_title}}",
+        "{{prospect_warehouse_stack}}",
+        "{{account.current_map}}"
+      ],
+      "qa_rules": [
+        "Suppress if Contact.Email_Opt_Out__c = TRUE or Contact.Unsubscribed__c = TRUE before send",
+        "Verify {{github_repo_pushed_days_ago}} resolves to integer \u2264 14; if NULL, suppress touch and flag for manual review",
+        "Verify {{greenhouse_job_title}} token resolves to non-empty string; if NULL substitute 'Marketing Data Engineer' and log substitution",
+        "Spam-gate: subject line must not contain ALL CAPS words; flag if spam score (SpamAssassin) > 3.0",
+        "Deduplicate: if both Marketing Data Engineer and VP Marketing contacts are in segment, send step 1 to Marketing Data Engineer only; VP Marketing enters at step 3",
+        "Confirm sending domain has valid DKIM + DMARC pass before queue commit"
+      ],
+      "success_metric": "Email open rate \u2265 45% (persona: technically literate, low volume outbound); reply rate \u2265 8% within 72 hours"
+    },
+    {
+      "step": 2,
+      "channel": "in_app_banner",
+      "agent": "execution",
+      "timing": "Day 1 \u2014 fires if contact visits getconversion.com/warehouse-native within 48 hours of step 1 send; else fires Day 3 on next session",
+      "subject": "Your dbt models are already your segments",
+      "body_brief": "Short contextual banner (\u2264 40 words) shown on Conversion's warehouse-native product page. Message: 'You already wrote the segment in dbt \u2014 Conversion just runs it. See {{prospect_warehouse_stack}} \u2192 campaign in under 5 minutes.' CTA button: 'Start free warehouse trial'. Banner should NOT fire on pricing page to avoid premature price anchoring.",
+      "personalization_tokens": [
+        "{{contact.first_name}}",
+        "{{prospect_warehouse_stack}}",
+        "{{account.name}}"
+      ],
+      "qa_rules": [
+        "Banner must not render on /pricing, /about, or /blog URL paths \u2014 enforce URL suppression list in banner targeting rules",
+        "Fire only once per contact per session; suppress repeat impressions within same 24-hour window",
+        "Verify {{prospect_warehouse_stack}} resolves before render; default to 'your data warehouse' if NULL to prevent broken token display",
+        "A/B variant selection is owned by optimization agent \u2014 execution agent must not override variant assignment",
+        "Confirm contact cookie/identity resolution matches CRM contact ID before personalization tokens are injected"
+      ],
+      "success_metric": "Banner CTR \u2265 12%; trial sign-up page scroll depth \u2265 60% among click-throughs"
+    },
+    {
+      "step": 3,
+      "channel": "ae_task",
+      "agent": "execution",
+      "timing": "Day 2, assigned to AE by 08:00 AE local time; task due same day EOD",
+      "subject": "AE Outreach \u2014 dbt Labs dual-thread: Marketing Data Engineer + VP Marketing (Greenhouse + GitHub signals live)",
+      "body_brief": "AE task brief with two sub-tasks: (A) LinkedIn connect + voice note to VP Marketing \u2014 reference the conscious decision to hire someone to build attribution outside HubSpot as a strategic bet, and offer a 20-min exec framing of what warehouse-native MAP means for their roadmap. (B) Direct email to Marketing Data Engineer (or hiring manager if role not yet filled) \u2014 lead with the dbt-mcp and dbt-duckdb repos as shared context, offer to co-build a live Snowflake segment using their actual dbt schema during a screen-share. AE note: buying window is <21 days per intent score decay model \u2014 do not batch this task. Include Salesforce task fields: Task.Subject, Task.Priority = 'High', Task.ActivityDate = today, Task.WhoId = both contact IDs, Task.Description = full brief text.",
+      "personalization_tokens": [
+        "{{contact.first_name}}",
+        "{{ae.first_name}}",
+        "{{account.name}}",
+        "{{greenhouse_job_title}}",
+        "{{github_repo_name}}",
+        "{{intent_score}}",
+        "{{account.current_map}}"
+      ],
+      "qa_rules": [
+        "Task must write back to Salesforce Task object with Task.Priority__c = 'High' and Task.Campaign_Source__c = 'Warehouse-Native MAP Adoption'",
+        "Verify AE assignment: Account.OwnerId must resolve to an active Salesforce user; if unassigned, escalate to SDR manager queue",
+        "Confirm both contact IDs (Marketing Data Engineer, VP Marketing) are present in Task.WhoId before task creation; if only one contact exists, create single-threaded task and flag for enrichment",
+        "Do not create duplicate tasks: check for existing open Task.Subject LIKE '%dbt Labs%' created in last 7 days before writing new task",
+        "Task description must not contain unparsed tokens \u2014 validate all {{tokens}} resolve before Salesforce write"
+      ],
+      "success_metric": "AE task completed (Task.Status = 'Completed') within 24 hours; LinkedIn connection accepted OR email reply from either champion within 72 hours of task creation"
+    },
+    {
+      "step": 4,
+      "channel": "email",
+      "agent": "execution",
+      "timing": "Day 5, 08:30 recipient local time \u2014 send only if no reply received to step 1 and AE task not marked 'Completed \u2014 Replied'",
+      "subject": "The attribution model your new hire will have to rebuild (unless\u2026)",
+      "body_brief": "Nurture email targeting Marketing Data Engineer persona (or VP Marketing if MDE contact not yet resolved). Open with a concrete technical narrative: 'The first 90 days of a Marketing Data Engineer at a HubSpot shop are usually the same \u2014 export CSVs, rebuild attribution in dbt, try to push segments back into HubSpot via reverse ETL, watch it break on contact ID mismatches.' Pivot: Conversion's warehouse sync means that 90-day rebuild is a 90-minute setup. Offer a specific artifact \u2014 a public dbt package or SQL template that maps directly to {{prospect_warehouse_stack}} schema \u2014 as the trial entry point. CTA: 'Grab the dbt attribution starter pack \u2192 start your trial.' Include one-sentence social proof from a data-forward customer (anonymized vertical match). Under 220 words.",
+      "personalization_tokens": [
+        "{{contact.first_name}}",
+        "{{prospect_warehouse_stack}}",
+        "{{account.current_map}}",
+        "{{greenhouse_job_title}}",
+        "{{account.name}}",
+        "{{similar_customer_vertical}}"
+      ],
+      "qa_rules": [
+        "Suppress if step 1 generated a reply OR if AE task is marked Task.Status = 'Completed \u2014 Replied' in Salesforce \u2014 do not double-touch an engaged contact",
+        "Suppress if Contact.Unsubscribed__c = TRUE or bounce recorded on step 1",
+        "Verify {{similar_customer_vertical}} token resolves to a non-empty, non-competitor reference; if NULL, remove social proof sentence entirely rather than render broken",
+        "Subject line A/B variant (optimization agent owns selection): variant B = 'What the first 90 days of your new Marketing Data Engineer look like' \u2014 do not send both variants to same contact",
+        "Confirm send-time suppression window: do not send between Friday 17:00 and Monday 07:00 recipient local time"
+      ],
+      "success_metric": "Email open rate \u2265 38%; dbt attribution starter pack download OR trial sign-up click \u2265 10% of opens"
+    },
+    {
+      "step": 5,
+      "channel": "linkedin",
+      "agent": "execution",
+      "timing": "Day 7, fire if no trial sign-up by Day 6 EOD; send as LinkedIn InMail to VP Marketing contact",
+      "subject": "The hire you just approved already knows how to use this",
+      "body_brief": "LinkedIn InMail to VP Marketing. Short and exec-toned (\u2264 120 words). Lead: 'You approved a {{greenhouse_job_title}} hire specifically to get past {{account.current_map}}'s limits. Conversion is what that person will reach for once they're in seat \u2014 warehouse-native MAP that runs on {{prospect_warehouse_stack}} without any sync layer.' Offer: 'Happy to give you a 15-min preview so you're not in a cold eval when they start.' Do not attach decks. No feature lists. One CTA: calendar link or reply. Reference dbt-mcp signal lightly as evidence of technical culture alignment: 'We saw your team ship dbt-mcp \u2014 the same agent-native design philosophy is in our platform core.'",
+      "personalization_tokens": [
+        "{{contact.first_name}}",
+        "{{greenhouse_job_title}}",
+        "{{account.current_map}}",
+        "{{prospect_warehouse_stack}}",
+        "{{github_repo_name}}",
+        "{{ae.first_name}}",
+        "{{ae.calendar_link}}"
+      ],
+      "qa_rules": [
+        "Confirm LinkedIn contact profile URL is populated on Contact.LinkedIn_URL__c before InMail dispatch; if NULL, skip step 5 and log for enrichment \u2014 do not send to generic LinkedIn search result",
+        "Suppress if VP Marketing contact has already replied to any prior touch in this sequence (check Contact.Last_Reply_Date__c against campaign enrollment date)",
+        "InMail character count must not exceed 300 characters including subject; QA agent must validate length before send",
+        "Verify {{ae.calendar_link}} is a valid URL (regex check); if broken, substitute ae.email CTA instead",
+        "Do not send InMail within 48 hours of a prior LinkedIn touch from AE (step 3 sub-task B) \u2014 check Task.ActivityDate on AE task before dispatch"
+      ],
+      "success_metric": "InMail open rate \u2265 55%; calendar booking OR positive reply rate \u2265 15% within 5 days of send"
+    },
+    {
+      "step": 6,
+      "channel": "ae_task",
+      "agent": "execution",
+      "timing": "Day 10, 08:00 AE local time \u2014 fires unconditionally as sequence close/escalation task regardless of prior engagement",
+      "subject": "AE Escalation \u2014 dbt Labs trial close or disqualify by Day 21 (intent decay window)",
+      "body_brief": "Final AE escalation task. Intent score decay model gives a \u2264 21-day window from first GitHub signal (Day 0 = dbt-mcp push). By Day 10 the window is 55% elapsed. Task instructs AE to: (1) Review full engagement log \u2014 opens, clicks, replies, LinkedIn accepts \u2014 surfaced in Conversion dashboard. (2) If any positive signal: call both champions same day, use trial-close script anchored on the dbt attribution starter pack from step 4. (3) If zero engagement: disqualify contact from active sequence, move Account.Lifecycle_Stage__c to 'Nurture \u2014 Dark', schedule re-signal check in 45 days via Salesforce follow-up task. (4) Log outcome in Task.Description with one of three dispositions: 'Trial Started', 'Meeting Booked', 'Disqualified \u2014 Dark'. AE must not leave task open past Day 21.",
+      "personalization_tokens": [
+        "{{account.name}}",
+        "{{ae.first_name}}",
+        "{{contact.first_name}}",
+        "{{campaign_engagement_summary}}",
+        "{{intent_score}}",
+        "{{intent_score_decay_date}}",
+        "{{github_repo_pushed_days_ago}}"
+      ],
+      "qa_rules": [
+        "Task must not be created if Account.Conversion_Trial_Active__c = TRUE (trial already started \u2014 escalation is moot)",
+        "{{campaign_engagement_summary}} token must pull from Conversion engagement log API and resolve to a non-empty string summarizing opens/clicks/replies; if API call fails, substitute 'Review Conversion dashboard manually' and alert MarOps",
+        "{{intent_score_decay_date}} must resolve to a valid date in ISO 8601 format; if NULL, default to enrollment_date + 21 days and log assumption",
+        "Verify Task.WhoId resolves to at least one active contact before Salesforce write",
+        "Task.Priority__c must be set to 'High'; Task.Campaign_Source__c = 'Warehouse-Native MAP Adoption'; Task.Type = 'Escalation Close'"
+      ],
+      "success_metric": "AE task disposition logged within 24 hours of creation; trial start rate OR meeting booked rate \u2265 30% of accounts reaching step 6"
+    }
+  ],
+  "optimization_triggers": [
+    {
+      "condition": "Contact replies to step 1 email within 72 hours OR clicks trial CTA in step 2 banner",
+      "action": "Optimization agent fast-tracks contact to step 3 AE task immediately (skip Day 2 delay); suppress steps 4 and 5 to prevent over-touching an engaged champion; re-segment contact into 'Hot \u2014 Active Trial Pursuit' cohort; AE task priority escalated to Task.Priority__c = 'Critical'"
+    },
+    {
+      "condition": "github_org = 'dbt-labs' AND repo_last_pushed_at refreshes with a NEW repo push (any repo) after campaign enrollment and within campaign runtime window",
+      "action": "Optimization agent injects updated {{github_repo_name}} and {{github_repo_pushed_days_ago}} tokens into all queued touches; re-scores intent signal; if intent_score increases by \u2265 10 points, compress remaining touch cadence by 48 hours across all pending steps"
+    },
+    {
+      "condition": "greenhouse_job_posting_active flips to FALSE (role filled or pulled) AND no trial started",
+      "action": "Optimization agent pivots champion targeting: deprioritize Marketing Data Engineer outreach, escalate VP Marketing thread (steps 5 and 6) immediately; update AE task brief to note 'MDE role filled \u2014 new hire may be in seat, direct AE outreach to confirm identity and re-thread'; re-enrich Contact.Title__c via enrichment queue"
+    },
+    {
+      "condition": "intent_score drops below 50 before Day 10 (signal decay without engagement)",
+      "action": "Optimization agent pauses steps 4\u20136, moves account to 'Nurture \u2014 Cooling' cohort, schedules a re-entry check at Day 30 conditional on new intent signal \u2265 60 or new GitHub push; logs pause reason in Account.Campaign_Pause_Reason__c"
+    },
+    {
+      "condition": "VP Marketing contact accepts AE LinkedIn connect (step 3 sub-task or step 5) AND no trial started",
+      "action": "Optimization agent immediately generates a personalized AE call brief using live engagement data and injects into open AE task description; suppress remaining email and in_app_banner touches to VP Marketing to preserve channel for AE-owned conversation; set Contact.Preferred_Channel__c = 'AE Direct'"
+    },
+    {
+      "condition": "Account.Conversion_Trial_Active__c flips to TRUE at any point during campaign",
+      "action": "Optimization agent immediately terminates all queued touches (email, in_app_banner, linkedin, sms) for all contacts in segment; cancels open AE prospecting tasks and replaces with onboarding task; transitions account lifecycle stage to 'Trial \u2014 Active Onboarding'; fires success event to Salesforce Opportunity stage update: StageName = 'Trial Started'"
+    },
+    {
+      "condition": "Conference signal detected: any contact in segment registers for or is confirmed attending dbt Coalesce, DataCouncil, or MADTechSummit within campaign runtime window (sourced from event_registration warehouse trait)",
+      "action": "Optimization agent triggers conference_meet workflow: creates high-priority AE task to request in-person or virtual meeting at event venue (Task.Subject = 'Conference Meet Request \u2014 dbt Labs @ {{event_name}}'); injects {{event_name}} and {{event_date}} tokens into a bespoke step 5 LinkedIn InMail variant; compresses remaining touch cadence to conclude before event date minus 3 days to ensure AE conversation happens pre-event"
+    }
+  ],
+  "pipeline_projection": {
+    "expected_renewals": "N/A \u2014 net-new trial conversion target. Expected outcome: 1 trial start within 21 days. Trial-to-paid conversion assumed at 35% (data-native ICP benchmark) = 0.35 net-new logo. ACV estimate: $48,000\u2013$72,000 (mid-market warehouse-native tier, 2\u20135 seat marketing team + warehouse connector). Pipeline contribution: $48K\u2013$72K ARR per won logo.",
+    "ae_efficiency": "AE touch count capped at 2 structured tasks (steps 3 and 6) plus opportunistic LinkedIn (step 3 sub-task). Estimated AE time investment: 45\u201360 minutes total across 21-day window. Full engagement signal context surfaced in Conversion dashboard eliminates cold-call prep time. Dual-thread (MDE + VP Marketing) increases meeting rate without doubling AE effort due to shared task structure.",
+    "campaign_runtime": "21 days from enrollment (Day 0 = campaign trigger date, anchored to dbt-mcp GitHub push signal 3 days ago, effective window expires in \u2264 18 days from brief submission). Hard stop at Day 21 \u2014 intent decay model predicts signal half-life at 21 days for GitHub-triggered outbound. AE must log disposition by Day 21 or account auto-moves to 'Nurture \u2014 Dark'.",
+    "downside": "Downside scenario (probability: ~35%): Marketing Data Engineer role is filled externally before campaign closes; new hire arrives with a pre-existing MAP vendor preference (e.g., Census, Hightouch, or Segment) established in prior role. VP Marketing defers MAP decision to new hire's 30/60/90 ramp plan, pushing eval window to Q2+. In this scenario: trial conversion probability drops to ~12%; pipeline contribution compresses to $0 in current quarter. Mitigation: step 3 AE task includes explicit instruction to ask VP Marketing for intro to new hire on Day 1 of their start; optimization trigger 3 catches role-filled signal and pivots outreach accordingly. Secondary downside: dbt Labs is acquired or announces a strategic partnership with an existing MAP vendor during campaign window (low probability, <5%), which would trigger immediate disqualification and Closed Lost logging."
+  },
+  "meta": {
+    "campaign_name": "Warehouse-Native MAP Adoption \u2014 Data Team as Champion",
+    "prospect": "dbt Labs",
+    "prospect_url": "https://www.getdbt.com",
+    "vertical": "Data transformation SaaS",
+    "lifecycle_stage": "evaluation",
+    "objective": "Convert dbt Labs from a MAP-adjacent prospect to a Conversion platform trial. dbt Labs' data team already operates natively in Snowflake and BigQuery with dbt at the core. The marketing stack gap is acute: their Greenhouse JD for a Marketing Data Engineer explicitly calls out 'building attribution from scratch outside of HubSpot', confirming the team has hit the ceiling of a warehouse-disconnected MAP. Active GitHub signals (dbt-mcp pushed 3d ago, dbt-duckdb pushed 6d ago) confirm an agent-native, embedded-warehouse orientation that maps directly to Conversion's architecture. Two champions are targeted: (1) the incoming/current Marketing Data Engineer \u2014 the person hired to solve the exact problem Conversion eliminates, and (2) the VP Marketing who approved the hire and owns the budget. The buying window is live and compressing \u2014 campaign must close to trial within 21 days.",
+    "buying_signals": [
+      {
+        "type": "HIRING",
+        "signal": "Marketing Data Engineer role on Greenhouse requires dbt, Snowflake, and attribution outside HubSpot",
+        "days_ago": 5,
+        "source": "Greenhouse"
+      },
+      {
+        "type": "GITHUB_REPO",
+        "signal": "dbt-labs/dbt-mcp pushed 3 days ago \u2014 active investment in agent-native tooling",
+        "days_ago": 3,
+        "source": "GitHub"
+      },
+      {
+        "type": "GITHUB_REPO",
+        "signal": "dbt-labs/dbt-duckdb active \u2014 embedded/local warehouse execution interest",
+        "days_ago": 6,
+        "source": "GitHub"
+      }
+    ],
+    "model": "claude-sonnet-4-6",
+    "generated_at": "2026-05-12T12:26:38+00:00",
+    "cache_read_input_tokens": 0,
+    "cache_creation_input_tokens": 2181,
+    "input_tokens": 23,
+    "output_tokens": 6131
+  },
+  "why_now": {
+    "timing_score": "HIGH",
+    "signals": [
+      {
+        "signal_type": "hiring",
+        "description": "Marketing Data Engineer role posted on Greenhouse \u2014 JD requires dbt, Snowflake, and 'building attribution from scratch outside of HubSpot'. Direct MAP ceiling signal.",
+        "days_ago": 5,
+        "source": "Greenhouse",
+        "timing_tier": "HIGH",
+        "shelf_life_days": 9
+      },
+      {
+        "signal_type": "github_repo",
+        "description": "dbt-labs/dbt-mcp repo pushed 3 days ago \u2014 they're building an MCP server for dbt, signaling active investment in agent-native tooling. Conversion's agent model is a natural fit.",
+        "days_ago": 3,
+        "source": "GitHub",
+        "timing_tier": "HIGH",
+        "shelf_life_days": 11
+      },
+      {
+        "signal_type": "github_repo",
+        "description": "dbt-labs/dbt-duckdb repo active \u2014 DuckDB integration signals interest in embedded/local warehouse execution, consistent with warehouse-native MAP interest.",
+        "days_ago": 6,
+        "source": "GitHub",
+        "timing_tier": "HIGH",
+        "shelf_life_days": 8
+      }
+    ],
+    "shelf_life_days": 8,
+    "rationale": "3 signals detected in the last 6 days. Buying window closes in ~8 days."
+  }
+}

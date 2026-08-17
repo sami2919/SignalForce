@@ -1,0 +1,242 @@
+{
+  "prospect": "Veriforce",
+  "prospect_url": "https://www.veriforce.com",
+  "vertical": "Supplier compliance & contractor safety SaaS \u2014 industrial enterprise (oil & gas, utilities, construction)",
+  "campaign_name": "Tier-2 Supplier Re-Engagement \u2014 Compliance Lapse \u2192 Renewal",
+  "objective": "Reactivate Tier-2 supplier accounts whose compliance verification lapsed in the last 90 days, route engaged accounts to AE-qualified pipeline, and recover ~12% of dormant ARR within one quarter.\n",
+  "lifecycle_stage": "Customer \u00b7 Re-engagement (post-lapse, pre-churn)",
+  "segment": {
+    "name": "Tier-2 Supplier Re-Engagement \u2014 Compliance Lapse \u2192 Renewal",
+    "salesforce_filters": [
+      "Account.Type__c = 'Supplier'",
+      "Account.Supplier_Tier__c = 'Tier-2'",
+      "Account.Compliance_Status__c IN ('Expired', 'Pending Renewal')",
+      "Contact.Last_Login_Date__c <= LAST_N_DAYS:90",
+      "Account.Customer_Stage__c = 'Customer'",
+      "Account.AnnualRevenue > 0",
+      "Contact.HasOptedOutOfEmail = false",
+      "Contact.SMS_Opt_Out__c = false",
+      "Account.Has_Active_Client_Contract__c = true"
+    ],
+    "warehouse_traits": [
+      "product_engagement.last_session_ts < now() - interval '90 days'",
+      "compliance_events.verification_expiry_date BETWEEN now() - interval '90 days' AND now()",
+      "client_contract_health.linked_hiring_client_active = true",
+      "account_health.churn_risk_score >= 60",
+      "intent_data.compliance_software_intent_tier IN ('medium', 'high')"
+    ],
+    "exclusions": [
+      "Account.Has_Open_Critical_Case__c = true",
+      "Account.Has_Open_High_Case__c = true",
+      "Account.Active_AE_Opportunity__c = true",
+      "Contact.HasOptedOutOfEmail = true",
+      "Contact.SMS_Opt_Out__c = true",
+      "Account.Churned_Date__c != null"
+    ],
+    "estimated_size": "~2,400 contacts across ~840 accounts"
+  },
+  "touches": [
+    {
+      "step": 1,
+      "channel": "email",
+      "agent": "execution",
+      "timing": "Day 0 \u2014 9:00 AM recipient local time, Tuesday or Wednesday send-day only",
+      "subject": "{{contact.first_name}}, your {{account.compliance_program_name}} verification expired {{compliance.days_since_expiry}} days ago",
+      "body_brief": "Open with a direct, non-alarmist compliance status alert: {{account.name}}'s supplier verification under {{account.compliance_program_name}} lapsed {{compliance.days_since_expiry}} days ago. Cite the specific hiring client(s) ({{account.linked_hiring_client_names}}) whose active contracts now flag {{account.name}} as unverified \u2014 making them non-compliant too. State the exact renewal path: one-click to the Veriforce Renewal Portal pre-populated with {{account.name}}'s profile. Include a secondary CTA to schedule a 15-min guided renewal call. Tone: factual urgency, zero scare tactics. Footer: account manager name {{ae.full_name}} and direct calendar link {{ae.calendar_link}}.",
+      "personalization_tokens": [
+        "{{contact.first_name}}",
+        "{{account.name}}",
+        "{{account.compliance_program_name}}",
+        "{{compliance.days_since_expiry}}",
+        "{{account.linked_hiring_client_names}}",
+        "{{ae.full_name}}",
+        "{{ae.calendar_link}}",
+        "{{renewal_portal.prefill_url}}"
+      ],
+      "qa_rules": [
+        "Suppress if Contact.HasOptedOutOfEmail = true at send time (real-time re-check)",
+        "Suppress if Account.Active_AE_Opportunity__c = true at send time",
+        "Suppress if Account.Has_Open_Critical_Case__c = true OR Account.Has_Open_High_Case__c = true",
+        "Hard-block send if compliance.days_since_expiry token resolves to null or <= 0",
+        "Hard-block send if account.linked_hiring_client_names token resolves to null or empty string",
+        "Deduplicate: one send per Account within 24-hour window; suppress duplicate contacts on same account",
+        "Spam-gate: subject line length must not exceed 70 characters after token resolution",
+        "Validate renewal_portal.prefill_url is a live URL (HTTP 200) before send"
+      ],
+      "success_metric": "Email open rate \u2265 32%; renewal portal CTA click rate \u2265 8% within 48 hours of send"
+    },
+    {
+      "step": 2,
+      "channel": "in_app_banner",
+      "agent": "execution",
+      "timing": "Day 3 \u2014 triggered on next login session detected post-Step 1; expires after 7 days if no login",
+      "subject": "Complete your compliance renewal \u2014 {{account.compliance_program_name}} verification is overdue",
+      "body_brief": "Persistent top-of-screen banner displayed immediately upon authenticated login to the Veriforce portal. Banner copy: 'Your {{account.compliance_program_name}} verification has been expired for {{compliance.days_since_expiry}} days. {{account.linked_hiring_client_count}} of your hiring clients require active verification. Renew now to restore compliant status.' Primary CTA button: 'Renew Now \u2192 ' linking to {{renewal_portal.prefill_url}}. Secondary dismissible link: 'Remind me in 3 days.' If user dismisses, re-surface at next login. Track banner impression, CTA click, and dismissal events separately.",
+      "personalization_tokens": [
+        "{{account.name}}",
+        "{{account.compliance_program_name}}",
+        "{{compliance.days_since_expiry}}",
+        "{{account.linked_hiring_client_count}}",
+        "{{renewal_portal.prefill_url}}"
+      ],
+      "qa_rules": [
+        "Suppress banner if renewal has been completed (compliance.verification_status = 'Active') at session start",
+        "Suppress banner if Account.Active_AE_Opportunity__c = true",
+        "Suppress if account.linked_hiring_client_count token resolves to 0 or null \u2014 escalate to data team",
+        "Ensure banner does not stack with any other active system alert banners (max one banner at a time rule)",
+        "Validate compliance.days_since_expiry is a positive integer at render time",
+        "Banner must not render for contacts tagged Contact.Role__c = 'Technical / IT' only \u2014 compliance owner targeting required"
+      ],
+      "success_metric": "In-app banner CTA click rate \u2265 18% of sessions where banner is rendered; renewal flow initiation \u2265 10%"
+    },
+    {
+      "step": 3,
+      "channel": "ae_task",
+      "agent": "execution",
+      "timing": "Day 7 \u2014 create AE task if Step 1 email was opened OR Step 2 banner was clicked but no renewal initiated; skip if renewal completed",
+      "subject": "[ACTION] Re-engage {{account.name}} \u2014 compliance lapsed {{compliance.days_since_expiry}} days, hiring client risk: {{account.linked_hiring_client_names}}",
+      "body_brief": "Create a high-priority Salesforce Task on the Account record assigned to {{ae.full_name}}. Task description: '{{account.name}} (Tier-2 Supplier) has shown re-engagement signals (email open / banner click) but has not initiated renewal. Compliance verification under {{account.compliance_program_name}} expired {{compliance.days_since_expiry}} days ago. Linked hiring clients at risk: {{account.linked_hiring_client_names}}. Recommended action: personal outreach \u2014 call or LinkedIn \u2014 within 24 hours. Reference compliance gap, offer white-glove renewal assist. Estimated ARR at risk: {{account.arr_at_risk}}. Attach renewal portal prefill link: {{renewal_portal.prefill_url}}. Log outcome in Opportunity.Stage__c.' Set Task.Priority = High, Task.ActivityDate = today + 1 business day.",
+      "personalization_tokens": [
+        "{{account.name}}",
+        "{{account.compliance_program_name}}",
+        "{{compliance.days_since_expiry}}",
+        "{{account.linked_hiring_client_names}}",
+        "{{account.arr_at_risk}}",
+        "{{ae.full_name}}",
+        "{{renewal_portal.prefill_url}}"
+      ],
+      "qa_rules": [
+        "Do not create task if Account.Active_AE_Opportunity__c = true (AE already engaged)",
+        "Do not create task if renewal has been completed prior to Day 7",
+        "Do not create task if Account.Has_Open_Critical_Case__c = true \u2014 route to CSM instead",
+        "Validate ae.full_name resolves to an active Salesforce User (User.IsActive = true); if AE seat is vacant, assign to CSM queue",
+        "Ensure account.arr_at_risk token is not null; if null, substitute with 'ARR data unavailable \u2014 check billing system'",
+        "Deduplicate: no more than one open re-engagement Task per Account at a time"
+      ],
+      "success_metric": "AE task completion rate \u2265 70% within 48 hours of creation; AE-logged outreach attempt rate \u2265 85%"
+    },
+    {
+      "step": 4,
+      "channel": "email",
+      "agent": "optimization",
+      "timing": "Day 14 \u2014 send at 10:00 AM recipient local time; optimization agent selects variant based on Day 0 engagement signal",
+      "subject": "Variant A (low-engagement cohort): '{{contact.first_name}}, {{account.linked_hiring_client_names}} may be required to find a new verified supplier' | Variant B (engaged cohort): '{{contact.first_name}}, here's everything you need to complete your {{account.compliance_program_name}} renewal in under 10 minutes'",
+      "body_brief": "VARIANT A (accounts with zero opens/clicks in Steps 1\u20132, churn_risk_score \u2265 75): Lead with consequence framing \u2014 hiring clients ({{account.linked_hiring_client_names}}) are contractually obligated to use verified suppliers; an unresolved lapse of {{compliance.days_since_expiry}} days may trigger a mandatory supplier swap. Include a peer social proof stat: 'Over {{industry.avg_reactivation_benchmark}}% of Tier-2 suppliers in {{account.industry_vertical}} renew within 30 days of lapse.' Hard CTA: 'Restore Verified Status Now' \u2192 {{renewal_portal.prefill_url}}. VARIANT B (accounts with open or click in Steps 1\u20132, churn_risk_score < 75): Lead with frictionless enablement \u2014 step-by-step renewal checklist pre-populated for {{account.name}}. Highlight: estimated time to complete = {{renewal.estimated_minutes}} minutes. Show progress indicator based on {{renewal.steps_already_completed}}. CTA: 'Pick Up Where You Left Off' \u2192 {{renewal_portal.prefill_url}}. Both variants close with AE offer: '{{ae.full_name}} is available if you need any help \u2014 {{ae.calendar_link}}'.",
+      "personalization_tokens": [
+        "{{contact.first_name}}",
+        "{{account.name}}",
+        "{{account.compliance_program_name}}",
+        "{{compliance.days_since_expiry}}",
+        "{{account.linked_hiring_client_names}}",
+        "{{account.industry_vertical}}",
+        "{{industry.avg_reactivation_benchmark}}",
+        "{{renewal.estimated_minutes}}",
+        "{{renewal.steps_already_completed}}",
+        "{{ae.full_name}}",
+        "{{ae.calendar_link}}",
+        "{{renewal_portal.prefill_url}}"
+      ],
+      "qa_rules": [
+        "Suppress if renewal completed before Day 14 send (real-time compliance status check)",
+        "Suppress if Account.Active_AE_Opportunity__c = true",
+        "Suppress if Contact.HasOptedOutOfEmail = true",
+        "Optimization agent must confirm variant assignment is logged in warehouse before send executes",
+        "Hard-block Variant A send if account.linked_hiring_client_names is null \u2014 fallback to Variant B",
+        "Hard-block if industry.avg_reactivation_benchmark token resolves outside range 40\u201395 (data anomaly gate)",
+        "Hard-block if renewal.estimated_minutes resolves to null or > 60 \u2014 review renewal workflow data",
+        "Spam-gate: combined subject + preheader must not trigger spam keywords list (run through internal filter before send)",
+        "Deduplicate: suppress contacts who received Step 1 email AND did not open \u2014 consider SMS escalation instead (flag for optimization agent review)"
+      ],
+      "success_metric": "Variant B click-to-renewal-initiation rate \u2265 15%; Variant A click rate \u2265 6%; optimization agent to declare winning variant by Day 16 for cohort reallocation"
+    },
+    {
+      "step": 5,
+      "channel": "linkedin",
+      "agent": "execution",
+      "timing": "Day 21 \u2014 send LinkedIn message for accounts with zero renewal initiation across all prior touches and churn_risk_score \u2265 70; send between 8:00\u201310:00 AM recipient local time, weekdays only",
+      "subject": "Personal outreach: compliance verification window closing for {{account.name}}",
+      "body_brief": "Send a LinkedIn direct message from the mapped AE ({{ae.linkedin_sender_name}}) to the primary compliance contact ({{contact.full_name}}, {{contact.title}}). Message tone: peer-to-peer, concise, non-automated in feel. Copy framework: '{{contact.first_name}} \u2014 I wanted to reach out directly because {{account.name}}'s {{account.compliance_program_name}} verification has now been lapsed for {{compliance.days_since_expiry}} days, and I know {{account.linked_hiring_client_names}} depend on your verified status. I don't want you to lose those contracts over something we can fix quickly. I can personally walk you through the renewal in one short call \u2014 [calendar link: {{ae.calendar_link}}] \u2014 or if you'd rather just do it yourself, here's your direct renewal link: {{renewal_portal.prefill_url}}. Let me know how I can help.' Cap message length at 300 characters for mobile readability. Do not include marketing disclaimers in the message body \u2014 handled by platform footer.",
+      "personalization_tokens": [
+        "{{contact.first_name}}",
+        "{{contact.full_name}}",
+        "{{contact.title}}",
+        "{{account.name}}",
+        "{{account.compliance_program_name}}",
+        "{{compliance.days_since_expiry}}",
+        "{{account.linked_hiring_client_names}}",
+        "{{ae.linkedin_sender_name}}",
+        "{{ae.calendar_link}}",
+        "{{renewal_portal.prefill_url}}"
+      ],
+      "qa_rules": [
+        "Suppress if renewal initiated or completed at any point before Day 21 send",
+        "Suppress if Account.Active_AE_Opportunity__c = true",
+        "Suppress if Contact.LinkedIn_Opt_Out__c = true",
+        "Suppress if ae.linkedin_sender_name resolves to null or AE LinkedIn seat is unconnected \u2014 route to CSM LinkedIn sender fallback",
+        "Hard-block if compliance.days_since_expiry < 21 at send time (data drift check)",
+        "Hard-block if account.linked_hiring_client_names is null \u2014 do not send without this anchor context",
+        "Validate contact.title is not a purely technical role (e.g., 'Software Engineer', 'IT Admin') \u2014 compliance/operations/safety titles only",
+        "Message body after token resolution must not exceed 300 characters \u2014 hard truncation block if over limit",
+        "Rate-limit: max 50 LinkedIn messages per sender per day (platform LinkedIn policy compliance)"
+      ],
+      "success_metric": "LinkedIn message acceptance/reply rate \u2265 12%; AE-booked meeting rate \u2265 5% of Step 5 recipients within 7 days of send"
+    }
+  ],
+  "optimization_triggers": [
+    {
+      "condition": "Contact opens Step 1 email AND clicks renewal portal CTA within 48 hours but does not complete renewal within 72 hours",
+      "action": "Acceleration path: suppress Step 2 banner default timing; immediately surface in-app banner on next login session and simultaneously create low-priority AE awareness task \u2014 do not wait for Day 7 threshold"
+    },
+    {
+      "condition": "Warehouse trait compliance.verification_status transitions to 'Active' (renewal completed) at any point during campaign runtime",
+      "action": "Immediately suppress contact and account from all remaining touches; write Account.Compliance_Status__c = 'Active' back to Salesforce; trigger post-renewal onboarding nurture enrollment; log conversion event to pipeline_projection.realized_renewals counter"
+    },
+    {
+      "condition": "Account.churn_risk_score crosses threshold \u2265 85 at any point (warehouse real-time update)",
+      "action": "Escalate account to AE priority queue: create Salesforce Task with Priority = Critical and ActivityDate = today; pull account out of automated sequence; flag for manual AE outreach within 4 business hours; notify AE via Slack webhook"
+    },
+    {
+      "condition": "Step 4 Variant A achieves click-to-initiation rate \u2265 10% by Day 16 cohort check (matches or exceeds Variant B performance)",
+      "action": "Optimization agent reallocates remaining untouched Day 14 cohort 70/30 toward Variant A; update subject line bandit weights in platform; log reallocation event with timestamp for attribution audit"
+    },
+    {
+      "condition": "AE task from Step 3 remains incomplete (Task.Status != 'Completed') for more than 48 business hours",
+      "action": "Escalate task to AE manager (User.ManagerId) via Salesforce Chatter mention; re-assign task if no action within 72 hours to CSM overflow queue; log escalation in Account.Re_Engagement_Escalation_Log__c"
+    },
+    {
+      "condition": "Three or more contacts on the same Account record engage (open or click) across Steps 1\u20134 but no renewal is initiated",
+      "action": "Flag account as 'High Multi-Contact Intent'; create an AE Opportunity record in Salesforce with Stage = 'Renewal Discovery' and attach all engagement signals as Activity history; route to AE for consultative renewal assist within 1 business day"
+    }
+  ],
+  "pipeline_projection": {
+    "expected_renewals": "~101 account renewals (12% of 840 accounts); estimated ARR recovery of $1.2M\u2013$1.6M assuming average Tier-2 ARR of ~$14,300/account; AE-assisted renewals projected at 30\u201335% of total conversions (30\u201335 accounts via Steps 3 & 5)",
+    "ae_efficiency": "AE task volume capped at ~168 tasks (Step 3 triggers on ~20% of 840 accounts showing engagement signals); Step 5 LinkedIn outreach limited to churn_risk \u2265 70 non-responders (~200\u2013250 contacts); total AE labor estimated at 140\u2013180 hours across the quarter, compared to ~520 hours for fully manual outreach \u2014 efficiency gain of ~65%",
+    "campaign_runtime": "21-day active sequence per contact cohort; full campaign closes Day 28 (Day 21 final touch + 7-day reply/conversion window); reporting cadence: Day 7 (early signal review), Day 14 (variant selection), Day 21 (final push), Day 28 (pipeline close and retrospective)",
+    "downside": "Downside scenario (probability ~25%): email deliverability degradation or compliance data sync lag reduces segment accuracy by 20\u201330%, limiting addressable pool to ~600 accounts. Engagement rates fall to Step 1 open rate ~18%, portal CTA click rate ~3.5%. Renewal conversion drops to 5\u20136% of addressable pool (~36 accounts), recovering ~$515K ARR. AE task volume remains constant but conversion from AE-assisted path also drops proportionally. Mitigation levers: (1) warm up sending domain 7 days pre-launch; (2) run warehouse-to-Salesforce compliance status reconciliation within 48 hours of campaign kick-off; (3) activate SMS channel as parallel Step 1 fallback for contacts with verified mobile numbers if email open rates fall below 15% at Day 3 check."
+  },
+  "meta": {
+    "campaign_name": "Tier-2 Supplier Re-Engagement \u2014 Compliance Lapse \u2192 Renewal",
+    "prospect": "Veriforce",
+    "prospect_url": "https://www.veriforce.com",
+    "vertical": "Supplier compliance & contractor safety SaaS \u2014 industrial enterprise (oil & gas, utilities, construction)",
+    "lifecycle_stage": "Customer \u00b7 Re-engagement (post-lapse, pre-churn)",
+    "objective": "Reactivate Tier-2 supplier accounts whose compliance verification lapsed in the last 90 days, route engaged accounts to AE-qualified pipeline, and recover ~12% of dormant ARR within one quarter",
+    "author": "Senior MarOps Architect",
+    "created_at": "2025-07-14",
+    "touch_count": 5,
+    "channels_used": [
+      "email",
+      "in_app_banner",
+      "ae_task",
+      "linkedin"
+    ],
+    "ab_test": "Step 4 email \u2014 consequence-framing (Variant A) vs. frictionless-enablement (Variant B), split on prior engagement signal",
+    "model": "claude-sonnet-4-6",
+    "generated_at": "2026-06-08T03:58:45+00:00",
+    "cache_read_input_tokens": 0,
+    "cache_creation_input_tokens": 1226,
+    "input_tokens": 713,
+    "output_tokens": 5458
+  },
+  "why_now": null
+}

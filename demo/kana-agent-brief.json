@@ -1,0 +1,86 @@
+{
+  "title": "Kana Customer Zero Activation Brief",
+  "audience": "Kana founders, GTM engineer interview loop, and internal marketing operators",
+  "objective": "Show how Kana should use its own platform to increase at-bats without adding manual GTM overhead.",
+  "why_now": [
+    "The role explicitly owns outbound, inbound, HubSpot plumbing, paid feedback loops, and internal agent deployment.",
+    "Kana's differentiation is augmentation, not replacement, so the strongest proof is an operating system that keeps the existing stack intact.",
+    "A Customer Zero workflow turns the hiring conversation from claims about AI into visible internal usage."
+  ],
+  "agents": [
+    {
+      "name": "Audience Agent",
+      "responsibility": "Cluster target accounts by hiring, growth, SEO, and automation signals across public sources.",
+      "output": "Ranked account queue with titles, routes, and message angles."
+    },
+    {
+      "name": "Experiment Agent",
+      "responsibility": "Translate signal clusters into outbound hypotheses, landing page angles, and paid-test tags.",
+      "output": "Experiment briefs routed into email, LinkedIn, and paid workflows."
+    },
+    {
+      "name": "HubSpot Sync Agent",
+      "responsibility": "Write every discovery event, owner assignment, and next action back to HubSpot with no manual re-entry.",
+      "output": "Clean system-of-record updates and follow-up tasks."
+    },
+    {
+      "name": "AEO Agent",
+      "responsibility": "Watch answer-engine and SEO topics, then propose content assets and distribution hooks.",
+      "output": "Topic backlog tied to GTM experiments and discoverability gaps."
+    }
+  ],
+  "channel_plan": [
+    {
+      "day": "Day 0",
+      "channel": "Clay research + Wiza",
+      "goal": "Resolve buyer, operator, and champion paths for the top queue entries.",
+      "owner": "Audience Agent"
+    },
+    {
+      "day": "Day 0",
+      "channel": "Instantly outbound",
+      "goal": "Launch email variant for ops-bottleneck and AI-augmentation angles.",
+      "owner": "Experiment Agent"
+    },
+    {
+      "day": "Day 1",
+      "channel": "Valley LinkedIn",
+      "goal": "Add signal-led social follow-up for accounts with recent leadership activity.",
+      "owner": "Experiment Agent"
+    },
+    {
+      "day": "Day 2",
+      "channel": "SEMRush + Kana content workflow",
+      "goal": "Publish one supporting content asset for the highest-performing angle.",
+      "owner": "AEO Agent"
+    }
+  ],
+  "experiments": [
+    "Compare 'more at-bats' framing vs 'less manual ops' framing by signal type.",
+    "Route SEO/content-pressure accounts into content-led outreach instead of direct demo asks.",
+    "Test whether funding + hiring windows outperform title-based routing alone."
+  ],
+  "hubspot_writeback": [
+    "Create company and lead records from the queue output.",
+    "Write signal summary, experiment tag, source URLs, and assigned owner.",
+    "Open next-action tasks automatically for LinkedIn or email depending on route.",
+    "Mark experiment cohort membership so outbound and paid learnings share the same source of truth."
+  ],
+  "aeo_signals": [
+    "Questions customers ask LLMs about AI-first demand generation",
+    "Competitor comparison prompts involving Clay, HubSpot, and agentic marketing",
+    "Emerging search terms around answer engine optimization and AI personalization"
+  ],
+  "success_metrics": [
+    "More qualified outbound opportunities per week",
+    "Lower manual CRM data-entry time",
+    "Faster campaign launch time from signal to first touch",
+    "Higher response rate from signal-led routing vs generic outbound"
+  ],
+  "next_48_hours": [
+    "Run the queue on live and sample data.",
+    "Review top three experiment tags with founders.",
+    "Pick one content angle and one outbound angle for same-week execution.",
+    "Use the queue output as the daily standup artifact for GTM."
+  ]
+}

@@ -22,12 +22,28 @@ logger = logging.getLogger(__name__)
 _SEED_FILE = Path(__file__).parent.parent.parent / "config" / "g2_seeds.yaml"
 
 _STRONG_KEYWORDS = {
-    "migration", "replacing", "switching", "evaluating", "replacement",
-    "alternative", "alternatives", "migrating", "moved off",
+    "migration",
+    "replacing",
+    "switching",
+    "evaluating",
+    "replacement",
+    "alternative",
+    "alternatives",
+    "migrating",
+    "moved off",
 }
 _MODERATE_KEYWORDS = {
-    "expensive", "complex", "slow", "frustrating", "difficult",
-    "overhead", "bloated", "ceiling", "too much", "painful", "clunky",
+    "expensive",
+    "complex",
+    "slow",
+    "frustrating",
+    "difficult",
+    "overhead",
+    "bloated",
+    "ceiling",
+    "too much",
+    "painful",
+    "clunky",
 }
 
 
@@ -77,22 +93,24 @@ def scan(config: ScannerConfig) -> ScanResult:
         star_rating = int(review.get("star_rating", 2))
         review_url = review.get("review_url", "")
 
-        signals.append(Signal(
-            signal_type="g2_review",
-            company_name=company,
-            signal_strength=_score(snippet, star_rating),
-            source_url=review_url,
-            raw_data={
-                "snippet": snippet,
-                "rating": star_rating,
-                "vendor": vendor,
-            },
-            metadata={
-                "source_type": "g2_manual_seed",
-                "product_mentioned": vendor,
-                "star_rating": star_rating,
-            },
-        ))
+        signals.append(
+            Signal(
+                signal_type="g2_review",
+                company_name=company,
+                signal_strength=_score(snippet, star_rating),
+                source_url=review_url,
+                raw_data={
+                    "snippet": snippet,
+                    "rating": star_rating,
+                    "vendor": vendor,
+                },
+                metadata={
+                    "source_type": "g2_manual_seed",
+                    "product_mentioned": vendor,
+                    "star_rating": star_rating,
+                },
+            )
+        )
 
     logger.info("G2 seed scanner: %d signals loaded from %s", len(signals), _SEED_FILE)
 

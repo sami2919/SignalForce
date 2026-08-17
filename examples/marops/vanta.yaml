@@ -1,0 +1,34 @@
+prospect: Vanta
+prospect_url: https://www.vanta.com
+vertical: "Security & compliance automation (SOC 2 / ISO / continuous monitoring) — late-stage, enterprise-scale GTM"
+campaign_name: "HubSpot Segmentation Ceiling → Warehouse-Native MAP Adoption"
+lifecycle_stage: "Prospect · New — active buying window, high urgency"
+objective: >
+  Land Vanta as a net-new Lumera customer while the post-Series-D stack-evaluation window
+  is open. Three signal types stacked in the scan window: a $150M Series D (fresh budget plus a
+  mandate to scale lifecycle), a 3-star HubSpot G2 review citing segmentation limits and a push
+  toward Snowflake-native audiences, and a live marketing-operations job posting. Buying
+  committee is the VP/Director of Marketing Ops plus the Head of Data. Move fast — shelf life
+  ~6 days from the freshest signal.
+segment_description: >
+  Late-stage B2B SaaS already running Snowflake alongside Salesforce AND showing active MAP
+  pain: frustrated G2 reviews of HubSpot, building custom SQL audiences to work around native
+  segmentation limits, and recent marketing-ops or data hiring. Vanta fits all three. Exclude
+  accounts already in a Lumera or Marketo trial. Single-account brief.
+num_touches: 5
+
+why_now_signals:
+  - signal_type: funding_event
+    description: "$150M Series D led by Sequoia. Fresh capital plus aggressive hiring means the marketing-ops team is under pressure to scale lifecycle campaigns — a budget-and-mandate window."
+    days_ago: 10
+    source: Crunchbase
+
+  - signal_type: g2_review_velocity
+    description: "3-star G2 review of HubSpot: 'HubSpot works fine at our scale but we're hitting the ceiling on segmentation. Building custom SQL audiences because the native filters aren't flexible enough. Evaluating alternatives that work natively with our Snowflake data.'"
+    days_ago: 4
+    source: G2
+
+  - signal_type: hiring
+    description: "Live marketing-operations job posting requiring Salesforce plus warehouse fluency — pulled from the job-board scan this morning. The one signal in this stack collected live, not seeded."
+    days_ago: 6
+    source: Greenhouse

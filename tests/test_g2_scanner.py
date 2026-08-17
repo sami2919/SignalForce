@@ -11,10 +11,10 @@ from scripts.models import SignalStrength
 
 
 SAMPLE_LINKEDIN_RESULT = {
-    "title": "Northwind Replaces Marketo with Lumera",
-    "url": "https://www.linkedin.com/posts/example_in-under-4-weeks-northwind-replaced-activ",
-    "snippet": "I'm the marketing operations manager at Northwind. Yeah. So here at Northwind we just finished "
-    "replacing Marketo with a unified AI-powered Lumera stack. It took 4 weeks.",
+    "title": "PDL Replaces Marketo with Conversion",
+    "url": "https://www.linkedin.com/posts/neiltewari_in-under-4-weeks-people-data-labs-replaced-activ",
+    "snippet": "I'm the marketing operations manager at PDL. Yeah. So here at PDL we just finished "
+    "replacing Marketo with a unified AI-powered Conversion stack. It took 4 weeks.",
 }
 
 SAMPLE_HUBSPOT_RESULT = {

@@ -323,6 +323,7 @@ if __name__ == "__main__":
     import argparse
 
     from dotenv import load_dotenv
+
     load_dotenv()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     parser = argparse.ArgumentParser(description="G2 authenticated review scanner (JSON API)")

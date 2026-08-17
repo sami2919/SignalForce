@@ -7,6 +7,7 @@ from datetime import datetime, timezone, timedelta
 import pytest
 
 from scripts.db import create_db_engine, init_db
+from scripts.db import OutcomeEvent, OutreachEvent, TrackedSignal, get_session
 from scripts.outcome_tracker import (
     create_campaign,
     get_best_performing_signals,
@@ -72,6 +73,78 @@ def test_full_feedback_loop(engine, campaign_id):
     assert isinstance(meeting_id, int)
 
 
+def test_logs_analytics_metadata(engine, campaign_id):
+    """Optional analytics fields are persisted without changing old callers."""
+    detected_at = datetime.now(timezone.utc) - timedelta(hours=6)
+    sent_at = datetime.now(timezone.utc)
+    sig_id = log_signal(
+        engine,
+        campaign_id,
+        signal_type="job_posting",
+        company_name="Acme",
+        signal_strength=3,
+        detected_at=detected_at,
+        icp_grade="A",
+        composite_score=22.5,
+        scanner_name="jobs",
+    )
+    outreach_id = log_outreach(
+        engine,
+        sig_id,
+        channel="email",
+        template="hiring-signal",
+        template_variant="A",
+        subject_variant="signal-first",
+        cta_variant="soft-ask",
+        experiment_tag="job-email-A",
+        external_id="instantly-1",
+        sent_at=sent_at,
+    )
+    outcome_id = log_outcome(
+        engine,
+        outreach_id,
+        outcome_type="opened",
+        external_id="instantly-open-1",
+    )
+
+    with get_session(engine) as session:
+        signal = session.query(TrackedSignal).filter(TrackedSignal.id == sig_id).one()
+        outreach = session.query(OutreachEvent).filter(OutreachEvent.id == outreach_id).one()
+        outcome = session.query(OutcomeEvent).filter(OutcomeEvent.id == outcome_id).one()
+
+        assert signal.icp_grade == "A"
+        assert signal.composite_score == 22.5
+        assert signal.scanner_name == "jobs"
+        assert outreach.template_variant == "A"
+        assert outreach.subject_variant == "signal-first"
+        assert outreach.cta_variant == "soft-ask"
+        assert outreach.experiment_tag == "job-email-A"
+        assert outreach.external_id == "instantly-1"
+        assert outreach.tracking_token
+        assert outreach.detected_to_sent_hours == 6.0
+        assert outcome.external_id == "instantly-open-1"
+
+
+def test_email_outreach_gets_tracking_token_but_linkedin_does_not(engine, campaign_id):
+    sig_id = log_signal(
+        engine,
+        campaign_id,
+        signal_type="github_repo",
+        company_name="Acme",
+        signal_strength=3,
+    )
+
+    email_id = log_outreach(engine, sig_id, channel="email")
+    linkedin_id = log_outreach(engine, sig_id, channel="linkedin")
+
+    with get_session(engine) as session:
+        email = session.query(OutreachEvent).filter(OutreachEvent.id == email_id).one()
+        linkedin = session.query(OutreachEvent).filter(OutreachEvent.id == linkedin_id).one()
+
+        assert email.tracking_token
+        assert linkedin.tracking_token is None
+
+
 # ---------------------------------------------------------------------------
 # Conversion rate calculations
 # ---------------------------------------------------------------------------
@@ -81,12 +154,18 @@ def test_conversion_rates_basic(engine, campaign_id):
     """Conversion rates are calculated correctly for a simple funnel."""
     # 2 signals, 2 outreach, 1 reply, 1 meeting
     sig1 = log_signal(
-        engine, campaign_id, signal_type="github_repo",
-        company_name="A", signal_strength=3,
+        engine,
+        campaign_id,
+        signal_type="github_repo",
+        company_name="A",
+        signal_strength=3,
     )
     sig2 = log_signal(
-        engine, campaign_id, signal_type="github_repo",
-        company_name="B", signal_strength=2,
+        engine,
+        campaign_id,
+        signal_type="github_repo",
+        company_name="B",
+        signal_strength=2,
     )
 
     out1 = log_outreach(engine, sig1, channel="email")
@@ -121,12 +200,18 @@ def test_conversion_rates_empty_db(engine):
 def test_conversion_rates_filter_by_signal_type(engine, campaign_id):
     """Filtering by signal_type narrows results correctly."""
     sig_gh = log_signal(
-        engine, campaign_id, signal_type="github_repo",
-        company_name="A", signal_strength=3,
+        engine,
+        campaign_id,
+        signal_type="github_repo",
+        company_name="A",
+        signal_strength=3,
     )
     sig_arxiv = log_signal(
-        engine, campaign_id, signal_type="arxiv_paper",
-        company_name="B", signal_strength=2,
+        engine,
+        campaign_id,
+        signal_type="arxiv_paper",
+        company_name="B",
+        signal_strength=2,
     )
 
     out_gh = log_outreach(engine, sig_gh, channel="email")
@@ -174,12 +259,20 @@ def test_conversion_rates_filter_by_date_range(engine, campaign_id):
     old = now - timedelta(days=30)
 
     log_signal(
-        engine, campaign_id, signal_type="github_repo",
-        company_name="Old", signal_strength=2, detected_at=old,
+        engine,
+        campaign_id,
+        signal_type="github_repo",
+        company_name="Old",
+        signal_strength=2,
+        detected_at=old,
     )
     log_signal(
-        engine, campaign_id, signal_type="github_repo",
-        company_name="New", signal_strength=3, detected_at=now,
+        engine,
+        campaign_id,
+        signal_type="github_repo",
+        company_name="New",
+        signal_strength=3,
+        detected_at=now,
     )
 
     rates = get_conversion_rates(
@@ -199,8 +292,11 @@ def test_best_performing_signals(engine, campaign_id):
     # github_repo: 2 signals, 2 positive outcomes
     for name in ("A", "B"):
         sig = log_signal(
-            engine, campaign_id, signal_type="github_repo",
-            company_name=name, signal_strength=3,
+            engine,
+            campaign_id,
+            signal_type="github_repo",
+            company_name=name,
+            signal_strength=3,
         )
         out = log_outreach(engine, sig, channel="email")
         log_outcome(engine, out, outcome_type="positive_reply")
@@ -208,8 +304,11 @@ def test_best_performing_signals(engine, campaign_id):
     # arxiv_paper: 2 signals, 0 positive outcomes (only plain replies)
     for name in ("C", "D"):
         sig = log_signal(
-            engine, campaign_id, signal_type="arxiv_paper",
-            company_name=name, signal_strength=2,
+            engine,
+            campaign_id,
+            signal_type="arxiv_paper",
+            company_name=name,
+            signal_strength=2,
         )
         out = log_outreach(engine, sig, channel="email")
         log_outcome(engine, out, outcome_type="reply")
@@ -234,8 +333,11 @@ def test_best_performing_signals_limit(engine, campaign_id):
     """Limit parameter restricts result count."""
     for i in range(5):
         log_signal(
-            engine, campaign_id, signal_type=f"type_{i}",
-            company_name=f"Co{i}", signal_strength=2,
+            engine,
+            campaign_id,
+            signal_type=f"type_{i}",
+            company_name=f"Co{i}",
+            signal_strength=2,
         )
 
     results = get_best_performing_signals(engine, limit=3)
@@ -250,8 +352,11 @@ def test_best_performing_signals_limit(engine, campaign_id):
 def test_invalid_channel_raises(engine, campaign_id):
     """log_outreach rejects invalid channel values."""
     sig = log_signal(
-        engine, campaign_id, signal_type="github_repo",
-        company_name="A", signal_strength=3,
+        engine,
+        campaign_id,
+        signal_type="github_repo",
+        company_name="A",
+        signal_strength=3,
     )
     with pytest.raises(ValueError, match="channel"):
         log_outreach(engine, sig, channel="carrier_pigeon")
@@ -260,12 +365,38 @@ def test_invalid_channel_raises(engine, campaign_id):
 def test_invalid_outcome_type_raises(engine, campaign_id):
     """log_outcome rejects invalid outcome_type values."""
     sig = log_signal(
-        engine, campaign_id, signal_type="github_repo",
-        company_name="A", signal_strength=3,
+        engine,
+        campaign_id,
+        signal_type="github_repo",
+        company_name="A",
+        signal_strength=3,
     )
     out = log_outreach(engine, sig, channel="email")
     with pytest.raises(ValueError, match="outcome_type"):
         log_outcome(engine, out, outcome_type="magic")
+
+
+def test_new_outcome_types_are_valid(engine, campaign_id):
+    """Analytics event types can be logged as outcomes."""
+    sig = log_signal(
+        engine,
+        campaign_id,
+        signal_type="github_repo",
+        company_name="A",
+        signal_strength=3,
+    )
+    out = log_outreach(engine, sig, channel="email")
+
+    for outcome_type in [
+        "delivered",
+        "opened",
+        "clicked",
+        "bounced",
+        "unsubscribed",
+        "negative_reply",
+        "no_response",
+    ]:
+        assert isinstance(log_outcome(engine, out, outcome_type=outcome_type), int)
 
 
 # ---------------------------------------------------------------------------
@@ -276,12 +407,18 @@ def test_invalid_outcome_type_raises(engine, campaign_id):
 def test_multiple_signals_same_company(engine, campaign_id):
     """Multiple signals for the same company are tracked independently."""
     sig1 = log_signal(
-        engine, campaign_id, signal_type="github_repo",
-        company_name="Acme", signal_strength=3,
+        engine,
+        campaign_id,
+        signal_type="github_repo",
+        company_name="Acme",
+        signal_strength=3,
     )
     sig2 = log_signal(
-        engine, campaign_id, signal_type="arxiv_paper",
-        company_name="Acme", signal_strength=2,
+        engine,
+        campaign_id,
+        signal_type="arxiv_paper",
+        company_name="Acme",
+        signal_strength=2,
     )
     assert sig1 != sig2
 

@@ -1,0 +1,191 @@
+# SignalForce configuration — Kana Customer Zero AI-first GTM engine
+# Copy to config/ to activate locally: cp -r examples/kana-ai-first/ config/
+
+company:
+  name: "Kana"
+  product: "Agentic marketing platform that plugs into the existing GTM stack"
+  category: "AI-first demand generation infrastructure"
+  website: "https://kana.ai"
+
+icp:
+  tiers:
+    - name: "AI-Forward B2B Growth Teams"
+      description: >
+        Mid-market and enterprise B2B companies hiring into growth, lifecycle,
+        marketing ops, or demand generation while talking publicly about AI,
+        automation, experimentation, or agentic workflows.
+      signals:
+        - "AI-first marketing"
+        - "marketing ops"
+        - "growth engineering"
+        - "agentic workflow"
+        - "experimentation"
+
+    - name: "Content + SEO Scale Pressure"
+      description: >
+        Teams investing in SEO, content operations, answer engine optimization,
+        or paid growth where headcount cannot keep up with message testing and
+        campaign production.
+      signals:
+        - "SEO"
+        - "content operations"
+        - "AEO"
+        - "demand generation"
+        - "paid social"
+
+    - name: "Ops-Constrained Revenue Teams"
+      description: >
+        Revenue teams that already use HubSpot, Clay, Sales Navigator, or
+        other multi-tool outbound systems and are hiring to keep the plumbing
+        together rather than to make the system smarter.
+      signals:
+        - "HubSpot"
+        - "Clay"
+        - "Sales Navigator"
+        - "marketing automation"
+        - "revenue operations"
+
+  maturity_stages:
+    - EXPLORING
+    - PILOTING
+    - SCALING
+    - SYSTEMATIZING
+
+  target_titles:
+    - "VP Marketing"
+    - "Head of Demand Generation"
+    - "Director of Lifecycle Marketing"
+    - "VP Marketing Operations"
+    - "Director of Marketing Operations"
+    - "Head of Growth"
+    - "Growth Engineer"
+    - "Revenue Operations Lead"
+    - "Director of Content"
+    - "SEO Lead"
+    - "CMO"
+
+  disqualifiers:
+    - "Consumer-only company with no B2B funnel"
+    - "No in-house marketing or growth team"
+    - "Under 15 employees and pre-go-to-market"
+    - "No evidence of experimentation, automation, or modern GTM tooling"
+
+scanners:
+  github:
+    enabled: true
+    module: "scripts.scanners.github_scanner"
+    lookback_days: 30
+    topics:
+      - "marketing-automation"
+      - "growth-engineering"
+      - "hubspot-api"
+      - "salesforce-integration"
+      - "content-automation"
+    libraries:
+      - "hubspot-api-python"
+      - "openai"
+      - "anthropic"
+      - "langchain"
+      - "airtable"
+      - "playwright"
+    keywords:
+      - "AI personalization"
+      - "outbound automation"
+      - "demand generation"
+      - "marketing ops"
+      - "lead routing"
+      - "SEO automation"
+
+  arxiv:
+    enabled: false
+    module: "scripts.scanners.arxiv_scanner"
+
+  huggingface:
+    enabled: false
+    module: "scripts.scanners.hf_scanner"
+
+  jobs:
+    enabled: true
+    module: "scripts.scanners.job_scanner"
+    lookback_days: 30
+    titles:
+      - "growth engineer"
+      - "marketing operations manager"
+      - "marketing automation manager"
+      - "demand generation manager"
+      - "lifecycle marketing manager"
+      - "head of growth"
+      - "content marketing manager"
+      - "SEO manager"
+      - "paid social manager"
+      - "revenue operations manager"
+    skills:
+      - "HubSpot"
+      - "Clay"
+      - "Sales Navigator"
+      - "Instantly"
+      - "LinkedIn"
+      - "SEMRush"
+      - "OpenAI"
+      - "Claude"
+      - "automation"
+      - "experimentation"
+
+  funding:
+    enabled: true
+    module: "scripts.scanners.funding_scanner"
+    lookback_days: 30
+    keywords:
+      - "B2B SaaS"
+      - "AI marketing"
+      - "growth platform"
+      - "martech"
+      - "revenue operations"
+      - "customer engagement"
+
+  linkedin:
+    enabled: true
+    module: "scripts.scanners.linkedin_scanner"
+    lookback_days: 7
+    keywords:
+      - "AI marketing"
+      - "agentic"
+      - "growth"
+      - "demand generation"
+      - "lifecycle"
+      - "content strategy"
+      - "SEO"
+      - "AEO"
+      - "campaign experimentation"
+      - "outbound"
+      - "personalization"
+      - "HubSpot"
+      - "Clay"
+
+scoring:
+  intent_weights:
+    github_repo: 1.5
+    job_posting: 2.8
+    funding_event: 2.2
+    linkedin_activity: 2.6
+
+  half_lives_days:
+    github_repo: 10.0
+    job_posting: 14.0
+    funding_event: 21.0
+    linkedin_activity: 5.0
+
+  icp_weight: 0.45
+  intent_weight: 0.55
+
+  grade_thresholds:
+    A: 6.4
+    B: 4.4
+    C: 2.4
+
+filters:
+  company_blocklist:
+    - "Kana"
+    - "HubSpot"
+    - "Salesforce"
+    - "Adobe"

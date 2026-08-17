@@ -76,12 +76,12 @@ def test_run_api_key_not_set(tmp_path):
     import yaml
     from scripts.marops import cli
 
-    config_path = tmp_path / "meridian.yaml"
+    config_path = tmp_path / "veriforce.yaml"
     config_path.write_text(
         yaml.dump(
             {
-                "prospect": "Meridian Analytics",
-                "prospect_url": "https://www.meridian-analytics.example",
+                "prospect": "Veriforce",
+                "prospect_url": "https://www.veriforce.com",
                 "vertical": "SaaS",
                 "campaign_name": "Re-engagement",
                 "lifecycle_stage": "Customer",
@@ -106,12 +106,12 @@ def test_run_api_timeout(tmp_path):
     import yaml
     from scripts.marops import cli
 
-    config_path = tmp_path / "meridian.yaml"
+    config_path = tmp_path / "veriforce.yaml"
     config_path.write_text(
         yaml.dump(
             {
-                "prospect": "Meridian Analytics",
-                "prospect_url": "https://www.meridian-analytics.example",
+                "prospect": "Veriforce",
+                "prospect_url": "https://www.veriforce.com",
                 "vertical": "SaaS",
                 "campaign_name": "Re-engagement",
                 "lifecycle_stage": "Customer",
@@ -124,7 +124,7 @@ def test_run_api_timeout(tmp_path):
     with (
         patch.object(cli, "EXAMPLES", tmp_path),
         patch(
-            "scripts.marops.cli.generate_brief",
+            "scripts.marops.briefer.generate_brief",
             side_effect=anthropic.APITimeoutError(request=MagicMock()),
         ),
     ):
@@ -137,12 +137,12 @@ def test_run_happy_path(tmp_path):
     import yaml
     from scripts.marops import cli
 
-    config_path = tmp_path / "meridian.yaml"
+    config_path = tmp_path / "veriforce.yaml"
     config_path.write_text(
         yaml.dump(
             {
-                "prospect": "Meridian Analytics",
-                "prospect_url": "https://www.meridian-analytics.example",
+                "prospect": "Veriforce",
+                "prospect_url": "https://www.veriforce.com",
                 "vertical": "SaaS",
                 "campaign_name": "Re-engagement",
                 "lifecycle_stage": "Customer",
@@ -157,10 +157,10 @@ def test_run_happy_path(tmp_path):
     with (
         patch.object(cli, "EXAMPLES", tmp_path),
         patch.object(cli, "OUT", tmp_path),
-        patch("scripts.marops.cli.generate_brief", return_value=brief),
+        patch("scripts.marops.briefer.generate_brief", return_value=brief),
         patch("scripts.marops.cli.render_html") as mock_render,
     ):
-        result = cli.run("meridian")
+        result = cli.run("veriforce")
 
     assert result == tmp_path / "meridian.html"
     mock_render.assert_called_once()

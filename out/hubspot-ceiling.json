@@ -1,0 +1,286 @@
+{
+  "prospect": "Meridian Analytics",
+  "prospect_url": "https://www.meridiananalytics.io",
+  "vertical": "Sales analytics SaaS for mid-market manufacturing \u2014 Series B, 160 employees",
+  "campaign_name": "HubSpot Ceiling \u2192 Warehouse-Native MAP Adoption",
+  "objective": "Land Meridian Analytics as a net-new Conversion customer before the Snowflake Data Cloud Summit window closes. They are actively scoping a HubSpot replacement \u2014 hiring signal, frustrated G2 reviews, and conference registration all fired in the last 7 days. The buying committee is the VP Marketing + a newly hired Marketing Data Engineer. Move fast: shelf life ~6 days.\n",
+  "lifecycle_stage": "Prospect \u00b7 New \u2014 active buying window, high urgency",
+  "segment": {
+    "name": "HubSpot Ceiling \u2192 Warehouse-Native MAP Adoption | Meridian Analytics",
+    "salesforce_filters": [
+      "Account.NumberOfEmployees >= 100 AND Account.NumberOfEmployees <= 300",
+      "Account.Financing_Stage__c = 'Series B'",
+      "Account.Industry = 'Technology'",
+      "Account.Current_MAP_Vendor__c = 'HubSpot'",
+      "Account.Data_Warehouse_Platform__c = 'Snowflake'",
+      "Account.CRM_Platform__c = 'Salesforce'",
+      "Account.Active_Trial__c = FALSE",
+      "Account.BillingCountry = 'US'",
+      "Contact.Title LIKE '%VP Marketing%' OR Contact.Title LIKE '%Marketing Data Engineer%'",
+      "Opportunity.StageName != 'Closed Won' AND Opportunity.StageName != 'Closed Lost'"
+    ],
+    "warehouse_traits": [
+      "g2_review_velocity_signal = TRUE AND g2_review_score <= 3 AND g2_review_vendor = 'HubSpot' AND g2_review_age_days <= 7",
+      "hiring_signal_role = 'Marketing Data Engineer' AND hiring_signal_keywords_match IN ('Snowflake','Salesforce','marketing attribution') AND hiring_signal_age_days <= 7",
+      "conference_registration_event = 'Snowflake Data Cloud Summit 2026' AND conference_registration_contact = 'Jordan Kim' AND conference_registration_age_days <= 10",
+      "reverse_etl_tool_detected IN ('Hightouch','Census')",
+      "intent_topic_score_map_replacement >= 70",
+      "account_id = 'meridian_analytics'"
+    ],
+    "exclusions": [
+      "Account.Active_Trial__c = TRUE AND Account.Trial_Vendor__c IN ('Marketo','Conversion')",
+      "Account.Competitor_Customer__c = TRUE",
+      "Contact.HasOptedOutOfEmail = TRUE",
+      "Contact.Unsubscribed__c = TRUE",
+      "Account.Do_Not_Contact__c = TRUE"
+    ],
+    "estimated_size": "1 account / 2 contacts (Jordan Kim \u2013 VP Marketing; [MDE_FIRST_NAME] [MDE_LAST_NAME] \u2013 Marketing Data Engineer)"
+  },
+  "touches": [
+    {
+      "step": 1,
+      "channel": "email",
+      "agent": "execution",
+      "timing": "Day 0 \u2013 send at 08:45 recipient local time, Tuesday or Wednesday preferred; do not send Friday\u2013Sunday",
+      "subject": "{{contact.first_name}}, your Snowflake data deserves a better MAP than duct tape",
+      "body_brief": "Open by mirroring the exact language from Jordan's G2 review ('duct tape' + '30% RevOps time on plumbing'). Acknowledge the pain is architectural, not a configuration problem \u2014 HubSpot was not built for warehouse-native data flows. Bridge to Conversion: a MAP with a native Snowflake read/write layer that eliminates reverse ETL middleware. Include a 60-second Loom demo link showing Snowflake \u2192 Conversion \u2192 Salesforce bi-directional sync with zero middleware. Close with a single low-friction CTA: 'See how Meridian's stack would look inside Conversion \u2014 20-min live walkthrough, I'll bring the data model.' P.S. line: 'Saw you're heading to Data Cloud Summit \u2014 we're at Booth #412. Happy to show this live on the floor.'",
+      "personalization_tokens": [
+        "{{contact.first_name}}",
+        "{{account.name}}",
+        "{{account.current_map_vendor}}",
+        "{{account.data_warehouse_platform}}",
+        "{{signal.g2_review_quote}}",
+        "{{signal.g2_review_age_days}}",
+        "{{signal.conference_event_name}}",
+        "{{sender.first_name}}",
+        "{{sender.calendar_link}}",
+        "{{asset.loom_demo_url}}"
+      ],
+      "qa_rules": [
+        "Suppress if Contact.HasOptedOutOfEmail = TRUE or Contact.Unsubscribed__c = TRUE before send",
+        "Verify {{signal.g2_review_quote}} resolves to non-null string; block send if null",
+        "Verify {{asset.loom_demo_url}} returns HTTP 200 before send; block if dead link",
+        "Deduplicate: block send if a touch was already delivered to this contact within the last 24 hours on any channel",
+        "Spam-gate: subject line must not trigger HubSpot trademark policy flags \u2014 run subject through spam scorer, block if score > 4.0",
+        "Validate {{sender.calendar_link}} is a live Calendly/Chili Piper URL returning 200",
+        "Confirm send window is Mon\u2013Thu 08:00\u201317:00 recipient local time; reschedule if outside window"
+      ],
+      "success_metric": "Email open within 24 hours OR calendar link click within 48 hours"
+    },
+    {
+      "step": 2,
+      "channel": "linkedin",
+      "agent": "execution",
+      "timing": "Day 1 \u2013 12 hours after Step 1 email confirmed delivered; send between 09:00\u201311:00 recipient local time",
+      "subject": "LinkedIn DM: Conversion + Snowflake \u2014 saw your Data Cloud Summit registration",
+      "body_brief": "Short, warm LinkedIn DM to Jordan Kim from the assigned AE. Reference the Data Cloud Summit registration organically ('Looking forward to Summit next month \u2014 are you going to be on the expo floor?'). Mention Conversion is a sponsor at Booth #412 and that we built our MAP ground-up on Snowflake. Offer to send a one-pager mapping Meridian's current stack (HubSpot + Hightouch/Census + Snowflake) to what a Conversion-native architecture removes. No hard pitch \u2014 goal is to open a conversation thread and establish presence before the conference. 300 characters max.",
+      "personalization_tokens": [
+        "{{contact.first_name}}",
+        "{{account.name}}",
+        "{{signal.conference_event_name}}",
+        "{{signal.conference_event_date}}",
+        "{{signal.conference_event_location}}",
+        "{{sender.linkedin_profile_url}}",
+        "{{sender.first_name}}"
+      ],
+      "qa_rules": [
+        "Verify LinkedIn contact profile URL resolves before send; block if profile not found",
+        "Confirm Step 1 email was delivered (not bounced) before triggering this touch; suppress if Step 1 hard-bounced",
+        "Message length check: body must be <= 300 characters after token injection; block if over limit",
+        "Deduplicate: block if a LinkedIn DM was already sent to this contact in the last 7 days",
+        "Suppress if contact LinkedIn connection status is not 1st-degree and AE has not sent a connection request; queue connection request first if needed"
+      ],
+      "success_metric": "LinkedIn DM read receipt OR reply within 48 hours"
+    },
+    {
+      "step": 3,
+      "channel": "ae_task",
+      "agent": "execution",
+      "timing": "Day 2 \u2013 create task at 08:00 AE local time; due same day by 17:00",
+      "subject": "AE Task: Call Jordan Kim + loop in [MDE_NAME] \u2014 Meridian buying signal trifecta fired",
+      "body_brief": "AE task written for the assigned account executive. Summarize the three buying signals with source and age: (1) G2 3-star review quoting 'duct tape' plumbing, 3 days ago; (2) Marketing Data Engineer hire posting requiring Snowflake + out-of-MAP attribution, 5 days ago; (3) Jordan Kim registered for Data Cloud Summit, 8 days ago. Instruct AE to: (a) attempt a warm call to Jordan Kim referencing the Summit and offering to meet at Booth #412; (b) find and connect with the newly hired Marketing Data Engineer on LinkedIn \u2014 their Snowflake/attribution background makes them a technical champion; (c) log call outcome in Salesforce Opportunity.Next_Step__c within 2 hours of attempt. Provide suggested call talk-track: lead with the Summit hook, pivot to the attribution-model-outside-MAP pain point from the JD, offer a bespoke data architecture review session.",
+      "personalization_tokens": [
+        "{{contact.first_name}}",
+        "{{contact.phone}}",
+        "{{account.name}}",
+        "{{account.ae_owner_name}}",
+        "{{signal.g2_review_quote}}",
+        "{{signal.g2_review_age_days}}",
+        "{{signal.hiring_signal_role}}",
+        "{{signal.hiring_signal_age_days}}",
+        "{{signal.conference_event_name}}",
+        "{{signal.conference_event_date}}",
+        "{{account.opportunity_id}}"
+      ],
+      "qa_rules": [
+        "Verify Opportunity.OwnerId is populated and maps to an active Salesforce user before task creation; block if owner is inactive",
+        "Confirm Account.Active_Trial__c = FALSE at task creation time; suppress task if trial has since started",
+        "Validate {{contact.phone}} is non-null; flag task with 'Phone Missing \u2014 LinkedIn only' if null",
+        "Check that Steps 1 and 2 were attempted before creating this task; log warning if either was suppressed",
+        "Deduplicate: block if an open AE task for this account was created in the last 48 hours"
+      ],
+      "success_metric": "AE logs call attempt in Salesforce within same business day; Opportunity.Next_Step__c updated"
+    },
+    {
+      "step": 4,
+      "channel": "email",
+      "agent": "execution",
+      "timing": "Day 3 \u2013 send at 09:00 recipient local time if Step 1 email was opened but no meeting booked; suppress if meeting already booked",
+      "subject": "{{contact.first_name}}, the Meridian stack \u2192 Conversion architecture (took 11 minutes to map)",
+      "body_brief": "Value-forward nurture email addressed to Jordan Kim, cc-awareness for the Marketing Data Engineer persona. Lead with: 'I mapped Meridian's current stack in our sandbox \u2014 here's what it looks like.' Include an inline architecture diagram (Snowflake \u2194 Conversion \u2194 Salesforce) that visually eliminates the Hightouch/Census middleware layer. Quantify the RevOps time savings: 'Teams in your profile recover ~25\u201330% of RevOps bandwidth in the first 90 days post-migration.' Reference the hiring JD signal naturally: 'Your new Marketing Data Engineer hire will be able to build attribution models directly in SQL against live Conversion events \u2014 no ETL layer, no lag.' Second CTA: link to a live sandbox environment pre-seeded with a fictional manufacturing SaaS dataset so Jordan/MDE can self-explore. Tertiary CTA: 'Still going to Summit? We'd love 20 minutes at Booth #412 \u2014 I can reserve a private demo slot.'",
+      "personalization_tokens": [
+        "{{contact.first_name}}",
+        "{{account.name}}",
+        "{{account.current_map_vendor}}",
+        "{{account.data_warehouse_platform}}",
+        "{{signal.reverse_etl_tool_detected}}",
+        "{{signal.hiring_signal_role}}",
+        "{{asset.architecture_diagram_url}}",
+        "{{asset.sandbox_environment_url}}",
+        "{{signal.conference_event_name}}",
+        "{{sender.first_name}}",
+        "{{sender.calendar_link}}"
+      ],
+      "qa_rules": [
+        "Suppress entirely if Opportunity.StageName has advanced to 'Meeting Booked' or beyond since Step 1",
+        "Suppress if contact replied to Step 1 email with a negative/unsubscribe signal",
+        "Verify {{asset.architecture_diagram_url}} returns HTTP 200 and renders inline image; block if broken",
+        "Verify {{asset.sandbox_environment_url}} returns HTTP 200 and sandbox is live; block if environment is down",
+        "Validate {{signal.reverse_etl_tool_detected}} resolves to 'Hightouch', 'Census', or another named tool \u2014 do not send generic placeholder text",
+        "Spam-gate: check for image-heavy layout triggering promotional tab classifiers; ensure text-to-image ratio > 60:40",
+        "Confirm send is Mon\u2013Thu 08:00\u201317:00 recipient local time; reschedule otherwise"
+      ],
+      "success_metric": "Sandbox environment link click OR calendar booking within 48 hours of send"
+    },
+    {
+      "step": 5,
+      "channel": "email",
+      "agent": "execution",
+      "timing": "Day 5 \u2013 send at 08:30 recipient local time; this is the final pre-Summit urgency touch; suppress if meeting booked at any prior step",
+      "subject": "Last call before Summit: reserved a private demo slot at Booth #412 for you, {{contact.first_name}}",
+      "body_brief": "Short, high-urgency close email. Open with explicit scarcity: 'We have 4 private 20-minute demo slots remaining at our Data Cloud Summit booth (June 11\u201313, Booth #412) \u2014 I've held one under your name through EOD tomorrow.' Reference the full buying-signal context in one tight paragraph: 'You flagged the Snowflake-HubSpot plumbing problem on G2, you're building out a data engineering function that lives outside a traditional MAP, and you're already coming to Summit \u2014 this feels like the right moment to see the warehouse-native alternative in person.' Primary CTA: 'Claim your slot \u2014 2 clicks' (deep link to a pre-filled Summit booking form). Secondary CTA: 'Can't do Summit? Here's the async walkthrough instead' (links back to Loom demo from Step 1). Closing line: 'If the timing genuinely isn't right, just reply and I'll stand down \u2014 no hard feelings.' Signature includes AE direct mobile.",
+      "personalization_tokens": [
+        "{{contact.first_name}}",
+        "{{account.name}}",
+        "{{signal.conference_event_name}}",
+        "{{signal.conference_event_date}}",
+        "{{signal.conference_event_location}}",
+        "{{signal.g2_review_age_days}}",
+        "{{signal.hiring_signal_role}}",
+        "{{asset.summit_booking_url}}",
+        "{{asset.loom_demo_url}}",
+        "{{sender.first_name}}",
+        "{{sender.mobile_phone}}"
+      ],
+      "qa_rules": [
+        "Hard suppress if Opportunity.StageName = 'Meeting Booked', 'Demo Scheduled', 'Closed Won', or 'Closed Lost'",
+        "Hard suppress if contact replied 'not interested', 'unsubscribe', or equivalent at any prior touch \u2014 check reply sentiment score < -0.4",
+        "Verify {{asset.summit_booking_url}} is live and the booking slot inventory shows >= 1 slot remaining; block send if slots = 0",
+        "Verify {{asset.loom_demo_url}} still returns HTTP 200; block if dead",
+        "Validate {{sender.mobile_phone}} is non-null and E.164 formatted; block send if missing",
+        "Confirm campaign has not exceeded 5-touch send cap for this contact across all channels in this campaign",
+        "Spam-gate: 'Last call' and urgency language \u2014 run subject through spam scorer; block if score > 3.5"
+      ],
+      "success_metric": "Summit demo slot booking OR reply indicating interest/meeting request within 48 hours"
+    }
+  ],
+  "optimization_triggers": [
+    {
+      "condition": "contact.email_open_count >= 2 AND calendar_link_click = FALSE AND hours_since_step1_send <= 48",
+      "action": "Optimization agent accelerates Step 3 AE task to same day as repeated opens; adds SMS touch to AE task brief flagging 'high-intent lurker \u2014 opened twice, not yet clicked'; reallocates Step 4 send to Day 2 instead of Day 3"
+    },
+    {
+      "condition": "signal.intent_topic_score_map_replacement spikes >= 85 at any point during campaign runtime",
+      "action": "Optimization agent triggers an out-of-sequence in_app_banner touch (if Meridian is already trialing any Conversion feature) AND escalates AE task priority to P0; notifies AE Slack channel with full signal context"
+    },
+    {
+      "condition": "signal.conference_registration_event = 'Snowflake Data Cloud Summit 2026' AND days_until_conference <= 7 AND Opportunity.StageName NOT IN ('Meeting Booked','Demo Scheduled','Closed Won')",
+      "action": "Optimization agent triggers conference_meet protocol: fast-tracks Step 5 to send immediately (overriding Day 5 schedule), reserves a Summit booth demo slot in the booking system under contact name, and creates a high-priority AE task to hand-deliver a physical one-pager to Jordan Kim at Booth #412 on Day 1 of Summit"
+    },
+    {
+      "condition": "contact.email_reply_sentiment_score < -0.4 OR contact.unsubscribe_event = TRUE",
+      "action": "Optimization agent immediately suppresses all remaining touches for this contact across all channels; updates Salesforce Contact.Campaign_Suppression_Reason__c = 'Negative reply or unsubscribe during HubSpot Ceiling campaign'; flags opportunity for AE review before any future outreach"
+    },
+    {
+      "condition": "Step 1 email hard_bounce = TRUE OR Step 1 email delivery_status = 'invalid_address'",
+      "action": "Optimization agent pauses email channel for this contact; re-routes campaign to LinkedIn-first sequence (Step 2 promoted to Step 1 equivalent); triggers AE task to source valid email via ZoomInfo/Clearbit enrichment within 4 hours"
+    },
+    {
+      "condition": "Opportunity.StageName advances to 'Meeting Booked' or 'Demo Scheduled' at any step",
+      "action": "Optimization agent halts all remaining campaign touches immediately; triggers a new AE task: 'Pre-demo prep \u2014 pull Meridian Snowflake schema from warehouse trait and prepare bespoke attribution model demo'; logs campaign as conversion success"
+    }
+  ],
+  "pipeline_projection": {
+    "expected_renewals": "Net-new logo close: 65% probability of Closed Won within 21 days of campaign launch, contingent on Summit meeting booked by Day 6. Estimated ACV: $48,000\u2013$72,000 (mid-market MAP contract, 100\u2013300 seat band). If Summit meeting books, close probability increases to 80% within 30 days.",
+    "ae_efficiency": "AE active involvement limited to Step 3 call + Summit booth meeting. Estimated AE time investment: 2.5 hours total across campaign lifecycle (30 min call prep, 20 min call, 20 min LinkedIn research, 60 min Summit demo). All email and LinkedIn DM touches are execution-agent-automated. AE task creation, sequencing, and suppression are fully system-managed \u2014 zero manual scheduling overhead.",
+    "campaign_runtime": "6 days active (Day 0\u20135), aligned to shelf life of buying signals. Conference hard deadline: Snowflake Data Cloud Summit opens June 11, 2026. Campaign must reach a booked meeting or explicit pass by Day 6 (June 10 latest) to enable Summit activation. Post-Day 6: campaign enters dormant state; optimization agent re-activates only on new intent spike or AE discretion.",
+    "downside": "Downside scenario (35% probability): No email reply, no LinkedIn engagement, no Summit booking by Day 5. In this case: AE logs 'no response' in Opportunity.Next_Step__c; contact enters a 30-day cooling-off suppression window; account is re-queued for next buying signal event (e.g., next G2 review, expanded hiring signal, or post-Summit content engagement). No ACV recognized. Secondary downside: meeting books but deal stalls post-Summit demo \u2014 estimated 20% of booked meetings do not advance past discovery. In this sub-scenario, ACV = $0 in current quarter; account enters a 60-day nurture track with a warehouse-native attribution content series."
+  },
+  "meta": {
+    "campaign_name": "HubSpot Ceiling \u2192 Warehouse-Native MAP Adoption",
+    "prospect_account": "Meridian Analytics",
+    "prospect_url": "https://www.meridiananalytics.io",
+    "vertical": "Sales analytics SaaS | Mid-market manufacturing | Series B | 160 employees",
+    "lifecycle_stage": "Prospect \u00b7 New",
+    "buying_window": "Active \u2014 estimated 6-day shelf life from campaign launch",
+    "primary_buying_committee": [
+      "Jordan Kim \u2014 VP Marketing (economic buyer, Summit registrant, G2 reviewer)",
+      "[MDE_FIRST_NAME] [MDE_LAST_NAME] \u2014 Marketing Data Engineer (technical champion, newly hired)"
+    ],
+    "active_buying_signals": [
+      "G2_REVIEW_VELOCITY: VP Marketing 3-star HubSpot review citing Snowflake plumbing \u2014 3 days ago",
+      "HIRING: Marketing Data Engineer JD requiring Snowflake + out-of-MAP attribution \u2014 5 days ago",
+      "CONFERENCE_REGISTRATION: Jordan Kim registered for Snowflake Data Cloud Summit 2026 (SF, June 11\u201313) \u2014 8 days ago"
+    ],
+    "conference_activation": "Conversion sponsoring Snowflake Data Cloud Summit 2026 \u2014 Booth #412",
+    "competing_vendors": [
+      "HubSpot Enterprise"
+    ],
+    "middleware_in_stack": [
+      "Hightouch",
+      "Census"
+    ],
+    "created_by": "Senior MarOps Architect",
+    "brief_version": "1.0",
+    "model": "claude-sonnet-4-6",
+    "generated_at": "2026-05-19T22:05:27+00:00",
+    "cache_read_input_tokens": 0,
+    "cache_creation_input_tokens": 1226,
+    "input_tokens": 1015,
+    "output_tokens": 5584,
+    "platform_fit": "Every field maps to a Conversion primitive: the segment is Salesforce SOQL plus warehouse trait joins, the touch sequence carries execution / QA / optimization agent assignments, and the whole brief is a typed JSON object delivered by webhook \u2014 no human translation step between signal and campaign.",
+    "build_time_on_conversion_platform": "~1 day. Segment, agent roles, and suppression rules drop straight into the campaign builder; the signal stack and shelf-life feed the trigger and optimization layers.",
+    "what_this_proves": "A GTM engineer can compile a buying-window signal stack into a ready-to-run lifecycle campaign \u2014 replacing intuition and manual research with a typed, schema-enforced system."
+  },
+  "why_now": {
+    "timing_score": "HIGH",
+    "signals": [
+      {
+        "signal_type": "g2_review_velocity",
+        "description": "VP Marketing left a 3-star G2 review: 'HubSpot Enterprise doesn't talk to our Snowflake warehouse without a lot of duct tape. Our RevOps team spends 30% of their time on plumbing.'",
+        "days_ago": 3,
+        "source": "G2",
+        "timing_tier": "HIGH",
+        "shelf_life_days": 11
+      },
+      {
+        "signal_type": "hiring",
+        "description": "Marketing Data Engineer posted on LinkedIn \u2014 JD requires Snowflake, Salesforce, and 'building marketing attribution models from scratch outside of a MAP'",
+        "days_ago": 5,
+        "source": "LinkedIn",
+        "timing_tier": "HIGH",
+        "shelf_life_days": 9
+      },
+      {
+        "signal_type": "conference_registration",
+        "description": "VP Marketing (Jordan Kim) registered for Snowflake Data Cloud Summit 2026 (San Francisco, June 11\u201313). Conversion is a sponsor with a booth on the expo floor.",
+        "days_ago": 8,
+        "source": "Eventbrite",
+        "timing_tier": "MEDIUM",
+        "shelf_life_days": 6
+      }
+    ],
+    "shelf_life_days": 6,
+    "rationale": "3 signals detected in the last 8 days. Buying window closes in ~6 days."
+  }
+}

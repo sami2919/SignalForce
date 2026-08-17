@@ -1,0 +1,114 @@
+[
+  {
+    "signal_type": "job_posting",
+    "company_name": "Warmly",
+    "signal_strength": 3,
+    "source_url": "https://jobs.example.com/warmly-growth-engineer",
+    "raw_data": {
+      "postings": [
+        {
+          "title": "Growth Engineer",
+          "snippet": "Own HubSpot automation, lifecycle experimentation, Clay workflows, and AI-assisted outbound."
+        }
+      ]
+    },
+    "metadata": {
+      "skills_mentioned": ["HubSpot", "Clay", "automation", "experimentation"],
+      "job_titles": ["Growth Engineer"]
+    }
+  },
+  {
+    "signal_type": "linkedin_activity",
+    "company_name": "Warmly",
+    "signal_strength": 2,
+    "source_url": "https://linkedin.example.com/warmly-ai-marketing",
+    "raw_data": {
+      "activities": [
+        {
+          "topic": "AI-first demand generation and personalization"
+        }
+      ]
+    },
+    "metadata": {
+      "keywords": ["AI marketing", "personalization", "growth"]
+    }
+  },
+  {
+    "signal_type": "funding_event",
+    "company_name": "Warmly",
+    "signal_strength": 2,
+    "source_url": "https://funding.example.com/warmly-series-a",
+    "raw_data": {
+      "title": "Warmly raises new growth round",
+      "snippet": "Budget expansion for go-to-market and growth hiring."
+    },
+    "metadata": {
+      "keywords": ["B2B SaaS", "growth platform"]
+    }
+  },
+  {
+    "signal_type": "job_posting",
+    "company_name": "HockeyStack",
+    "signal_strength": 2,
+    "source_url": "https://jobs.example.com/hockeystack-lifecycle",
+    "raw_data": {
+      "postings": [
+        {
+          "title": "Lifecycle Marketing Manager",
+          "snippet": "Scale outbound and lifecycle campaigns, own content distribution, and build better attribution."
+        }
+      ]
+    },
+    "metadata": {
+      "skills_mentioned": ["HubSpot", "content strategy", "lifecycle"],
+      "job_titles": ["Lifecycle Marketing Manager"]
+    }
+  },
+  {
+    "signal_type": "linkedin_activity",
+    "company_name": "HockeyStack",
+    "signal_strength": 2,
+    "source_url": "https://linkedin.example.com/hockeystack-seo",
+    "raw_data": {
+      "activities": [
+        {
+          "topic": "SEO, category creation, and answer-engine discoverability"
+        }
+      ]
+    },
+    "metadata": {
+      "keywords": ["SEO", "AEO", "content"]
+    }
+  },
+  {
+    "signal_type": "funding_event",
+    "company_name": "UserGems",
+    "signal_strength": 2,
+    "source_url": "https://funding.example.com/usergems-growth",
+    "raw_data": {
+      "title": "UserGems expands GTM investment",
+      "snippet": "Fresh capital for revenue team buildout and new outbound experiments."
+    },
+    "metadata": {
+      "keywords": ["revenue operations", "AI marketing"]
+    }
+  },
+  {
+    "signal_type": "job_posting",
+    "company_name": "UserGems",
+    "signal_strength": 2,
+    "source_url": "https://jobs.example.com/usergems-demandgen",
+    "raw_data": {
+      "postings": [
+        {
+          "title": "Demand Generation Manager",
+          "snippet": "Own SEMRush research, paid social testing, and campaign automation across HubSpot."
+        }
+      ]
+    },
+    "metadata": {
+      "skills_mentioned": ["SEMRush", "HubSpot", "paid social", "automation"],
+      "job_titles": ["Demand Generation Manager"]
+    }
+  }
+]

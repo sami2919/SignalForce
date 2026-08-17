@@ -50,6 +50,7 @@ The signal stacker grades accounts A through D. Target distribution at steady st
 |-------|----------|--------|
 | A | 10–15% | Prioritize — personalize outreach, enroll same week |
 | B | 25–35% | Contact — use signal-specific template, enroll within 2 weeks |
+
 | C | 30–40% | Nurture — add to low-priority drip, revisit in 30 days |
 | D | 20–30% | Skip — log for future re-evaluation |
 
@@ -58,6 +59,27 @@ If D-grade is below 20%, the signal detection criteria are too broad — tighten
 ---
 
 ## Reporting Cadence
+
+### Local Analytics Report
+
+SignalForce includes a local analytics report backed by the same SQLite feedback loop used
+by `scripts.outcome_tracker`.
+
+```bash
+python -m scripts.analytics_report --last-days 30 --format markdown
+python -m scripts.analytics_report --last-days 7 --format json --out out/analytics.json
+```
+
+The report summarizes:
+
+- funnel totals and rates from signal detection through deals
+- conversion breakdowns by signal type, ICP grade, template, and experiment tag
+- stale signals that have not been worked after 72 hours
+- deterministic optimization recommendations, such as weak templates or low-yield ICP grades
+
+V1 is intentionally local and deterministic. HubSpot, Instantly, or n8n can write events
+into the same tracker tables, but external import adapters are not required to generate
+the report.
 
 ### Daily (automated via `crm-sync` workflow)
 

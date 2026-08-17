@@ -348,9 +348,9 @@ def main(argv: list[str] | None = None) -> None:
         print(f"  [{strength_label:8s}] {signal.company_name} — {round_type} ({amount_str})")
 
     if args.output:
-        output_data = result.model_copy(
-            update={"signals_found": filtered_signals}
-        ).model_dump(mode="json")
+        output_data = result.model_copy(update={"signals_found": filtered_signals}).model_dump(
+            mode="json"
+        )
         with open(args.output, "w") as f:
             json.dump(output_data, f, indent=2, default=str)
         print(f"\nResults written to {args.output}")

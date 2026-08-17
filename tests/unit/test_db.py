@@ -37,6 +37,27 @@ def test_init_db_creates_all_tables(memory_engine):
     assert "outcome_events" in table_names
 
 
+def test_init_db_creates_analytics_columns(memory_engine):
+    """Analytics metadata columns should be present on fresh databases."""
+    inspector = inspect(memory_engine)
+
+    signal_columns = {col["name"] for col in inspector.get_columns("tracked_signals")}
+    outreach_columns = {col["name"] for col in inspector.get_columns("outreach_events")}
+    outcome_columns = {col["name"] for col in inspector.get_columns("outcome_events")}
+
+    assert {"icp_grade", "composite_score", "scanner_name"} <= signal_columns
+    assert {
+        "template_variant",
+        "subject_variant",
+        "cta_variant",
+        "experiment_tag",
+        "external_id",
+        "tracking_token",
+        "detected_to_sent_hours",
+    } <= outreach_columns
+    assert "external_id" in outcome_columns
+
+
 def test_init_db_idempotent(memory_engine):
     """Calling init_db twice should not raise."""
     init_db(memory_engine)  # second call — must not error

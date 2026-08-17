@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Lifecycle Campaign Brief — Vanta</title>
+  <style>
+    @page { size: A4; margin: 18mm 16mm 16mm 16mm; }
+    :root {
+      --ink: #0B0B0B;
+      --muted: #6B6B6B;
+      --rule: #E6E6E6;
+      --accent: #2952E3;
+      --accent-soft: #EEF2FF;
+      --bg-soft: #FAFAFA;
+      --code-bg: #F4F4F5;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      color: var(--ink);
+      font-size: 10.25pt;
+      line-height: 1.45;
+      margin: 0;
+    }
+    code, .mono {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 9pt;
+      background: var(--code-bg);
+      padding: 1px 4px;
+      border-radius: 2px;
+    }
+    .doc-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding-bottom: 10px;
+      border-bottom: 2px solid var(--ink);
+      margin-bottom: 16px;
+    }
+    .doc-header .title { font-size: 20pt; font-weight: 700; letter-spacing: -0.02em; }
+    .doc-header .subtitle { font-size: 11pt; color: var(--muted); margin-top: 2px; }
+    .doc-header .meta { text-align: right; font-size: 9pt; color: var(--muted); }
+    .campaign-block {
+      background: var(--accent-soft);
+      border-left: 3px solid var(--accent);
+      padding: 10px 14px;
+      margin-bottom: 16px;
+    }
+    .campaign-block .name { font-size: 12pt; font-weight: 600; }
+    .campaign-block .obj { font-size: 10pt; margin-top: 4px; color: var(--ink); }
+    .campaign-block .stage {
+      font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--accent); font-weight: 600; margin-top: 6px;
+    }
+    .section-h {
+      font-size: 9pt; text-transform: uppercase; letter-spacing: 0.14em;
+      color: var(--muted); font-weight: 600;
+      border-bottom: 1px solid var(--rule);
+      padding-bottom: 4px; margin: 18px 0 10px 0;
+    }
+    .segment-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 16px;
+      font-size: 9.5pt;
+    }
+    .segment-grid .col-h {
+      font-size: 8.5pt; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 4px;
+    }
+    .segment-grid ul {
+      margin: 0; padding-left: 14px;
+      font-size: 9pt;
+    }
+    .segment-grid li {
+      margin-bottom: 2px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 8.75pt;
+      line-height: 1.35;
+    }
+    .segment-name {
+      font-size: 10pt; font-weight: 600; margin-bottom: 6px;
+    }
+    .segment-size {
+      font-size: 9pt; color: var(--muted); margin-top: 8px;
+      font-style: italic;
+    }
+    .touch {
+      page-break-inside: avoid;
+      border-top: 1px solid var(--rule);
+      padding: 12px 0 10px 0;
+    }
+    .touch:first-of-type { border-top: none; padding-top: 4px; }
+    .touch-h {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 4px;
+    }
+    .touch-step {
+      font-size: 9pt; color: var(--muted); letter-spacing: 0.08em;
+      text-transform: uppercase; font-weight: 600;
+    }
+    .touch-step .num {
+      display: inline-block; background: var(--ink); color: #fff;
+      padding: 1px 6px; border-radius: 2px; margin-right: 6px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .touch-channel {
+      font-size: 9pt; color: var(--ink); background: var(--bg-soft);
+      padding: 2px 8px; border-radius: 2px; font-weight: 500;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .touch-agent {
+      font-size: 8.5pt; color: var(--accent);
+      text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;
+      margin-left: 8px;
+    }
+    .touch-subject {
+      font-size: 11pt; font-weight: 600; line-height: 1.35;
+      margin: 4px 0 4px 0;
+    }
+    .touch-timing {
+      font-size: 8.5pt; color: var(--muted);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      margin-bottom: 6px;
+    }
+    .touch-body {
+      font-size: 9.5pt; margin: 4px 0 6px 0;
+    }
+    .qa-list, .opt-list {
+      margin: 4px 0; padding-left: 16px;
+      font-size: 8.75pt; color: var(--ink);
+    }
+    .qa-list li, .opt-list li { margin-bottom: 2px; line-height: 1.4; }
+    .qa-list code { background: transparent; padding: 0; }
+    .kv {
+      font-size: 8.5pt; color: var(--muted);
+      margin-top: 4px;
+    }
+    .kv .k { text-transform: uppercase; letter-spacing: 0.08em; }
+    .kv .v {
+      color: var(--ink);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .metric {
+      font-size: 8.75pt; color: var(--ink);
+      background: var(--bg-soft); padding: 4px 8px;
+      border-left: 2px solid var(--accent);
+      margin-top: 6px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .triggers {
+      background: var(--bg-soft);
+      padding: 10px 14px;
+      border-radius: 3px;
+    }
+    .projection-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 14px;
+      font-size: 9pt;
+    }
+    .projection-grid .pk {
+      font-size: 8.5pt; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 2px;
+    }
+    .projection-grid .pv {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 9pt;
+    }
+    .footer {
+      margin-top: 22px; padding-top: 10px;
+      border-top: 1px solid var(--rule);
+      font-size: 8pt; color: var(--muted);
+      display: flex; justify-content: space-between;
+    }
+    .footer .brand { letter-spacing: 0.1em; text-transform: uppercase; }
+    .platform-fit {
+      font-size: 9pt; color: var(--ink);
+      background: var(--accent-soft);
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+    .platform-fit .pf-h {
+      font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.12em;
+      color: var(--accent); font-weight: 600; margin-bottom: 4px;
+      display: block;
+    }
+    .why-now-block {
+      border: 2px solid #16a34a;
+      border-radius: 4px;
+      padding: 10px 14px;
+      margin-bottom: 16px;
+      background: #f0fdf4;
+    }
+    .why-now-header {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+    }
+    .why-now-badge {
+      font-size: 8pt; font-weight: 700; letter-spacing: 0.14em;
+      text-transform: uppercase; padding: 2px 8px; border-radius: 2px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .why-now-badge.HIGH { background: #16a34a; color: #fff; }
+    .why-now-badge.MEDIUM { background: #ca8a04; color: #fff; }
+    .why-now-badge.LOW { background: #9ca3af; color: #fff; }
+    .why-now-rationale { font-size: 9pt; color: #15803d; font-weight: 600; }
+    .signal-row {
+      display: flex; align-items: baseline; gap: 8px;
+      font-size: 8.75pt; margin-bottom: 4px; font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .signal-type {
+      font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.1em;
+      color: #6b7280; white-space: nowrap; min-width: 130px;
+    }
+    .signal-desc { color: #1f2937; flex: 1; }
+    .signal-meta { color: #6b7280; white-space: nowrap; font-size: 7.5pt; }
+    .signal-tier { font-weight: 700; }
+    .signal-tier.HIGH { color: #16a34a; }
+    .signal-tier.MEDIUM { color: #ca8a04; }
+    .signal-tier.LOW { color: #9ca3af; }
+    .shelf-life { color: #374151; }
+  </style>
+</head>
+<body>
+
+  <div class="doc-header">
+    <div>
+      <div class="title">Lifecycle Campaign Brief</div>
+      <div class="subtitle">Vanta &middot; https://www.vanta.com</div>
+    </div>
+    <div class="meta">
+      Generated 2026-05-30T00:12:52+00:00<br>
+      Vertical: Security &amp; compliance automation (SOC 2 / ISO / continuous monitoring) — late-stage, enterprise-scale GTM<br>
+      Touches: 5
+    </div>
+  </div>
+
+  
+  <div class="why-now-block">
+    <div class="why-now-header">
+      <span class="why-now-badge HIGH">HIGH timing</span>
+      <span class="why-now-rationale">3 signals detected in the last 10 days. Buying window closes in ~4 days.</span>
+    </div>
+    
+    <div class="signal-row">
+      <span class="signal-type">funding event</span>
+      <span class="signal-desc">$150M Series D led by Sequoia. Fresh capital plus aggressive hiring means the marketing-ops team is under pressure to scale lifecycle campaigns — a budget-and-mandate window.</span>
+      <span class="signal-meta">
+        Crunchbase &middot;
+        <span class="signal-tier MEDIUM">MEDIUM</span>
+        &middot; <span class="shelf-life">10d ago &middot; 4d left</span>
+      </span>
+    </div>
+    
+    <div class="signal-row">
+      <span class="signal-type">g2 review velocity</span>
+      <span class="signal-desc">3-star G2 review of HubSpot: &#39;HubSpot works fine at our scale but we&#39;re hitting the ceiling on segmentation. Building custom SQL audiences because the native filters aren&#39;t flexible enough. Evaluating alternatives that work natively with our Snowflake data.&#39;</span>
+      <span class="signal-meta">
+        G2 &middot;
+        <span class="signal-tier HIGH">HIGH</span>
+        &middot; <span class="shelf-life">4d ago &middot; 10d left</span>
+      </span>
+    </div>
+    
+    <div class="signal-row">
+      <span class="signal-type">hiring</span>
+      <span class="signal-desc">Live marketing-operations job posting requiring Salesforce plus warehouse fluency — pulled from the job-board scan this morning. The one signal in this stack collected live, not seeded.</span>
+      <span class="signal-meta">
+        Greenhouse &middot;
+        <span class="signal-tier HIGH">HIGH</span>
+        &middot; <span class="shelf-life">6d ago &middot; 8d left</span>
+      </span>
+    </div>
+    
+  </div>
+  
+
+  <div class="campaign-block">
+    <div class="name">HubSpot Segmentation Ceiling → Warehouse-Native MAP Adoption</div>
+    <div class="obj">Land Vanta as a net-new Conversion customer while the post-Series-D stack-evaluation window is open. Three signal types stacked in the scan window: a $150M Series D (fresh budget plus a mandate to scale lifecycle), a 3-star HubSpot G2 review citing segmentation limits and a push toward Snowflake-native audiences, and a live marketing-operations job posting. Buying committee is the VP/Director of Marketing Ops plus the Head of Data. Move fast — shelf life ~6 days from the freshest signal.
+</div>
+    <div class="stage">Prospect · New — active buying window, high urgency</div>
+  </div>
+
+  <div class="section-h">Segment</div>
+  <div class="segment-name">HubSpot-Ceiling_WarehouseNative-MAP_Vanta</div>
+  <div class="segment-grid">
+    <div>
+      <div class="col-h">Salesforce filters</div>
+      <ul>
+        <li>Account.Name = &#39;Vanta&#39;</li><li>Account.Industry = &#39;Technology&#39;</li><li>Account.NumberOfEmployees &gt;= 200</li><li>Account.AnnualRevenue &gt;= 10000000</li><li>Account.Current_MAP_Vendor__c = &#39;HubSpot&#39;</li><li>Account.Data_Warehouse_Platform__c = &#39;Snowflake&#39;</li><li>Account.CRM_Platform__c = &#39;Salesforce&#39;</li><li>Account.Last_Funding_Round__c = &#39;Series D&#39;</li><li>Account.Last_Funding_Date__c &gt;= LAST_N_DAYS:30</li><li>Account.Lifecycle_Stage__c = &#39;Prospect&#39;</li><li>Account.Buying_Stage__c = &#39;Active Evaluation&#39;</li><li>Contact.Title LIKE &#39;%Marketing Operations%&#39; OR Contact.Title LIKE &#39;%Head of Data%&#39; OR Contact.Title LIKE &#39;%Director of Marketing%&#39; OR Contact.Title LIKE &#39;%VP Marketing%&#39;</li><li>Contact.LeadSource IN (&#39;Outbound&#39;, &#39;Intent&#39;, &#39;G2 Review Signal&#39;)</li>
+      </ul>
+    </div>
+    <div>
+      <div class="col-h">Warehouse traits</div>
+      <ul>
+        <li>g2_review_signal.vendor = &#39;HubSpot&#39; AND g2_review_signal.star_rating &lt;= 3 AND g2_review_signal.review_body ILIKE &#39;%segmentation%&#39; AND g2_review_signal.days_since_review &lt;= 7</li><li>intent_topic.category = &#39;Marketing Automation Platform Evaluation&#39; AND intent_topic.surge_score &gt;= 70</li><li>intent_topic.category = &#39;Snowflake Native Audiences&#39; AND intent_topic.surge_score &gt;= 60</li><li>hiring_signal.department = &#39;Marketing Operations&#39; AND hiring_signal.required_skills ILIKE &#39;%Salesforce%&#39; AND hiring_signal.required_skills ILIKE &#39;%Snowflake%&#39; AND hiring_signal.days_since_posted &lt;= 10</li><li>funding_event.round = &#39;Series D&#39; AND funding_event.amount_usd &gt;= 150000000 AND funding_event.days_since_announced &lt;= 14</li><li>technographic.tool = &#39;Snowflake&#39; AND technographic.confirmed = true</li><li>technographic.tool = &#39;Salesforce&#39; AND technographic.confirmed = true</li><li>product_engagement.conversion_trial_active = false</li><li>product_engagement.marketo_trial_active = false</li>
+      </ul>
+      <div class="col-h" style="margin-top: 10px;">Exclusions</div>
+      <ul>
+        <li>Account.Current_Trial_Vendor__c IN (&#39;Conversion&#39;, &#39;Marketo&#39;)</li><li>Account.Competitor_Customer__c = true</li><li>Contact.HasOptedOutOfEmail = true</li><li>Contact.Unsubscribed_All__c = true</li><li>Account.DQ_Reason__c != null</li><li>g2_review_signal.vendor = &#39;Conversion&#39; AND g2_review_signal.star_rating &gt;= 4</li>
+      </ul>
+    </div>
+  </div>
+  <div class="segment-size">1 target account · 3–5 contacts (VP/Dir Marketing Ops, Head of Data, CMO-adjacent stakeholders)</div>
+
+  <div class="section-h">Touch sequence</div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">1</span>Day 0 · 08:45 recipient local time · Tuesday or Wednesday send only</span>
+      <span>
+        <span class="touch-channel">TouchChannel.EMAIL</span>
+        <span class="touch-agent">AgentRole.EXECUTION agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">{{first_name}}, Vanta&#39;s Snowflake investment deserves a MAP that keeps up</div>
+    <div class="touch-body">Open by naming the specific G2 review signal: Vanta&#39;s team is already writing custom SQL to work around HubSpot&#39;s native segmentation limits — that&#39;s engineering time spent on plumbing, not pipeline. Bridge to the Series D mandate: with $150M to deploy and a scale-lifecycle charter, the cost of MAP fragility compounds fast. Introduce Conversion as the only MAP built warehouse-native — segmentation lives in Snowflake, not a proprietary data layer. Single CTA: 15-minute &#39;Snowflake audience live-build&#39; demo — AE shares screen, pulls a real Vanta-shaped segment in &lt;5 minutes with zero SQL handoff. Keep body under 180 words. No marketing footer imagery — plain-text format to maximize deliverability into ops personas.</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{first_name}}</span> &middot; <span class="v">{{account_name}}</span> &middot; <span class="v">{{g2_review_snippet}}</span> &middot; <span class="v">{{funding_round_amount}}</span> &middot; <span class="v">{{funding_round_investor}}</span> &middot; <span class="v">{{map_vendor_current}}</span> &middot; <span class="v">{{warehouse_platform}}</span> &middot; <span class="v">{{ae_first_name}}</span> &middot; <span class="v">{{ae_calendar_link}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>BLOCK send if Contact.HasOptedOutOfEmail = true</li><li>BLOCK send if Account.Current_Trial_Vendor__c IN (&#39;Conversion&#39;,&#39;Marketo&#39;)</li><li>VERIFY {{g2_review_snippet}} resolves to non-null string length &gt; 20 chars before send</li><li>VERIFY {{funding_round_amount}} token renders as &#39;$150M&#39; — numeric format gate</li><li>VERIFY {{ae_calendar_link}} is a valid URL (regex: ^https://)</li><li>DEDUPE: suppress if Contact received any Conversion outbound email in last 14 days</li><li>SPAM-GATE: plain-text variant only — flag if HTML image tags detected in final render</li><li>SEND-WINDOW: hard block if local send time falls outside 07:00–17:00 recipient timezone</li>
+    </ul>
+
+    <div class="metric">Email open rate ≥ 45% · Reply rate or CTA click ≥ 12% within 48 hours</div>
+  </div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">2</span>Day 1 · 30 minutes after Step 1 email confirmed delivered · AE sends manual InMail via Sales Navigator</span>
+      <span>
+        <span class="touch-channel">TouchChannel.LINKEDIN</span>
+        <span class="touch-agent">AgentRole.EXECUTION agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">Snowflake-native segmentation — following up on the email</div>
+    <div class="touch-body">Short, human LinkedIn message from AE. Reference the email sent moments ago so the outreach feels coordinated, not spammy. Cite the HubSpot segmentation ceiling pain point by name — &#39;saw the note about building custom SQL audiences.&#39; Mention the Series D timing: &#39;congrats on the Sequoia round — seems like exactly the moment to lock in the right stack.&#39; Offer a single soft ask: a 10-minute async Loom walkthrough OR a live call — let them choose. Hard limit: 300 characters for InMail preview pane optimization. Do not attach assets or decks.</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{first_name}}</span> &middot; <span class="v">{{account_name}}</span> &middot; <span class="v">{{funding_round_investor}}</span> &middot; <span class="v">{{map_pain_point_summary}}</span> &middot; <span class="v">{{ae_first_name}}</span> &middot; <span class="v">{{ae_linkedin_profile_url}}</span> &middot; <span class="v">{{loom_demo_url}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>VERIFY AE has active Sales Navigator seat before routing — block task if seat_status != &#39;active&#39;</li><li>VERIFY {{loom_demo_url}} resolves with HTTP 200 before message send</li><li>BLOCK if Contact.LinkedIn_Opted_Out__c = true</li><li>DEDUPE: suppress if Contact already has an open LinkedIn conversation thread with AE in last 7 days</li><li>CHARACTER-GATE: flag message body if preview-pane string (first 300 chars) ends mid-sentence</li><li>TIMING-LOCK: must fire within 90-minute window after Step 1 delivery confirmation — expire task if window missed</li>
+    </ul>
+
+    <div class="metric">InMail acceptance rate ≥ 35% · Loom link click OR calendar booking within 72 hours</div>
+  </div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">3</span>Day 2 · 09:00 AE local time · fires if no reply to Step 1 or Step 2 by EOD Day 1</span>
+      <span>
+        <span class="touch-channel">TouchChannel.AE_TASK</span>
+        <span class="touch-agent">AgentRole.EXECUTION agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">AE Research Task: Map Vanta Buying Committee + Tailor Series D ROI Angle</div>
+    <div class="touch-body">Structured AE research and personalization task surfaced in Salesforce. Task body should include: (1) Confirm the live MarOps job posting is still active on Greenhouse — copy job ID and required skills into Opportunity Notes. (2) Identify if the Head of Data or VP Marketing Ops has posted on LinkedIn about Snowflake/data stack in last 30 days — note any quote for use in Step 4 email. (3) Pull Vanta&#39;s current HubSpot contract renewal date from ZoomInfo or LinkedIn — if &lt;6 months, flag as &#39;renewal-pressure&#39; account tag in Salesforce. (4) Draft a one-paragraph ROI note: at $150M raised, quantify what a 10% improvement in lifecycle conversion rate means in ARR terms using Vanta&#39;s estimated ACVs. Paste into Opportunity Notes for Step 4 personalization. Estimated task time: 20 minutes.</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{account_name}}</span> &middot; <span class="v">{{opportunity_id}}</span> &middot; <span class="v">{{ae_first_name}}</span> &middot; <span class="v">{{greenhouse_job_posting_url}}</span> &middot; <span class="v">{{contact_linkedin_head_of_data}}</span> &middot; <span class="v">{{contact_linkedin_vp_marketing_ops}}</span> &middot; <span class="v">{{funding_round_amount}}</span> &middot; <span class="v">{{hubspot_contract_renewal_estimate}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>VERIFY Opportunity record exists in Salesforce with Stage != &#39;Closed Lost&#39; before creating task</li><li>VERIFY {{greenhouse_job_posting_url}} is non-null — pull from hiring_signal warehouse trait</li><li>FLAG task to AE manager if not completed within 4 business hours of creation</li><li>BLOCK Step 4 from firing until Task.Status__c = &#39;Completed&#39; and Opportunity.Research_Notes__c != null</li><li>DEDUPE: do not create duplicate task if an identical task was created in last 48 hours on same Opportunity</li>
+    </ul>
+
+    <div class="metric">AE task completed within 4 hours · Opportunity Notes updated with ROI calc and renewal intel</div>
+  </div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">4</span>Day 3 · 09:15 recipient local time · fires only after Step 3 task marked Complete</span>
+      <span>
+        <span class="touch-channel">TouchChannel.EMAIL</span>
+        <span class="touch-agent">AgentRole.EXECUTION agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">{{first_name}} — what replacing the SQL workaround actually buys back</div>
+    <div class="touch-body">This email is the &#39;proof + ROI&#39; beat. Open with a direct callback to the AE-researched hook: cite the Greenhouse job posting by title and note that hiring for Snowflake-fluent MarOps is expensive precisely because current tools force engineers into the loop. Transition to a concrete ROI frame: with Conversion, the audience that took a Vanta data engineer 3 days to build in SQL can be built by a marketer in 8 minutes — include the AE-calculated ROI note from Step 3 Opportunity Notes. Include one customer proof point from a comparable Series D / high-growth SaaS (use token, not hardcoded name, to allow QA substitution). Close with a specific calendar slot — two options, not an open-ended Calendly link — to reduce friction. Under 200 words. Plain text, same AE signature.</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{first_name}}</span> &middot; <span class="v">{{account_name}}</span> &middot; <span class="v">{{greenhouse_job_title}}</span> &middot; <span class="v">{{ae_roi_note}}</span> &middot; <span class="v">{{comparable_customer_name}}</span> &middot; <span class="v">{{comparable_customer_metric}}</span> &middot; <span class="v">{{ae_first_name}}</span> &middot; <span class="v">{{ae_calendar_slot_1}}</span> &middot; <span class="v">{{ae_calendar_slot_2}}</span> &middot; <span class="v">{{map_vendor_current}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>BLOCK send if Task.Status__c != &#39;Completed&#39; on linked Opportunity</li><li>VERIFY {{ae_roi_note}} token is non-null and length &gt; 50 chars — hard block if empty</li><li>VERIFY {{comparable_customer_name}} is not &#39;Vanta&#39; (no self-referential proof point)</li><li>VERIFY {{ae_calendar_slot_1}} and {{ae_calendar_slot_2}} are both future timestamps (&gt; now)</li><li>BLOCK send if Contact.HasOptedOutOfEmail = true</li><li>DEDUPE: suppress if Contact replied to Step 1 email (reply = positive signal, route to AE directly)</li><li>SPAM-GATE: flag if word count exceeds 220 words in final render</li><li>SEND-WINDOW: hard block outside 07:00–17:00 recipient timezone</li>
+    </ul>
+
+    <div class="metric">Reply rate ≥ 18% · Meeting booked rate ≥ 10% within 48 hours of send</div>
+  </div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">5</span>Day 5 · fires if no meeting booked by EOD Day 4 · displayed on Conversion free-tier or trial touchpoints; if no product session detected, fall back to email on Day 5 at 10:00 recipient local time</span>
+      <span>
+        <span class="touch-channel">TouchChannel.IN_APP_BANNER</span>
+        <span class="touch-agent">AgentRole.EXECUTION agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">Vanta&#39;s Snowflake audiences — live in 8 minutes. Ready when you are.</div>
+    <div class="touch-body">Final urgency touch. If in-app: persistent top-of-screen banner on any Conversion marketing touchpoint or content page the contact visits. Message: &#39;You&#39;re one SQL query away from never writing one again. See Conversion pull a Snowflake audience in 8 minutes — built for teams at Vanta&#39;s scale.&#39; CTA button: &#39;Book 15 min with {{ae_first_name}}&#39;. If email fallback: short 5-sentence plain-text. Subject: &#39;Last note from me, {{first_name}} — the Snowflake demo is 8 minutes&#39;. Body references the full signal stack (Series D budget window, G2 review, MarOps hiring) as a single sentence to reinforce urgency, then one CTA. No follow-up scheduled after this touch — AE takes over manually if no response.</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{first_name}}</span> &middot; <span class="v">{{account_name}}</span> &middot; <span class="v">{{ae_first_name}}</span> &middot; <span class="v">{{ae_calendar_link}}</span> &middot; <span class="v">{{funding_round_amount}}</span> &middot; <span class="v">{{days_since_g2_review}}</span> &middot; <span class="v">{{signal_stack_summary}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>VERIFY contact has not booked a meeting (Opportunity.Meeting_Booked__c != true) before firing</li><li>VERIFY {{ae_calendar_link}} resolves with HTTP 200</li><li>CHANNEL-FALLBACK: confirm product session event in warehouse (page_view count &gt; 0 in last 72h) before triggering in_app_banner; else route to email fallback automatically</li><li>BLOCK if Contact.HasOptedOutOfEmail = true (covers email fallback path)</li><li>DEDUPE: suppress if any positive reply or meeting booking detected across all prior steps</li><li>URGENCY-GATE: verify {{days_since_g2_review}} &lt;= 10 — if review signal is stale, swap {{signal_stack_summary}} to leading with funding signal instead</li><li>FINAL-TOUCH FLAG: set Contact.Campaign_Sequence_Complete__c = true after this step fires regardless of engagement outcome</li>
+    </ul>
+
+    <div class="metric">Banner CTR ≥ 8% OR email fallback reply/click ≥ 10% · Meeting booked from this touch ≥ 5%</div>
+  </div>
+  
+
+  <div class="section-h">Optimization triggers</div>
+  <div class="triggers">
+    <ul class="opt-list">
+      <li><strong>If</strong> Contact replies to any email touch with positive intent keywords (&#39;interested&#39;, &#39;yes&#39;, &#39;let&#39;s talk&#39;, &#39;send me&#39;, &#39;tell me more&#39;) at any step &rarr; Immediately pause all remaining automated touches. Route contact to AE with Slack alert including reply text, step number, and recommended next action: &#39;Skip to demo booking — do not send Step N+1.&#39; Set Contact.Buying_Signal_Strength__c = &#39;Hot&#39;.</li><li><strong>If</strong> g2_review_signal.days_since_review exceeds 10 days at campaign runtime (signal going stale) &rarr; Optimization agent rotates primary urgency anchor in Steps 1 and 4 from G2 review to hiring signal. Swap {{g2_review_snippet}} lead-in for {{greenhouse_job_posting_summary}} lead-in across all pending touches. Log variant swap as &#39;signal-rotation-hiring&#39; in campaign analytics.</li><li><strong>If</strong> funding_event.days_since_announced exceeds 14 days before campaign completes (budget window narrowing) &rarr; Compress remaining touch cadence: collapse any Day 3–5 gaps to Day 2–3. Upgrade Step 5 from in_app_banner to direct AE phone task. Set campaign urgency flag to &#39;CRITICAL&#39; and alert AE manager.</li><li><strong>If</strong> hiring_signal.job_posting_status transitions to &#39;filled&#39; or &#39;removed&#39; during campaign runtime &rarr; Remove hiring signal token from all unsent touches. Optimization agent re-weights body_brief emphasis to G2 review pain point and Series D ROI angle. Update {{signal_stack_summary}} token to exclude hiring reference.</li><li><strong>If</strong> Intent surge score for &#39;Marketing Automation Platform Evaluation&#39; drops below 50 mid-campaign (buying signal cooling) &rarr; Pause Steps 4 and 5. Optimization agent triggers a re-segmentation check: if account intent score recovers above 60 within 5 days, resume sequence at next step. If not recovered, archive campaign and create a 30-day re-entry nurture task for AE.</li><li><strong>If</strong> A new contact at Vanta matching Title LIKE &#39;%Marketing Operations%&#39; OR &#39;%Head of Data%&#39; is created in Salesforce mid-campaign &rarr; Optimization agent clones Step 1 touch and re-enters new contact into sequence at Step 1 with same personalization tokens. Do not re-send to contacts already in sequence. Alert AE of buying committee expansion.</li><li><strong>If</strong> Account.Current_Trial_Vendor__c is updated to &#39;Conversion&#39; or &#39;Marketo&#39; at any point during campaign &rarr; Immediately suppress all remaining touches for all contacts at this account. Set Campaign_Status__c = &#39;Suppressed - Trial Active&#39;. Alert AE to shift to trial-conversion playbook.</li><li><strong>If</strong> Conference attendance signal detected for Vanta contact at a MarTech, SaaStr, or RevOps event within campaign window (sourced from intent data or LinkedIn event RSVPs) &rarr; Optimization agent inserts a conference_meet touch: AE task to request an in-person or lounge meeting at the event. Personalize outreach with event name and booth/session reference. Reprioritize this as the primary CTA over remote demo booking for the duration of the event window.</li>
+    </ul>
+  </div>
+
+  <div class="section-h">Pipeline projection</div>
+  <div class="projection-grid">
+    <div>
+      <div class="pk">Expected renewals</div>
+      <div class="pv">N/A — net-new prospect. Expected outcome: 1 qualified meeting booked within 6-day buying window → opportunity created at $80K–$120K estimated ACV. Pipeline contribution: $100K ACV (midpoint). At 25% stage-1-to-close rate for Series D SaaS, expected closed ARR attribution: $25K. Full-sequence meeting booking rate benchmark: 15–20% for 3-signal stacked outbound.</div>
+    </div>
+    <div>
+      <div class="pk">AE efficiency</div>
+      <div class="pv">AE active time: ~35 minutes total (20-min Step 3 research task + 10-min LinkedIn InMail + 5-min calendar slot selection). All 5 touches otherwise fully automated. AE is unblocked for parallel outbound — estimated 4–6 additional accounts can run concurrently without AE capacity conflict. Zero manual email drafting required.</div>
+    </div>
+    <div>
+      <div class="pk">Runtime</div>
+      <div class="pv">6 days end-to-end (Day 0 send → Day 5 final touch). Matches estimated shelf life of freshest signal (MarOps job posting, 6 days old at launch). All triggers and fallbacks resolved within the window. Post-Day-5: AE manual ownership only.</div>
+    </div>
+    <div>
+      <div class="pk">Downside scenario</div>
+      <div class="pv">Downside scenario: all 5 touches go unanswered, no meeting booked. Probability estimate: 65% (cold outbound base rate for VP+ personas). Outcomes: (1) Zero pipeline from this sequence — $0 ACV. (2) Vanta moves forward with a competitor MAP or extends HubSpot contract on renewal pressure. (3) If intent score drops below threshold trigger, campaign auto-archives with 30-day re-entry nurture — second-window opportunity preserved. (4) AE time cost: 35 minutes sunk with no return. Mitigation: optimization triggers for signal rotation and cadence compression reduce downside probability by an estimated 8–12 percentage points. Conference_meet trigger provides a non-digital recovery path if signal stack cools before Day 5.</div>
+    </div>
+  </div>
+
+  <div class="platform-fit">
+    <span class="pf-h">Why this is a Conversion-shaped artifact</span>
+    <br><br>
+    <strong>Build time on the platform:</strong> <br><br>
+    <strong>What this proves:</strong> 
+  </div>
+
+  <div class="footer">
+    <span class="brand">SignalForce &middot; MarOps branch</span>
+    <span>Built by Sami Rahman &middot; github.com/sami2919</span>
+  </div>
+
+</body>
+</html>

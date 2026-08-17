@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Lifecycle Campaign Brief — dbt Labs</title>
+  <style>
+    @page { size: A4; margin: 18mm 16mm 16mm 16mm; }
+    :root {
+      --ink: #0B0B0B;
+      --muted: #6B6B6B;
+      --rule: #E6E6E6;
+      --accent: #2952E3;
+      --accent-soft: #EEF2FF;
+      --bg-soft: #FAFAFA;
+      --code-bg: #F4F4F5;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      color: var(--ink);
+      font-size: 10.25pt;
+      line-height: 1.45;
+      margin: 0;
+    }
+    code, .mono {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 9pt;
+      background: var(--code-bg);
+      padding: 1px 4px;
+      border-radius: 2px;
+    }
+    .doc-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding-bottom: 10px;
+      border-bottom: 2px solid var(--ink);
+      margin-bottom: 16px;
+    }
+    .doc-header .title { font-size: 20pt; font-weight: 700; letter-spacing: -0.02em; }
+    .doc-header .subtitle { font-size: 11pt; color: var(--muted); margin-top: 2px; }
+    .doc-header .meta { text-align: right; font-size: 9pt; color: var(--muted); }
+    .campaign-block {
+      background: var(--accent-soft);
+      border-left: 3px solid var(--accent);
+      padding: 10px 14px;
+      margin-bottom: 16px;
+    }
+    .campaign-block .name { font-size: 12pt; font-weight: 600; }
+    .campaign-block .obj { font-size: 10pt; margin-top: 4px; color: var(--ink); }
+    .campaign-block .stage {
+      font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--accent); font-weight: 600; margin-top: 6px;
+    }
+    .section-h {
+      font-size: 9pt; text-transform: uppercase; letter-spacing: 0.14em;
+      color: var(--muted); font-weight: 600;
+      border-bottom: 1px solid var(--rule);
+      padding-bottom: 4px; margin: 18px 0 10px 0;
+    }
+    .segment-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 16px;
+      font-size: 9.5pt;
+    }
+    .segment-grid .col-h {
+      font-size: 8.5pt; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 4px;
+    }
+    .segment-grid ul {
+      margin: 0; padding-left: 14px;
+      font-size: 9pt;
+    }
+    .segment-grid li {
+      margin-bottom: 2px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 8.75pt;
+      line-height: 1.35;
+    }
+    .segment-name {
+      font-size: 10pt; font-weight: 600; margin-bottom: 6px;
+    }
+    .segment-size {
+      font-size: 9pt; color: var(--muted); margin-top: 8px;
+      font-style: italic;
+    }
+    .touch {
+      page-break-inside: avoid;
+      border-top: 1px solid var(--rule);
+      padding: 12px 0 10px 0;
+    }
+    .touch:first-of-type { border-top: none; padding-top: 4px; }
+    .touch-h {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 4px;
+    }
+    .touch-step {
+      font-size: 9pt; color: var(--muted); letter-spacing: 0.08em;
+      text-transform: uppercase; font-weight: 600;
+    }
+    .touch-step .num {
+      display: inline-block; background: var(--ink); color: #fff;
+      padding: 1px 6px; border-radius: 2px; margin-right: 6px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .touch-channel {
+      font-size: 9pt; color: var(--ink); background: var(--bg-soft);
+      padding: 2px 8px; border-radius: 2px; font-weight: 500;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .touch-agent {
+      font-size: 8.5pt; color: var(--accent);
+      text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;
+      margin-left: 8px;
+    }
+    .touch-subject {
+      font-size: 11pt; font-weight: 600; line-height: 1.35;
+      margin: 4px 0 4px 0;
+    }
+    .touch-timing {
+      font-size: 8.5pt; color: var(--muted);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      margin-bottom: 6px;
+    }
+    .touch-body {
+      font-size: 9.5pt; margin: 4px 0 6px 0;
+    }
+    .qa-list, .opt-list {
+      margin: 4px 0; padding-left: 16px;
+      font-size: 8.75pt; color: var(--ink);
+    }
+    .qa-list li, .opt-list li { margin-bottom: 2px; line-height: 1.4; }
+    .qa-list code { background: transparent; padding: 0; }
+    .kv {
+      font-size: 8.5pt; color: var(--muted);
+      margin-top: 4px;
+    }
+    .kv .k { text-transform: uppercase; letter-spacing: 0.08em; }
+    .kv .v {
+      color: var(--ink);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .metric {
+      font-size: 8.75pt; color: var(--ink);
+      background: var(--bg-soft); padding: 4px 8px;
+      border-left: 2px solid var(--accent);
+      margin-top: 6px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .triggers {
+      background: var(--bg-soft);
+      padding: 10px 14px;
+      border-radius: 3px;
+    }
+    .projection-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 14px;
+      font-size: 9pt;
+    }
+    .projection-grid .pk {
+      font-size: 8.5pt; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 2px;
+    }
+    .projection-grid .pv {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 9pt;
+    }
+    .footer {
+      margin-top: 22px; padding-top: 10px;
+      border-top: 1px solid var(--rule);
+      font-size: 8pt; color: var(--muted);
+      display: flex; justify-content: space-between;
+    }
+    .footer .brand { letter-spacing: 0.1em; text-transform: uppercase; }
+    .platform-fit {
+      font-size: 9pt; color: var(--ink);
+      background: var(--accent-soft);
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+    .platform-fit .pf-h {
+      font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.12em;
+      color: var(--accent); font-weight: 600; margin-bottom: 4px;
+      display: block;
+    }
+    .why-now-block {
+      border: 2px solid #16a34a;
+      border-radius: 4px;
+      padding: 10px 14px;
+      margin-bottom: 16px;
+      background: #f0fdf4;
+    }
+    .why-now-header {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+    }
+    .why-now-badge {
+      font-size: 8pt; font-weight: 700; letter-spacing: 0.14em;
+      text-transform: uppercase; padding: 2px 8px; border-radius: 2px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .why-now-badge.HIGH { background: #16a34a; color: #fff; }
+    .why-now-badge.MEDIUM { background: #ca8a04; color: #fff; }
+    .why-now-badge.LOW { background: #9ca3af; color: #fff; }
+    .why-now-rationale { font-size: 9pt; color: #15803d; font-weight: 600; }
+    .signal-row {
+      display: flex; align-items: baseline; gap: 8px;
+      font-size: 8.75pt; margin-bottom: 4px; font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .signal-type {
+      font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.1em;
+      color: #6b7280; white-space: nowrap; min-width: 130px;
+    }
+    .signal-desc { color: #1f2937; flex: 1; }
+    .signal-meta { color: #6b7280; white-space: nowrap; font-size: 7.5pt; }
+    .signal-tier { font-weight: 700; }
+    .signal-tier.HIGH { color: #16a34a; }
+    .signal-tier.MEDIUM { color: #ca8a04; }
+    .signal-tier.LOW { color: #9ca3af; }
+    .shelf-life { color: #374151; }
+  </style>
+</head>
+<body>
+
+  <div class="doc-header">
+    <div>
+      <div class="title">Lifecycle Campaign Brief</div>
+      <div class="subtitle">dbt Labs &middot; https://www.getdbt.com</div>
+    </div>
+    <div class="meta">
+      Generated 2026-05-12T12:26:38+00:00<br>
+      Vertical: Data transformation SaaS — open-source dbt Core + dbt Cloud, ~300 employees, Series D<br>
+      Touches: 6
+    </div>
+  </div>
+
+  
+  <div class="why-now-block">
+    <div class="why-now-header">
+      <span class="why-now-badge SignalTimingTier.HIGH">SignalTimingTier.HIGH timing</span>
+      <span class="why-now-rationale">3 signals detected in the last 6 days. Buying window closes in ~8 days.</span>
+    </div>
+    
+    <div class="signal-row">
+      <span class="signal-type">hiring</span>
+      <span class="signal-desc">Marketing Data Engineer role posted on Greenhouse — JD requires dbt, Snowflake, and &#39;building attribution from scratch outside of HubSpot&#39;. Direct MAP ceiling signal.</span>
+      <span class="signal-meta">
+        Greenhouse &middot;
+        <span class="signal-tier SignalTimingTier.HIGH">SignalTimingTier.HIGH</span>
+        &middot; <span class="shelf-life">5d ago &middot; 9d left</span>
+      </span>
+    </div>
+    
+    <div class="signal-row">
+      <span class="signal-type">github repo</span>
+      <span class="signal-desc">dbt-labs/dbt-mcp repo pushed 3 days ago — they&#39;re building an MCP server for dbt, signaling active investment in agent-native tooling. Conversion&#39;s agent model is a natural fit.</span>
+      <span class="signal-meta">
+        GitHub &middot;
+        <span class="signal-tier SignalTimingTier.HIGH">SignalTimingTier.HIGH</span>
+        &middot; <span class="shelf-life">3d ago &middot; 11d left</span>
+      </span>
+    </div>
+    
+    <div class="signal-row">
+      <span class="signal-type">github repo</span>
+      <span class="signal-desc">dbt-labs/dbt-duckdb repo active — DuckDB integration signals interest in embedded/local warehouse execution, consistent with warehouse-native MAP interest.</span>
+      <span class="signal-meta">
+        GitHub &middot;
+        <span class="signal-tier SignalTimingTier.HIGH">SignalTimingTier.HIGH</span>
+        &middot; <span class="shelf-life">6d ago &middot; 8d left</span>
+      </span>
+    </div>
+    
+  </div>
+  
+
+  <div class="campaign-block">
+    <div class="name">Warehouse-Native MAP Adoption — Data Team as Champion</div>
+    <div class="obj">Convert dbt Labs from a MAP-adjacent prospect to a Conversion platform trial. Their data team already lives in the warehouse — they have Snowflake, BigQuery, and dbt natively. The gap is their marketing team is almost certainly running HubSpot or Marketo on top of that warehouse without a native connection. The champion is their Marketing Data Engineer (active Greenhouse posting) — the person hired to paper over that exact gap.
+</div>
+    <div class="stage">evaluation</div>
+  </div>
+
+  <div class="section-h">Segment</div>
+  <div class="segment-name">dbt Labs — Marketing Data Engineer Champion + VP Marketing Economic Buyer</div>
+  <div class="segment-grid">
+    <div>
+      <div class="col-h">Salesforce filters</div>
+      <ul>
+        <li>Account.Name = &#39;dbt Labs&#39;</li><li>Account.Industry = &#39;Technology&#39;</li><li>Account.NumberOfEmployees &gt;= 200 AND Account.NumberOfEmployees &lt;= 500</li><li>Account.Funding_Stage__c = &#39;Series D&#39;</li><li>Contact.Title LIKE &#39;%Marketing Data Engineer%&#39; OR Contact.Title LIKE &#39;%VP Marketing%&#39; OR Contact.Title LIKE &#39;%VP of Marketing%&#39;</li><li>Contact.LeadSource = &#39;Outbound — Intent Signal&#39;</li><li>Opportunity.StageName NOT IN (&#39;Closed Won&#39;, &#39;Closed Lost&#39;)</li><li>Account.Tech_Stack__c INCLUDES (&#39;Snowflake&#39;, &#39;dbt&#39;, &#39;BigQuery&#39;)</li><li>Account.Current_MAP__c IN (&#39;HubSpot&#39;, &#39;Marketo&#39;, &#39;Unknown&#39;)</li>
+      </ul>
+    </div>
+    <div>
+      <div class="col-h">Warehouse traits</div>
+      <ul>
+        <li>github_org = &#39;dbt-labs&#39; AND repo_last_pushed_at &gt;= DATEADD(day, -7, CURRENT_DATE) AND repo_name IN (&#39;dbt-mcp&#39;, &#39;dbt-duckdb&#39;)</li><li>greenhouse_job_posting_active = TRUE AND greenhouse_job_title ILIKE &#39;%marketing data engineer%&#39; AND greenhouse_job_description ILIKE &#39;%dbt%&#39; AND greenhouse_job_description ILIKE &#39;%Snowflake%&#39;</li><li>greenhouse_job_description ILIKE &#39;%attribution%outside%HubSpot%&#39; OR greenhouse_job_description ILIKE &#39;%attribution%beyond%HubSpot%&#39;</li><li>intent_topic IN (&#39;marketing attribution&#39;, &#39;warehouse-native analytics&#39;, &#39;CDP replacement&#39;, &#39;reverse ETL&#39;) AND intent_score &gt;= 65</li><li>contact_github_contributions_last_30d &gt;= 1 AND contact_github_org = &#39;dbt-labs&#39;</li>
+      </ul>
+      <div class="col-h" style="margin-top: 10px;">Exclusions</div>
+      <ul>
+        <li>Account.Conversion_Customer__c = TRUE</li><li>Account.Conversion_Trial_Active__c = TRUE</li><li>Contact.Email_Opt_Out__c = TRUE</li><li>Contact.Unsubscribed__c = TRUE</li><li>Account.Competitor__c = TRUE</li><li>Opportunity.StageName = &#39;Closed Lost&#39; AND Opportunity.CloseDate &gt;= LAST_N_DAYS:180</li>
+      </ul>
+    </div>
+  </div>
+  <div class="segment-size">2–4 contacts (Marketing Data Engineer + VP Marketing as primary; up to 2 secondary data team contacts identified via GitHub org membership)</div>
+
+  <div class="section-h">Touch sequence</div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">1</span>Day 0, 09:00 recipient local time, Tuesday or Wednesday send only</span>
+      <span>
+        <span class="touch-channel">TouchChannel.EMAIL</span>
+        <span class="touch-agent">AgentRole.EXECUTION agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">dbt-mcp + your HubSpot gap — a direct connection</div>
+    <div class="touch-body">Open by referencing the dbt-mcp repo push from {{github_repo_pushed_days_ago}} days ago as proof of dbt Labs&#39; agent-native orientation. Transition to the MAP ceiling observation: the Greenhouse JD for {{greenhouse_job_title}} explicitly asks for someone to build attribution &#39;outside of HubSpot&#39; — which is the exact sentence Conversion was built to delete. Explain in 3 sentences: Conversion&#39;s execution, QA, and optimization agents run directly on top of {{prospect_warehouse_stack}} with no ETL hop; segmentation is written in SQL the new hire already knows; no HubSpot sync required. Single CTA: &#39;See a 60-second Snowflake-native segment built live — reply to book.&#39; Keep under 180 words. No decks, no PDF attachments.</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{{{contact.first_name}}}}</span> &middot; <span class="v">{{{{github_repo_name}}}}</span> &middot; <span class="v">{{{{github_repo_pushed_days_ago}}}}</span> &middot; <span class="v">{{{{greenhouse_job_title}}}}</span> &middot; <span class="v">{{{{prospect_warehouse_stack}}}}</span> &middot; <span class="v">{{{{account.current_map}}}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>Suppress if Contact.Email_Opt_Out__c = TRUE or Contact.Unsubscribed__c = TRUE before send</li><li>Verify {{github_repo_pushed_days_ago}} resolves to integer ≤ 14; if NULL, suppress touch and flag for manual review</li><li>Verify {{greenhouse_job_title}} token resolves to non-empty string; if NULL substitute &#39;Marketing Data Engineer&#39; and log substitution</li><li>Spam-gate: subject line must not contain ALL CAPS words; flag if spam score (SpamAssassin) &gt; 3.0</li><li>Deduplicate: if both Marketing Data Engineer and VP Marketing contacts are in segment, send step 1 to Marketing Data Engineer only; VP Marketing enters at step 3</li><li>Confirm sending domain has valid DKIM + DMARC pass before queue commit</li>
+    </ul>
+
+    <div class="metric">Email open rate ≥ 45% (persona: technically literate, low volume outbound); reply rate ≥ 8% within 72 hours</div>
+  </div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">2</span>Day 1 — fires if contact visits getconversion.com/warehouse-native within 48 hours of step 1 send; else fires Day 3 on next session</span>
+      <span>
+        <span class="touch-channel">TouchChannel.IN_APP_BANNER</span>
+        <span class="touch-agent">AgentRole.EXECUTION agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">Your dbt models are already your segments</div>
+    <div class="touch-body">Short contextual banner (≤ 40 words) shown on Conversion&#39;s warehouse-native product page. Message: &#39;You already wrote the segment in dbt — Conversion just runs it. See {{prospect_warehouse_stack}} → campaign in under 5 minutes.&#39; CTA button: &#39;Start free warehouse trial&#39;. Banner should NOT fire on pricing page to avoid premature price anchoring.</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{{{contact.first_name}}}}</span> &middot; <span class="v">{{{{prospect_warehouse_stack}}}}</span> &middot; <span class="v">{{{{account.name}}}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>Banner must not render on /pricing, /about, or /blog URL paths — enforce URL suppression list in banner targeting rules</li><li>Fire only once per contact per session; suppress repeat impressions within same 24-hour window</li><li>Verify {{prospect_warehouse_stack}} resolves before render; default to &#39;your data warehouse&#39; if NULL to prevent broken token display</li><li>A/B variant selection is owned by optimization agent — execution agent must not override variant assignment</li><li>Confirm contact cookie/identity resolution matches CRM contact ID before personalization tokens are injected</li>
+    </ul>
+
+    <div class="metric">Banner CTR ≥ 12%; trial sign-up page scroll depth ≥ 60% among click-throughs</div>
+  </div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">3</span>Day 2, assigned to AE by 08:00 AE local time; task due same day EOD</span>
+      <span>
+        <span class="touch-channel">TouchChannel.AE_TASK</span>
+        <span class="touch-agent">AgentRole.EXECUTION agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">AE Outreach — dbt Labs dual-thread: Marketing Data Engineer + VP Marketing (Greenhouse + GitHub signals live)</div>
+    <div class="touch-body">AE task brief with two sub-tasks: (A) LinkedIn connect + voice note to VP Marketing — reference the conscious decision to hire someone to build attribution outside HubSpot as a strategic bet, and offer a 20-min exec framing of what warehouse-native MAP means for their roadmap. (B) Direct email to Marketing Data Engineer (or hiring manager if role not yet filled) — lead with the dbt-mcp and dbt-duckdb repos as shared context, offer to co-build a live Snowflake segment using their actual dbt schema during a screen-share. AE note: buying window is &lt;21 days per intent score decay model — do not batch this task. Include Salesforce task fields: Task.Subject, Task.Priority = &#39;High&#39;, Task.ActivityDate = today, Task.WhoId = both contact IDs, Task.Description = full brief text.</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{{{contact.first_name}}}}</span> &middot; <span class="v">{{{{ae.first_name}}}}</span> &middot; <span class="v">{{{{account.name}}}}</span> &middot; <span class="v">{{{{greenhouse_job_title}}}}</span> &middot; <span class="v">{{{{github_repo_name}}}}</span> &middot; <span class="v">{{{{intent_score}}}}</span> &middot; <span class="v">{{{{account.current_map}}}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>Task must write back to Salesforce Task object with Task.Priority__c = &#39;High&#39; and Task.Campaign_Source__c = &#39;Warehouse-Native MAP Adoption&#39;</li><li>Verify AE assignment: Account.OwnerId must resolve to an active Salesforce user; if unassigned, escalate to SDR manager queue</li><li>Confirm both contact IDs (Marketing Data Engineer, VP Marketing) are present in Task.WhoId before task creation; if only one contact exists, create single-threaded task and flag for enrichment</li><li>Do not create duplicate tasks: check for existing open Task.Subject LIKE &#39;%dbt Labs%&#39; created in last 7 days before writing new task</li><li>Task description must not contain unparsed tokens — validate all {{tokens}} resolve before Salesforce write</li>
+    </ul>
+
+    <div class="metric">AE task completed (Task.Status = &#39;Completed&#39;) within 24 hours; LinkedIn connection accepted OR email reply from either champion within 72 hours of task creation</div>
+  </div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">4</span>Day 5, 08:30 recipient local time — send only if no reply received to step 1 and AE task not marked &#39;Completed — Replied&#39;</span>
+      <span>
+        <span class="touch-channel">TouchChannel.EMAIL</span>
+        <span class="touch-agent">AgentRole.EXECUTION agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">The attribution model your new hire will have to rebuild (unless…)</div>
+    <div class="touch-body">Nurture email targeting Marketing Data Engineer persona (or VP Marketing if MDE contact not yet resolved). Open with a concrete technical narrative: &#39;The first 90 days of a Marketing Data Engineer at a HubSpot shop are usually the same — export CSVs, rebuild attribution in dbt, try to push segments back into HubSpot via reverse ETL, watch it break on contact ID mismatches.&#39; Pivot: Conversion&#39;s warehouse sync means that 90-day rebuild is a 90-minute setup. Offer a specific artifact — a public dbt package or SQL template that maps directly to {{prospect_warehouse_stack}} schema — as the trial entry point. CTA: &#39;Grab the dbt attribution starter pack → start your trial.&#39; Include one-sentence social proof from a data-forward customer (anonymized vertical match). Under 220 words.</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{{{contact.first_name}}}}</span> &middot; <span class="v">{{{{prospect_warehouse_stack}}}}</span> &middot; <span class="v">{{{{account.current_map}}}}</span> &middot; <span class="v">{{{{greenhouse_job_title}}}}</span> &middot; <span class="v">{{{{account.name}}}}</span> &middot; <span class="v">{{{{similar_customer_vertical}}}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>Suppress if step 1 generated a reply OR if AE task is marked Task.Status = &#39;Completed — Replied&#39; in Salesforce — do not double-touch an engaged contact</li><li>Suppress if Contact.Unsubscribed__c = TRUE or bounce recorded on step 1</li><li>Verify {{similar_customer_vertical}} token resolves to a non-empty, non-competitor reference; if NULL, remove social proof sentence entirely rather than render broken</li><li>Subject line A/B variant (optimization agent owns selection): variant B = &#39;What the first 90 days of your new Marketing Data Engineer look like&#39; — do not send both variants to same contact</li><li>Confirm send-time suppression window: do not send between Friday 17:00 and Monday 07:00 recipient local time</li>
+    </ul>
+
+    <div class="metric">Email open rate ≥ 38%; dbt attribution starter pack download OR trial sign-up click ≥ 10% of opens</div>
+  </div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">5</span>Day 7, fire if no trial sign-up by Day 6 EOD; send as LinkedIn InMail to VP Marketing contact</span>
+      <span>
+        <span class="touch-channel">TouchChannel.LINKEDIN</span>
+        <span class="touch-agent">AgentRole.EXECUTION agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">The hire you just approved already knows how to use this</div>
+    <div class="touch-body">LinkedIn InMail to VP Marketing. Short and exec-toned (≤ 120 words). Lead: &#39;You approved a {{greenhouse_job_title}} hire specifically to get past {{account.current_map}}&#39;s limits. Conversion is what that person will reach for once they&#39;re in seat — warehouse-native MAP that runs on {{prospect_warehouse_stack}} without any sync layer.&#39; Offer: &#39;Happy to give you a 15-min preview so you&#39;re not in a cold eval when they start.&#39; Do not attach decks. No feature lists. One CTA: calendar link or reply. Reference dbt-mcp signal lightly as evidence of technical culture alignment: &#39;We saw your team ship dbt-mcp — the same agent-native design philosophy is in our platform core.&#39;</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{{{contact.first_name}}}}</span> &middot; <span class="v">{{{{greenhouse_job_title}}}}</span> &middot; <span class="v">{{{{account.current_map}}}}</span> &middot; <span class="v">{{{{prospect_warehouse_stack}}}}</span> &middot; <span class="v">{{{{github_repo_name}}}}</span> &middot; <span class="v">{{{{ae.first_name}}}}</span> &middot; <span class="v">{{{{ae.calendar_link}}}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>Confirm LinkedIn contact profile URL is populated on Contact.LinkedIn_URL__c before InMail dispatch; if NULL, skip step 5 and log for enrichment — do not send to generic LinkedIn search result</li><li>Suppress if VP Marketing contact has already replied to any prior touch in this sequence (check Contact.Last_Reply_Date__c against campaign enrollment date)</li><li>InMail character count must not exceed 300 characters including subject; QA agent must validate length before send</li><li>Verify {{ae.calendar_link}} is a valid URL (regex check); if broken, substitute ae.email CTA instead</li><li>Do not send InMail within 48 hours of a prior LinkedIn touch from AE (step 3 sub-task B) — check Task.ActivityDate on AE task before dispatch</li>
+    </ul>
+
+    <div class="metric">InMail open rate ≥ 55%; calendar booking OR positive reply rate ≥ 15% within 5 days of send</div>
+  </div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">6</span>Day 10, 08:00 AE local time — fires unconditionally as sequence close/escalation task regardless of prior engagement</span>
+      <span>
+        <span class="touch-channel">TouchChannel.AE_TASK</span>
+        <span class="touch-agent">AgentRole.EXECUTION agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">AE Escalation — dbt Labs trial close or disqualify by Day 21 (intent decay window)</div>
+    <div class="touch-body">Final AE escalation task. Intent score decay model gives a ≤ 21-day window from first GitHub signal (Day 0 = dbt-mcp push). By Day 10 the window is 55% elapsed. Task instructs AE to: (1) Review full engagement log — opens, clicks, replies, LinkedIn accepts — surfaced in Conversion dashboard. (2) If any positive signal: call both champions same day, use trial-close script anchored on the dbt attribution starter pack from step 4. (3) If zero engagement: disqualify contact from active sequence, move Account.Lifecycle_Stage__c to &#39;Nurture — Dark&#39;, schedule re-signal check in 45 days via Salesforce follow-up task. (4) Log outcome in Task.Description with one of three dispositions: &#39;Trial Started&#39;, &#39;Meeting Booked&#39;, &#39;Disqualified — Dark&#39;. AE must not leave task open past Day 21.</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{{{account.name}}}}</span> &middot; <span class="v">{{{{ae.first_name}}}}</span> &middot; <span class="v">{{{{contact.first_name}}}}</span> &middot; <span class="v">{{{{campaign_engagement_summary}}}}</span> &middot; <span class="v">{{{{intent_score}}}}</span> &middot; <span class="v">{{{{intent_score_decay_date}}}}</span> &middot; <span class="v">{{{{github_repo_pushed_days_ago}}}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>Task must not be created if Account.Conversion_Trial_Active__c = TRUE (trial already started — escalation is moot)</li><li>{{campaign_engagement_summary}} token must pull from Conversion engagement log API and resolve to a non-empty string summarizing opens/clicks/replies; if API call fails, substitute &#39;Review Conversion dashboard manually&#39; and alert MarOps</li><li>{{intent_score_decay_date}} must resolve to a valid date in ISO 8601 format; if NULL, default to enrollment_date + 21 days and log assumption</li><li>Verify Task.WhoId resolves to at least one active contact before Salesforce write</li><li>Task.Priority__c must be set to &#39;High&#39;; Task.Campaign_Source__c = &#39;Warehouse-Native MAP Adoption&#39;; Task.Type = &#39;Escalation Close&#39;</li>
+    </ul>
+
+    <div class="metric">AE task disposition logged within 24 hours of creation; trial start rate OR meeting booked rate ≥ 30% of accounts reaching step 6</div>
+  </div>
+  
+
+  <div class="section-h">Optimization triggers</div>
+  <div class="triggers">
+    <ul class="opt-list">
+      <li><strong>If</strong> Contact replies to step 1 email within 72 hours OR clicks trial CTA in step 2 banner &rarr; Optimization agent fast-tracks contact to step 3 AE task immediately (skip Day 2 delay); suppress steps 4 and 5 to prevent over-touching an engaged champion; re-segment contact into &#39;Hot — Active Trial Pursuit&#39; cohort; AE task priority escalated to Task.Priority__c = &#39;Critical&#39;</li><li><strong>If</strong> github_org = &#39;dbt-labs&#39; AND repo_last_pushed_at refreshes with a NEW repo push (any repo) after campaign enrollment and within campaign runtime window &rarr; Optimization agent injects updated {{github_repo_name}} and {{github_repo_pushed_days_ago}} tokens into all queued touches; re-scores intent signal; if intent_score increases by ≥ 10 points, compress remaining touch cadence by 48 hours across all pending steps</li><li><strong>If</strong> greenhouse_job_posting_active flips to FALSE (role filled or pulled) AND no trial started &rarr; Optimization agent pivots champion targeting: deprioritize Marketing Data Engineer outreach, escalate VP Marketing thread (steps 5 and 6) immediately; update AE task brief to note &#39;MDE role filled — new hire may be in seat, direct AE outreach to confirm identity and re-thread&#39;; re-enrich Contact.Title__c via enrichment queue</li><li><strong>If</strong> intent_score drops below 50 before Day 10 (signal decay without engagement) &rarr; Optimization agent pauses steps 4–6, moves account to &#39;Nurture — Cooling&#39; cohort, schedules a re-entry check at Day 30 conditional on new intent signal ≥ 60 or new GitHub push; logs pause reason in Account.Campaign_Pause_Reason__c</li><li><strong>If</strong> VP Marketing contact accepts AE LinkedIn connect (step 3 sub-task or step 5) AND no trial started &rarr; Optimization agent immediately generates a personalized AE call brief using live engagement data and injects into open AE task description; suppress remaining email and in_app_banner touches to VP Marketing to preserve channel for AE-owned conversation; set Contact.Preferred_Channel__c = &#39;AE Direct&#39;</li><li><strong>If</strong> Account.Conversion_Trial_Active__c flips to TRUE at any point during campaign &rarr; Optimization agent immediately terminates all queued touches (email, in_app_banner, linkedin, sms) for all contacts in segment; cancels open AE prospecting tasks and replaces with onboarding task; transitions account lifecycle stage to &#39;Trial — Active Onboarding&#39;; fires success event to Salesforce Opportunity stage update: StageName = &#39;Trial Started&#39;</li><li><strong>If</strong> Conference signal detected: any contact in segment registers for or is confirmed attending dbt Coalesce, DataCouncil, or MADTechSummit within campaign runtime window (sourced from event_registration warehouse trait) &rarr; Optimization agent triggers conference_meet workflow: creates high-priority AE task to request in-person or virtual meeting at event venue (Task.Subject = &#39;Conference Meet Request — dbt Labs @ {{event_name}}&#39;); injects {{event_name}} and {{event_date}} tokens into a bespoke step 5 LinkedIn InMail variant; compresses remaining touch cadence to conclude before event date minus 3 days to ensure AE conversation happens pre-event</li>
+    </ul>
+  </div>
+
+  <div class="section-h">Pipeline projection</div>
+  <div class="projection-grid">
+    <div>
+      <div class="pk">Expected renewals</div>
+      <div class="pv">N/A — net-new trial conversion target. Expected outcome: 1 trial start within 21 days. Trial-to-paid conversion assumed at 35% (data-native ICP benchmark) = 0.35 net-new logo. ACV estimate: $48,000–$72,000 (mid-market warehouse-native tier, 2–5 seat marketing team + warehouse connector). Pipeline contribution: $48K–$72K ARR per won logo.</div>
+    </div>
+    <div>
+      <div class="pk">AE efficiency</div>
+      <div class="pv">AE touch count capped at 2 structured tasks (steps 3 and 6) plus opportunistic LinkedIn (step 3 sub-task). Estimated AE time investment: 45–60 minutes total across 21-day window. Full engagement signal context surfaced in Conversion dashboard eliminates cold-call prep time. Dual-thread (MDE + VP Marketing) increases meeting rate without doubling AE effort due to shared task structure.</div>
+    </div>
+    <div>
+      <div class="pk">Runtime</div>
+      <div class="pv">21 days from enrollment (Day 0 = campaign trigger date, anchored to dbt-mcp GitHub push signal 3 days ago, effective window expires in ≤ 18 days from brief submission). Hard stop at Day 21 — intent decay model predicts signal half-life at 21 days for GitHub-triggered outbound. AE must log disposition by Day 21 or account auto-moves to &#39;Nurture — Dark&#39;.</div>
+    </div>
+    <div>
+      <div class="pk">Downside scenario</div>
+      <div class="pv">Downside scenario (probability: ~35%): Marketing Data Engineer role is filled externally before campaign closes; new hire arrives with a pre-existing MAP vendor preference (e.g., Census, Hightouch, or Segment) established in prior role. VP Marketing defers MAP decision to new hire&#39;s 30/60/90 ramp plan, pushing eval window to Q2+. In this scenario: trial conversion probability drops to ~12%; pipeline contribution compresses to $0 in current quarter. Mitigation: step 3 AE task includes explicit instruction to ask VP Marketing for intro to new hire on Day 1 of their start; optimization trigger 3 catches role-filled signal and pivots outreach accordingly. Secondary downside: dbt Labs is acquired or announces a strategic partnership with an existing MAP vendor during campaign window (low probability, &lt;5%), which would trigger immediate disqualification and Closed Lost logging.</div>
+    </div>
+  </div>
+
+  <div class="platform-fit">
+    <span class="pf-h">Why this is a Conversion-shaped artifact</span>
+    <br><br>
+    <strong>Build time on the platform:</strong> <br><br>
+    <strong>What this proves:</strong> 
+  </div>
+
+  <div class="footer">
+    <span class="brand">SignalForce &middot; MarOps branch</span>
+    <span>Built by Sami Rahman &middot; github.com/sami2919</span>
+  </div>
+
+</body>
+</html>

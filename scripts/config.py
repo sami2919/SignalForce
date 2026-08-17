@@ -38,6 +38,10 @@ class AppConfig(BaseSettings):
     zerobounce_api_key: str | None = None
     serpapi_key: str | None = None
     anthropic_api_key: str | None = None
+    fireworks_api_key: str | None = None
+    fireworks_base_url: str | None = None
+    fireworks_model: str | None = None
+    firecrawl_api_key: str | None = None
 
     # Pipeline behaviour
     scan_lookback_days: int = 7
@@ -67,6 +71,9 @@ _SCANNER_REQUIREMENTS: dict[str, list[str]] = {
     "enrichment": [],  # custom logic: at least one of three keys
     "job_posting": [],
     "funding": [],
+    "firecrawl": ["firecrawl_api_key"],
+    "firecrawl_search": ["firecrawl_api_key"],
+    "g2_firecrawl": ["firecrawl_api_key"],
 }
 
 
@@ -97,6 +104,13 @@ def validate_keys_for_scanner(scanner_name: str, config: AppConfig | None = None
                 "Scanner 'enrichment' requires at least one of: "
                 "apollo_api_key, hunter_api_key, prospeo_api_key. "
                 "Add APOLLO_API_KEY, HUNTER_API_KEY, or PROSPEO_API_KEY to your .env file."
+            )
+
+    elif scanner_name in ("firecrawl", "firecrawl_search", "g2_firecrawl"):
+        if not cfg.firecrawl_api_key:
+            raise ValueError(
+                f"Scanner '{scanner_name}' requires firecrawl_api_key to be set. "
+                "Add FIRECRAWL_API_KEY to your .env file."
             )
 
     # "arxiv", "huggingface", "job_posting", "funding" require no mandatory keys.

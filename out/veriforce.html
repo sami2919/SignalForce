@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Lifecycle Campaign Brief — Veriforce</title>
+  <style>
+    @page { size: A4; margin: 18mm 16mm 16mm 16mm; }
+    :root {
+      --ink: #0B0B0B;
+      --muted: #6B6B6B;
+      --rule: #E6E6E6;
+      --accent: #2952E3;
+      --accent-soft: #EEF2FF;
+      --bg-soft: #FAFAFA;
+      --code-bg: #F4F4F5;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      color: var(--ink);
+      font-size: 10.25pt;
+      line-height: 1.45;
+      margin: 0;
+    }
+    code, .mono {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 9pt;
+      background: var(--code-bg);
+      padding: 1px 4px;
+      border-radius: 2px;
+    }
+    .doc-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding-bottom: 10px;
+      border-bottom: 2px solid var(--ink);
+      margin-bottom: 16px;
+    }
+    .doc-header .title { font-size: 20pt; font-weight: 700; letter-spacing: -0.02em; }
+    .doc-header .subtitle { font-size: 11pt; color: var(--muted); margin-top: 2px; }
+    .doc-header .meta { text-align: right; font-size: 9pt; color: var(--muted); }
+    .campaign-block {
+      background: var(--accent-soft);
+      border-left: 3px solid var(--accent);
+      padding: 10px 14px;
+      margin-bottom: 16px;
+    }
+    .campaign-block .name { font-size: 12pt; font-weight: 600; }
+    .campaign-block .obj { font-size: 10pt; margin-top: 4px; color: var(--ink); }
+    .campaign-block .stage {
+      font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--accent); font-weight: 600; margin-top: 6px;
+    }
+    .section-h {
+      font-size: 9pt; text-transform: uppercase; letter-spacing: 0.14em;
+      color: var(--muted); font-weight: 600;
+      border-bottom: 1px solid var(--rule);
+      padding-bottom: 4px; margin: 18px 0 10px 0;
+    }
+    .segment-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 16px;
+      font-size: 9.5pt;
+    }
+    .segment-grid .col-h {
+      font-size: 8.5pt; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 4px;
+    }
+    .segment-grid ul {
+      margin: 0; padding-left: 14px;
+      font-size: 9pt;
+    }
+    .segment-grid li {
+      margin-bottom: 2px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 8.75pt;
+      line-height: 1.35;
+    }
+    .segment-name {
+      font-size: 10pt; font-weight: 600; margin-bottom: 6px;
+    }
+    .segment-size {
+      font-size: 9pt; color: var(--muted); margin-top: 8px;
+      font-style: italic;
+    }
+    .touch {
+      page-break-inside: avoid;
+      border-top: 1px solid var(--rule);
+      padding: 12px 0 10px 0;
+    }
+    .touch:first-of-type { border-top: none; padding-top: 4px; }
+    .touch-h {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 4px;
+    }
+    .touch-step {
+      font-size: 9pt; color: var(--muted); letter-spacing: 0.08em;
+      text-transform: uppercase; font-weight: 600;
+    }
+    .touch-step .num {
+      display: inline-block; background: var(--ink); color: #fff;
+      padding: 1px 6px; border-radius: 2px; margin-right: 6px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .touch-channel {
+      font-size: 9pt; color: var(--ink); background: var(--bg-soft);
+      padding: 2px 8px; border-radius: 2px; font-weight: 500;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .touch-agent {
+      font-size: 8.5pt; color: var(--accent);
+      text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;
+      margin-left: 8px;
+    }
+    .touch-subject {
+      font-size: 11pt; font-weight: 600; line-height: 1.35;
+      margin: 4px 0 4px 0;
+    }
+    .touch-timing {
+      font-size: 8.5pt; color: var(--muted);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      margin-bottom: 6px;
+    }
+    .touch-body {
+      font-size: 9.5pt; margin: 4px 0 6px 0;
+    }
+    .qa-list, .opt-list {
+      margin: 4px 0; padding-left: 16px;
+      font-size: 8.75pt; color: var(--ink);
+    }
+    .qa-list li, .opt-list li { margin-bottom: 2px; line-height: 1.4; }
+    .qa-list code { background: transparent; padding: 0; }
+    .kv {
+      font-size: 8.5pt; color: var(--muted);
+      margin-top: 4px;
+    }
+    .kv .k { text-transform: uppercase; letter-spacing: 0.08em; }
+    .kv .v {
+      color: var(--ink);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .metric {
+      font-size: 8.75pt; color: var(--ink);
+      background: var(--bg-soft); padding: 4px 8px;
+      border-left: 2px solid var(--accent);
+      margin-top: 6px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .triggers {
+      background: var(--bg-soft);
+      padding: 10px 14px;
+      border-radius: 3px;
+    }
+    .projection-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 14px;
+      font-size: 9pt;
+    }
+    .projection-grid .pk {
+      font-size: 8.5pt; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 2px;
+    }
+    .projection-grid .pv {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 9pt;
+    }
+    .footer {
+      margin-top: 22px; padding-top: 10px;
+      border-top: 1px solid var(--rule);
+      font-size: 8pt; color: var(--muted);
+      display: flex; justify-content: space-between;
+    }
+    .footer .brand { letter-spacing: 0.1em; text-transform: uppercase; }
+    .platform-fit {
+      font-size: 9pt; color: var(--ink);
+      background: var(--accent-soft);
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+    .platform-fit .pf-h {
+      font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.12em;
+      color: var(--accent); font-weight: 600; margin-bottom: 4px;
+      display: block;
+    }
+    .why-now-block {
+      border: 2px solid #16a34a;
+      border-radius: 4px;
+      padding: 10px 14px;
+      margin-bottom: 16px;
+      background: #f0fdf4;
+    }
+    .why-now-header {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+    }
+    .why-now-badge {
+      font-size: 8pt; font-weight: 700; letter-spacing: 0.14em;
+      text-transform: uppercase; padding: 2px 8px; border-radius: 2px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .why-now-badge.HIGH { background: #16a34a; color: #fff; }
+    .why-now-badge.MEDIUM { background: #ca8a04; color: #fff; }
+    .why-now-badge.LOW { background: #9ca3af; color: #fff; }
+    .why-now-rationale { font-size: 9pt; color: #15803d; font-weight: 600; }
+    .signal-row {
+      display: flex; align-items: baseline; gap: 8px;
+      font-size: 8.75pt; margin-bottom: 4px; font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .signal-type {
+      font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.1em;
+      color: #6b7280; white-space: nowrap; min-width: 130px;
+    }
+    .signal-desc { color: #1f2937; flex: 1; }
+    .signal-meta { color: #6b7280; white-space: nowrap; font-size: 7.5pt; }
+    .signal-tier { font-weight: 700; }
+    .signal-tier.HIGH { color: #16a34a; }
+    .signal-tier.MEDIUM { color: #ca8a04; }
+    .signal-tier.LOW { color: #9ca3af; }
+    .shelf-life { color: #374151; }
+  </style>
+</head>
+<body>
+
+  <div class="doc-header">
+    <div>
+      <div class="title">Lifecycle Campaign Brief</div>
+      <div class="subtitle">Veriforce &middot; https://www.veriforce.com</div>
+    </div>
+    <div class="meta">
+      Generated 2026-06-08T03:58:45+00:00<br>
+      Vertical: Supplier compliance &amp; contractor safety SaaS — industrial enterprise (oil &amp; gas, utilities, construction)<br>
+      Touches: 5
+    </div>
+  </div>
+
+  
+
+  <div class="campaign-block">
+    <div class="name">Tier-2 Supplier Re-Engagement — Compliance Lapse → Renewal</div>
+    <div class="obj">Reactivate Tier-2 supplier accounts whose compliance verification lapsed in the last 90 days, route engaged accounts to AE-qualified pipeline, and recover ~12% of dormant ARR within one quarter.
+</div>
+    <div class="stage">Customer · Re-engagement (post-lapse, pre-churn)</div>
+  </div>
+
+  <div class="section-h">Segment</div>
+  <div class="segment-name">Tier-2 Supplier Re-Engagement — Compliance Lapse → Renewal</div>
+  <div class="segment-grid">
+    <div>
+      <div class="col-h">Salesforce filters</div>
+      <ul>
+        <li>Account.Type__c = &#39;Supplier&#39;</li><li>Account.Supplier_Tier__c = &#39;Tier-2&#39;</li><li>Account.Compliance_Status__c IN (&#39;Expired&#39;, &#39;Pending Renewal&#39;)</li><li>Contact.Last_Login_Date__c &lt;= LAST_N_DAYS:90</li><li>Account.Customer_Stage__c = &#39;Customer&#39;</li><li>Account.AnnualRevenue &gt; 0</li><li>Contact.HasOptedOutOfEmail = false</li><li>Contact.SMS_Opt_Out__c = false</li><li>Account.Has_Active_Client_Contract__c = true</li>
+      </ul>
+    </div>
+    <div>
+      <div class="col-h">Warehouse traits</div>
+      <ul>
+        <li>product_engagement.last_session_ts &lt; now() - interval &#39;90 days&#39;</li><li>compliance_events.verification_expiry_date BETWEEN now() - interval &#39;90 days&#39; AND now()</li><li>client_contract_health.linked_hiring_client_active = true</li><li>account_health.churn_risk_score &gt;= 60</li><li>intent_data.compliance_software_intent_tier IN (&#39;medium&#39;, &#39;high&#39;)</li>
+      </ul>
+      <div class="col-h" style="margin-top: 10px;">Exclusions</div>
+      <ul>
+        <li>Account.Has_Open_Critical_Case__c = true</li><li>Account.Has_Open_High_Case__c = true</li><li>Account.Active_AE_Opportunity__c = true</li><li>Contact.HasOptedOutOfEmail = true</li><li>Contact.SMS_Opt_Out__c = true</li><li>Account.Churned_Date__c != null</li>
+      </ul>
+    </div>
+  </div>
+  <div class="segment-size">~2,400 contacts across ~840 accounts</div>
+
+  <div class="section-h">Touch sequence</div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">1</span>Day 0 — 9:00 AM recipient local time, Tuesday or Wednesday send-day only</span>
+      <span>
+        <span class="touch-channel">TouchChannel.EMAIL</span>
+        <span class="touch-agent">AgentRole.EXECUTION agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">{{contact.first_name}}, your {{account.compliance_program_name}} verification expired {{compliance.days_since_expiry}} days ago</div>
+    <div class="touch-body">Open with a direct, non-alarmist compliance status alert: {{account.name}}&#39;s supplier verification under {{account.compliance_program_name}} lapsed {{compliance.days_since_expiry}} days ago. Cite the specific hiring client(s) ({{account.linked_hiring_client_names}}) whose active contracts now flag {{account.name}} as unverified — making them non-compliant too. State the exact renewal path: one-click to the Veriforce Renewal Portal pre-populated with {{account.name}}&#39;s profile. Include a secondary CTA to schedule a 15-min guided renewal call. Tone: factual urgency, zero scare tactics. Footer: account manager name {{ae.full_name}} and direct calendar link {{ae.calendar_link}}.</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{contact.first_name}}</span> &middot; <span class="v">{{account.name}}</span> &middot; <span class="v">{{account.compliance_program_name}}</span> &middot; <span class="v">{{compliance.days_since_expiry}}</span> &middot; <span class="v">{{account.linked_hiring_client_names}}</span> &middot; <span class="v">{{ae.full_name}}</span> &middot; <span class="v">{{ae.calendar_link}}</span> &middot; <span class="v">{{renewal_portal.prefill_url}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>Suppress if Contact.HasOptedOutOfEmail = true at send time (real-time re-check)</li><li>Suppress if Account.Active_AE_Opportunity__c = true at send time</li><li>Suppress if Account.Has_Open_Critical_Case__c = true OR Account.Has_Open_High_Case__c = true</li><li>Hard-block send if compliance.days_since_expiry token resolves to null or &lt;= 0</li><li>Hard-block send if account.linked_hiring_client_names token resolves to null or empty string</li><li>Deduplicate: one send per Account within 24-hour window; suppress duplicate contacts on same account</li><li>Spam-gate: subject line length must not exceed 70 characters after token resolution</li><li>Validate renewal_portal.prefill_url is a live URL (HTTP 200) before send</li>
+    </ul>
+
+    <div class="metric">Email open rate ≥ 32%; renewal portal CTA click rate ≥ 8% within 48 hours of send</div>
+  </div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">2</span>Day 3 — triggered on next login session detected post-Step 1; expires after 7 days if no login</span>
+      <span>
+        <span class="touch-channel">TouchChannel.IN_APP_BANNER</span>
+        <span class="touch-agent">AgentRole.EXECUTION agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">Complete your compliance renewal — {{account.compliance_program_name}} verification is overdue</div>
+    <div class="touch-body">Persistent top-of-screen banner displayed immediately upon authenticated login to the Veriforce portal. Banner copy: &#39;Your {{account.compliance_program_name}} verification has been expired for {{compliance.days_since_expiry}} days. {{account.linked_hiring_client_count}} of your hiring clients require active verification. Renew now to restore compliant status.&#39; Primary CTA button: &#39;Renew Now → &#39; linking to {{renewal_portal.prefill_url}}. Secondary dismissible link: &#39;Remind me in 3 days.&#39; If user dismisses, re-surface at next login. Track banner impression, CTA click, and dismissal events separately.</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{account.name}}</span> &middot; <span class="v">{{account.compliance_program_name}}</span> &middot; <span class="v">{{compliance.days_since_expiry}}</span> &middot; <span class="v">{{account.linked_hiring_client_count}}</span> &middot; <span class="v">{{renewal_portal.prefill_url}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>Suppress banner if renewal has been completed (compliance.verification_status = &#39;Active&#39;) at session start</li><li>Suppress banner if Account.Active_AE_Opportunity__c = true</li><li>Suppress if account.linked_hiring_client_count token resolves to 0 or null — escalate to data team</li><li>Ensure banner does not stack with any other active system alert banners (max one banner at a time rule)</li><li>Validate compliance.days_since_expiry is a positive integer at render time</li><li>Banner must not render for contacts tagged Contact.Role__c = &#39;Technical / IT&#39; only — compliance owner targeting required</li>
+    </ul>
+
+    <div class="metric">In-app banner CTA click rate ≥ 18% of sessions where banner is rendered; renewal flow initiation ≥ 10%</div>
+  </div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">3</span>Day 7 — create AE task if Step 1 email was opened OR Step 2 banner was clicked but no renewal initiated; skip if renewal completed</span>
+      <span>
+        <span class="touch-channel">TouchChannel.AE_TASK</span>
+        <span class="touch-agent">AgentRole.EXECUTION agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">[ACTION] Re-engage {{account.name}} — compliance lapsed {{compliance.days_since_expiry}} days, hiring client risk: {{account.linked_hiring_client_names}}</div>
+    <div class="touch-body">Create a high-priority Salesforce Task on the Account record assigned to {{ae.full_name}}. Task description: &#39;{{account.name}} (Tier-2 Supplier) has shown re-engagement signals (email open / banner click) but has not initiated renewal. Compliance verification under {{account.compliance_program_name}} expired {{compliance.days_since_expiry}} days ago. Linked hiring clients at risk: {{account.linked_hiring_client_names}}. Recommended action: personal outreach — call or LinkedIn — within 24 hours. Reference compliance gap, offer white-glove renewal assist. Estimated ARR at risk: {{account.arr_at_risk}}. Attach renewal portal prefill link: {{renewal_portal.prefill_url}}. Log outcome in Opportunity.Stage__c.&#39; Set Task.Priority = High, Task.ActivityDate = today + 1 business day.</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{account.name}}</span> &middot; <span class="v">{{account.compliance_program_name}}</span> &middot; <span class="v">{{compliance.days_since_expiry}}</span> &middot; <span class="v">{{account.linked_hiring_client_names}}</span> &middot; <span class="v">{{account.arr_at_risk}}</span> &middot; <span class="v">{{ae.full_name}}</span> &middot; <span class="v">{{renewal_portal.prefill_url}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>Do not create task if Account.Active_AE_Opportunity__c = true (AE already engaged)</li><li>Do not create task if renewal has been completed prior to Day 7</li><li>Do not create task if Account.Has_Open_Critical_Case__c = true — route to CSM instead</li><li>Validate ae.full_name resolves to an active Salesforce User (User.IsActive = true); if AE seat is vacant, assign to CSM queue</li><li>Ensure account.arr_at_risk token is not null; if null, substitute with &#39;ARR data unavailable — check billing system&#39;</li><li>Deduplicate: no more than one open re-engagement Task per Account at a time</li>
+    </ul>
+
+    <div class="metric">AE task completion rate ≥ 70% within 48 hours of creation; AE-logged outreach attempt rate ≥ 85%</div>
+  </div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">4</span>Day 14 — send at 10:00 AM recipient local time; optimization agent selects variant based on Day 0 engagement signal</span>
+      <span>
+        <span class="touch-channel">TouchChannel.EMAIL</span>
+        <span class="touch-agent">AgentRole.OPTIMIZATION agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">Variant A (low-engagement cohort): &#39;{{contact.first_name}}, {{account.linked_hiring_client_names}} may be required to find a new verified supplier&#39; | Variant B (engaged cohort): &#39;{{contact.first_name}}, here&#39;s everything you need to complete your {{account.compliance_program_name}} renewal in under 10 minutes&#39;</div>
+    <div class="touch-body">VARIANT A (accounts with zero opens/clicks in Steps 1–2, churn_risk_score ≥ 75): Lead with consequence framing — hiring clients ({{account.linked_hiring_client_names}}) are contractually obligated to use verified suppliers; an unresolved lapse of {{compliance.days_since_expiry}} days may trigger a mandatory supplier swap. Include a peer social proof stat: &#39;Over {{industry.avg_reactivation_benchmark}}% of Tier-2 suppliers in {{account.industry_vertical}} renew within 30 days of lapse.&#39; Hard CTA: &#39;Restore Verified Status Now&#39; → {{renewal_portal.prefill_url}}. VARIANT B (accounts with open or click in Steps 1–2, churn_risk_score &lt; 75): Lead with frictionless enablement — step-by-step renewal checklist pre-populated for {{account.name}}. Highlight: estimated time to complete = {{renewal.estimated_minutes}} minutes. Show progress indicator based on {{renewal.steps_already_completed}}. CTA: &#39;Pick Up Where You Left Off&#39; → {{renewal_portal.prefill_url}}. Both variants close with AE offer: &#39;{{ae.full_name}} is available if you need any help — {{ae.calendar_link}}&#39;.</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{contact.first_name}}</span> &middot; <span class="v">{{account.name}}</span> &middot; <span class="v">{{account.compliance_program_name}}</span> &middot; <span class="v">{{compliance.days_since_expiry}}</span> &middot; <span class="v">{{account.linked_hiring_client_names}}</span> &middot; <span class="v">{{account.industry_vertical}}</span> &middot; <span class="v">{{industry.avg_reactivation_benchmark}}</span> &middot; <span class="v">{{renewal.estimated_minutes}}</span> &middot; <span class="v">{{renewal.steps_already_completed}}</span> &middot; <span class="v">{{ae.full_name}}</span> &middot; <span class="v">{{ae.calendar_link}}</span> &middot; <span class="v">{{renewal_portal.prefill_url}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>Suppress if renewal completed before Day 14 send (real-time compliance status check)</li><li>Suppress if Account.Active_AE_Opportunity__c = true</li><li>Suppress if Contact.HasOptedOutOfEmail = true</li><li>Optimization agent must confirm variant assignment is logged in warehouse before send executes</li><li>Hard-block Variant A send if account.linked_hiring_client_names is null — fallback to Variant B</li><li>Hard-block if industry.avg_reactivation_benchmark token resolves outside range 40–95 (data anomaly gate)</li><li>Hard-block if renewal.estimated_minutes resolves to null or &gt; 60 — review renewal workflow data</li><li>Spam-gate: combined subject + preheader must not trigger spam keywords list (run through internal filter before send)</li><li>Deduplicate: suppress contacts who received Step 1 email AND did not open — consider SMS escalation instead (flag for optimization agent review)</li>
+    </ul>
+
+    <div class="metric">Variant B click-to-renewal-initiation rate ≥ 15%; Variant A click rate ≥ 6%; optimization agent to declare winning variant by Day 16 for cohort reallocation</div>
+  </div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">5</span>Day 21 — send LinkedIn message for accounts with zero renewal initiation across all prior touches and churn_risk_score ≥ 70; send between 8:00–10:00 AM recipient local time, weekdays only</span>
+      <span>
+        <span class="touch-channel">TouchChannel.LINKEDIN</span>
+        <span class="touch-agent">AgentRole.EXECUTION agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">Personal outreach: compliance verification window closing for {{account.name}}</div>
+    <div class="touch-body">Send a LinkedIn direct message from the mapped AE ({{ae.linkedin_sender_name}}) to the primary compliance contact ({{contact.full_name}}, {{contact.title}}). Message tone: peer-to-peer, concise, non-automated in feel. Copy framework: &#39;{{contact.first_name}} — I wanted to reach out directly because {{account.name}}&#39;s {{account.compliance_program_name}} verification has now been lapsed for {{compliance.days_since_expiry}} days, and I know {{account.linked_hiring_client_names}} depend on your verified status. I don&#39;t want you to lose those contracts over something we can fix quickly. I can personally walk you through the renewal in one short call — [calendar link: {{ae.calendar_link}}] — or if you&#39;d rather just do it yourself, here&#39;s your direct renewal link: {{renewal_portal.prefill_url}}. Let me know how I can help.&#39; Cap message length at 300 characters for mobile readability. Do not include marketing disclaimers in the message body — handled by platform footer.</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{contact.first_name}}</span> &middot; <span class="v">{{contact.full_name}}</span> &middot; <span class="v">{{contact.title}}</span> &middot; <span class="v">{{account.name}}</span> &middot; <span class="v">{{account.compliance_program_name}}</span> &middot; <span class="v">{{compliance.days_since_expiry}}</span> &middot; <span class="v">{{account.linked_hiring_client_names}}</span> &middot; <span class="v">{{ae.linkedin_sender_name}}</span> &middot; <span class="v">{{ae.calendar_link}}</span> &middot; <span class="v">{{renewal_portal.prefill_url}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>Suppress if renewal initiated or completed at any point before Day 21 send</li><li>Suppress if Account.Active_AE_Opportunity__c = true</li><li>Suppress if Contact.LinkedIn_Opt_Out__c = true</li><li>Suppress if ae.linkedin_sender_name resolves to null or AE LinkedIn seat is unconnected — route to CSM LinkedIn sender fallback</li><li>Hard-block if compliance.days_since_expiry &lt; 21 at send time (data drift check)</li><li>Hard-block if account.linked_hiring_client_names is null — do not send without this anchor context</li><li>Validate contact.title is not a purely technical role (e.g., &#39;Software Engineer&#39;, &#39;IT Admin&#39;) — compliance/operations/safety titles only</li><li>Message body after token resolution must not exceed 300 characters — hard truncation block if over limit</li><li>Rate-limit: max 50 LinkedIn messages per sender per day (platform LinkedIn policy compliance)</li>
+    </ul>
+
+    <div class="metric">LinkedIn message acceptance/reply rate ≥ 12%; AE-booked meeting rate ≥ 5% of Step 5 recipients within 7 days of send</div>
+  </div>
+  
+
+  <div class="section-h">Optimization triggers</div>
+  <div class="triggers">
+    <ul class="opt-list">
+      <li><strong>If</strong> Contact opens Step 1 email AND clicks renewal portal CTA within 48 hours but does not complete renewal within 72 hours &rarr; Acceleration path: suppress Step 2 banner default timing; immediately surface in-app banner on next login session and simultaneously create low-priority AE awareness task — do not wait for Day 7 threshold</li><li><strong>If</strong> Warehouse trait compliance.verification_status transitions to &#39;Active&#39; (renewal completed) at any point during campaign runtime &rarr; Immediately suppress contact and account from all remaining touches; write Account.Compliance_Status__c = &#39;Active&#39; back to Salesforce; trigger post-renewal onboarding nurture enrollment; log conversion event to pipeline_projection.realized_renewals counter</li><li><strong>If</strong> Account.churn_risk_score crosses threshold ≥ 85 at any point (warehouse real-time update) &rarr; Escalate account to AE priority queue: create Salesforce Task with Priority = Critical and ActivityDate = today; pull account out of automated sequence; flag for manual AE outreach within 4 business hours; notify AE via Slack webhook</li><li><strong>If</strong> Step 4 Variant A achieves click-to-initiation rate ≥ 10% by Day 16 cohort check (matches or exceeds Variant B performance) &rarr; Optimization agent reallocates remaining untouched Day 14 cohort 70/30 toward Variant A; update subject line bandit weights in platform; log reallocation event with timestamp for attribution audit</li><li><strong>If</strong> AE task from Step 3 remains incomplete (Task.Status != &#39;Completed&#39;) for more than 48 business hours &rarr; Escalate task to AE manager (User.ManagerId) via Salesforce Chatter mention; re-assign task if no action within 72 hours to CSM overflow queue; log escalation in Account.Re_Engagement_Escalation_Log__c</li><li><strong>If</strong> Three or more contacts on the same Account record engage (open or click) across Steps 1–4 but no renewal is initiated &rarr; Flag account as &#39;High Multi-Contact Intent&#39;; create an AE Opportunity record in Salesforce with Stage = &#39;Renewal Discovery&#39; and attach all engagement signals as Activity history; route to AE for consultative renewal assist within 1 business day</li>
+    </ul>
+  </div>
+
+  <div class="section-h">Pipeline projection</div>
+  <div class="projection-grid">
+    <div>
+      <div class="pk">Expected renewals</div>
+      <div class="pv">~101 account renewals (12% of 840 accounts); estimated ARR recovery of $1.2M–$1.6M assuming average Tier-2 ARR of ~$14,300/account; AE-assisted renewals projected at 30–35% of total conversions (30–35 accounts via Steps 3 &amp; 5)</div>
+    </div>
+    <div>
+      <div class="pk">AE efficiency</div>
+      <div class="pv">AE task volume capped at ~168 tasks (Step 3 triggers on ~20% of 840 accounts showing engagement signals); Step 5 LinkedIn outreach limited to churn_risk ≥ 70 non-responders (~200–250 contacts); total AE labor estimated at 140–180 hours across the quarter, compared to ~520 hours for fully manual outreach — efficiency gain of ~65%</div>
+    </div>
+    <div>
+      <div class="pk">Runtime</div>
+      <div class="pv">21-day active sequence per contact cohort; full campaign closes Day 28 (Day 21 final touch + 7-day reply/conversion window); reporting cadence: Day 7 (early signal review), Day 14 (variant selection), Day 21 (final push), Day 28 (pipeline close and retrospective)</div>
+    </div>
+    <div>
+      <div class="pk">Downside scenario</div>
+      <div class="pv">Downside scenario (probability ~25%): email deliverability degradation or compliance data sync lag reduces segment accuracy by 20–30%, limiting addressable pool to ~600 accounts. Engagement rates fall to Step 1 open rate ~18%, portal CTA click rate ~3.5%. Renewal conversion drops to 5–6% of addressable pool (~36 accounts), recovering ~$515K ARR. AE task volume remains constant but conversion from AE-assisted path also drops proportionally. Mitigation levers: (1) warm up sending domain 7 days pre-launch; (2) run warehouse-to-Salesforce compliance status reconciliation within 48 hours of campaign kick-off; (3) activate SMS channel as parallel Step 1 fallback for contacts with verified mobile numbers if email open rates fall below 15% at Day 3 check.</div>
+    </div>
+  </div>
+
+  <div class="platform-fit">
+    <span class="pf-h">Why this is a Conversion-shaped artifact</span>
+    <br><br>
+    <strong>Build time on the platform:</strong> <br><br>
+    <strong>What this proves:</strong> 
+  </div>
+
+  <div class="footer">
+    <span class="brand">SignalForce &middot; MarOps branch</span>
+    <span>Built by Sami Rahman &middot; github.com/sami2919</span>
+  </div>
+
+</body>
+</html>

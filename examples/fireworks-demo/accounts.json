@@ -1,0 +1,35 @@
+[
+  {
+    "account_name": "Cursor-like AI Coding Platform",
+    "industry": "AI coding assistant",
+    "signals": [
+      "Hiring ML infrastructure engineers",
+      "Mentions low-latency code generation",
+      "Uses open-source models for internal evals",
+      "Recently launched faster AI code-editing workflows"
+    ],
+    "hypothesis": "Inference speed directly affects user experience for code editing."
+  },
+  {
+    "account_name": "Voice AI Support Startup",
+    "industry": "Voice AI",
+    "signals": [
+      "Hiring real-time AI engineers",
+      "Mentions streaming responses",
+      "Needs sub-second latency for customer conversations",
+      "Recently raised Series A"
+    ],
+    "hypothesis": "Voice AI requires low-latency inference at scale."
+  },
+  {
+    "account_name": "Enterprise RAG Platform",
+    "industry": "Enterprise AI search",
+    "signals": [
+      "Adding support for multiple open-source models",
+      "Hiring AI platform engineers",
+      "Publishing content around inference cost",
+      "Expanding enterprise deployments"
+    ],
+    "hypothesis": "Enterprise RAG workloads need model flexibility and predictable serving costs."
+  }
+]

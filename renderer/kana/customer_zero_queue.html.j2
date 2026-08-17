@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ company_name }} Customer Zero Queue</title>
+  <style>
+    :root {
+      --bg: #f4efe5;
+      --paper: #fffaf1;
+      --ink: #1d1a16;
+      --muted: #645a50;
+      --line: #d8c9b6;
+      --accent: #c55d2d;
+      --accent-soft: #f5d8c8;
+      --green: #275d44;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      background:
+        radial-gradient(circle at top right, rgba(197, 93, 45, 0.16), transparent 28%),
+        linear-gradient(135deg, #efe4d0, var(--bg));
+      color: var(--ink);
+    }
+    .page {
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 48px 24px 64px;
+    }
+    .hero {
+      background: linear-gradient(150deg, rgba(255,250,241,.96), rgba(247,236,218,.92));
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 32px;
+      box-shadow: 0 20px 60px rgba(52, 35, 16, 0.08);
+    }
+    h1, h2, h3, p { margin: 0; }
+    .eyebrow {
+      font-size: 12px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 14px;
+    }
+    .hero h1 {
+      font-size: clamp(2.2rem, 5vw, 4rem);
+      line-height: 0.95;
+      max-width: 12ch;
+    }
+    .hero p {
+      margin-top: 18px;
+      max-width: 68ch;
+      line-height: 1.55;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px;
+      margin-top: 26px;
+    }
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 22px;
+    }
+    .card h2 {
+      font-size: 1.3rem;
+      margin-bottom: 10px;
+    }
+    .meta {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .chip {
+      background: var(--accent-soft);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 0.8rem;
+      color: var(--ink);
+    }
+    .chip.grade-a, .chip.grade-b { background: rgba(39, 93, 68, 0.14); color: var(--green); }
+    .label {
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.72rem;
+      margin-bottom: 6px;
+    }
+    .section {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
+    }
+    ul {
+      padding-left: 18px;
+      margin: 8px 0 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .mono {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <div class="eyebrow">SignalForce x Kana</div>
+      <h1>Customer Zero Operating Queue</h1>
+      <p>
+        This is the Kana-shaped proof surface for the walk-in: a ranked queue of accounts,
+        routes, message angles, experiment tags, and HubSpot write-back actions. The point
+        is not “here are leads.” The point is “here is the AI-first demand engine Kana says
+        this role should own.”
+      </p>
+    </section>
+
+    <section class="grid">
+      {% for entry in entries %}
+      <article class="card">
+        <div class="meta">
+          <span class="chip grade-{{ entry.grade.value | lower }}">{{ entry.grade.value }} Grade</span>
+          <span class="chip">Score {{ "%.1f"|format(entry.combined_score) }}</span>
+          <span class="chip">{{ entry.outbound_route }}</span>
+        </div>
+        <h2>{{ entry.company }}</h2>
+        <p>{{ entry.why_now }}</p>
+
+        <div class="section">
+          <div class="label">Recommended Titles</div>
+          <ul>
+            {% for title in entry.recommended_titles %}
+            <li>{{ title }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+
+        <div class="section">
+          <div class="label">Message Angle</div>
+          <p>{{ entry.message_angle }}</p>
+        </div>
+
+        <div class="section">
+          <div class="label">Experiment Tag</div>
+          <p class="mono">{{ entry.experiment_tag }}</p>
+        </div>
+
+        <div class="section">
+          <div class="label">HubSpot Sync</div>
+          <p>{{ entry.hubspot_sync }}</p>
+        </div>
+
+        <div class="section">
+          <div class="label">Next Action</div>
+          <p>{{ entry.next_action }}</p>
+        </div>
+      </article>
+      {% endfor %}
+    </section>
+  </div>
+</body>
+</html>

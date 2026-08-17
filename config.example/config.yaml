@@ -215,6 +215,42 @@ scanners:
       - "ml infrastructure"
       - "mlops"
 
+  firecrawl_website:
+    enabled: false
+    module: "scripts.scanners.firecrawl_scanner"
+    lookback_days: 7
+    keywords: []  # Add company domains to scrape (e.g. "openai.com", "anthropic.com")
+    topics:
+      - "reinforcement learning"
+      - "rlhf"
+      - "grpo"
+      - "reward model"
+      - "agent"
+      - "llm"
+    custom_params:
+      domains:
+        - "example.com"  # Replace with target company domains
+
+  firecrawl_search:
+    enabled: false
+    module: "scripts.scanners.firecrawl_search_scanner"
+    lookback_days: 7
+    queries:
+      - "companies building RLHF infrastructure"
+      - "reinforcement learning platform startups"
+    topics:
+      - "reinforcement learning"
+      - "rlhf"
+      - "agent"
+      - "llm"
+
+  g2_firecrawl:
+    enabled: false
+    module: "scripts.scanners.g2_firecrawl_scanner"
+    lookback_days: 30
+    custom_params:
+      use_extraction: true
+
 scoring:
   intent_weights:
     github_repo: 2.5
@@ -223,6 +259,8 @@ scoring:
     job_posting: 2.0
     funding_event: 1.5
     linkedin_activity: 3.0
+    website_enrichment: 1.5       # Firecrawl website scrape — context signal
+    firecrawl_search: 2.0          # Firecrawl web search discovery
 
   half_lives_days:
     github_repo: 5.0
@@ -231,6 +269,8 @@ scoring:
     job_posting: 10.0
     funding_event: 21.0
     linkedin_activity: 2.0
+    website_enrichment: 30.0       # Website content changes slowly
+    firecrawl_search: 14.0        # Search discoveries moderate relevance
 
   icp_weight: 0.4
   intent_weight: 0.6

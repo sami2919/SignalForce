@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Lifecycle Campaign Brief — Meridian Analytics</title>
+  <style>
+    @page { size: A4; margin: 18mm 16mm 16mm 16mm; }
+    :root {
+      --ink: #0B0B0B;
+      --muted: #6B6B6B;
+      --rule: #E6E6E6;
+      --accent: #2952E3;
+      --accent-soft: #EEF2FF;
+      --bg-soft: #FAFAFA;
+      --code-bg: #F4F4F5;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      color: var(--ink);
+      font-size: 10.25pt;
+      line-height: 1.45;
+      margin: 0;
+    }
+    code, .mono {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 9pt;
+      background: var(--code-bg);
+      padding: 1px 4px;
+      border-radius: 2px;
+    }
+    .doc-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding-bottom: 10px;
+      border-bottom: 2px solid var(--ink);
+      margin-bottom: 16px;
+    }
+    .doc-header .title { font-size: 20pt; font-weight: 700; letter-spacing: -0.02em; }
+    .doc-header .subtitle { font-size: 11pt; color: var(--muted); margin-top: 2px; }
+    .doc-header .meta { text-align: right; font-size: 9pt; color: var(--muted); }
+    .campaign-block {
+      background: var(--accent-soft);
+      border-left: 3px solid var(--accent);
+      padding: 10px 14px;
+      margin-bottom: 16px;
+    }
+    .campaign-block .name { font-size: 12pt; font-weight: 600; }
+    .campaign-block .obj { font-size: 10pt; margin-top: 4px; color: var(--ink); }
+    .campaign-block .stage {
+      font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--accent); font-weight: 600; margin-top: 6px;
+    }
+    .section-h {
+      font-size: 9pt; text-transform: uppercase; letter-spacing: 0.14em;
+      color: var(--muted); font-weight: 600;
+      border-bottom: 1px solid var(--rule);
+      padding-bottom: 4px; margin: 18px 0 10px 0;
+    }
+    .segment-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 16px;
+      font-size: 9.5pt;
+    }
+    .segment-grid .col-h {
+      font-size: 8.5pt; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 4px;
+    }
+    .segment-grid ul {
+      margin: 0; padding-left: 14px;
+      font-size: 9pt;
+    }
+    .segment-grid li {
+      margin-bottom: 2px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 8.75pt;
+      line-height: 1.35;
+    }
+    .segment-name {
+      font-size: 10pt; font-weight: 600; margin-bottom: 6px;
+    }
+    .segment-size {
+      font-size: 9pt; color: var(--muted); margin-top: 8px;
+      font-style: italic;
+    }
+    .touch {
+      page-break-inside: avoid;
+      border-top: 1px solid var(--rule);
+      padding: 12px 0 10px 0;
+    }
+    .touch:first-of-type { border-top: none; padding-top: 4px; }
+    .touch-h {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 4px;
+    }
+    .touch-step {
+      font-size: 9pt; color: var(--muted); letter-spacing: 0.08em;
+      text-transform: uppercase; font-weight: 600;
+    }
+    .touch-step .num {
+      display: inline-block; background: var(--ink); color: #fff;
+      padding: 1px 6px; border-radius: 2px; margin-right: 6px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .touch-channel {
+      font-size: 9pt; color: var(--ink); background: var(--bg-soft);
+      padding: 2px 8px; border-radius: 2px; font-weight: 500;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .touch-agent {
+      font-size: 8.5pt; color: var(--accent);
+      text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;
+      margin-left: 8px;
+    }
+    .touch-subject {
+      font-size: 11pt; font-weight: 600; line-height: 1.35;
+      margin: 4px 0 4px 0;
+    }
+    .touch-timing {
+      font-size: 8.5pt; color: var(--muted);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      margin-bottom: 6px;
+    }
+    .touch-body {
+      font-size: 9.5pt; margin: 4px 0 6px 0;
+    }
+    .qa-list, .opt-list {
+      margin: 4px 0; padding-left: 16px;
+      font-size: 8.75pt; color: var(--ink);
+    }
+    .qa-list li, .opt-list li { margin-bottom: 2px; line-height: 1.4; }
+    .qa-list code { background: transparent; padding: 0; }
+    .kv {
+      font-size: 8.5pt; color: var(--muted);
+      margin-top: 4px;
+    }
+    .kv .k { text-transform: uppercase; letter-spacing: 0.08em; }
+    .kv .v {
+      color: var(--ink);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .metric {
+      font-size: 8.75pt; color: var(--ink);
+      background: var(--bg-soft); padding: 4px 8px;
+      border-left: 2px solid var(--accent);
+      margin-top: 6px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .triggers {
+      background: var(--bg-soft);
+      padding: 10px 14px;
+      border-radius: 3px;
+    }
+    .projection-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 14px;
+      font-size: 9pt;
+    }
+    .projection-grid .pk {
+      font-size: 8.5pt; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 2px;
+    }
+    .projection-grid .pv {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 9pt;
+    }
+    .footer {
+      margin-top: 22px; padding-top: 10px;
+      border-top: 1px solid var(--rule);
+      font-size: 8pt; color: var(--muted);
+      display: flex; justify-content: space-between;
+    }
+    .footer .brand { letter-spacing: 0.1em; text-transform: uppercase; }
+    .platform-fit {
+      font-size: 9pt; color: var(--ink);
+      background: var(--accent-soft);
+      padding: 10px 14px;
+      border-radius: 3px;
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+    .platform-fit .pf-h {
+      font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.12em;
+      color: var(--accent); font-weight: 600; margin-bottom: 4px;
+      display: block;
+    }
+    .why-now-block {
+      border: 2px solid #16a34a;
+      border-radius: 4px;
+      padding: 10px 14px;
+      margin-bottom: 16px;
+      background: #f0fdf4;
+    }
+    .why-now-header {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+    }
+    .why-now-badge {
+      font-size: 8pt; font-weight: 700; letter-spacing: 0.14em;
+      text-transform: uppercase; padding: 2px 8px; border-radius: 2px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .why-now-badge.HIGH { background: #16a34a; color: #fff; }
+    .why-now-badge.MEDIUM { background: #ca8a04; color: #fff; }
+    .why-now-badge.LOW { background: #9ca3af; color: #fff; }
+    .why-now-rationale { font-size: 9pt; color: #15803d; font-weight: 600; }
+    .signal-row {
+      display: flex; align-items: baseline; gap: 8px;
+      font-size: 8.75pt; margin-bottom: 4px; font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .signal-type {
+      font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.1em;
+      color: #6b7280; white-space: nowrap; min-width: 130px;
+    }
+    .signal-desc { color: #1f2937; flex: 1; }
+    .signal-meta { color: #6b7280; white-space: nowrap; font-size: 7.5pt; }
+    .signal-tier { font-weight: 700; }
+    .signal-tier.HIGH { color: #16a34a; }
+    .signal-tier.MEDIUM { color: #ca8a04; }
+    .signal-tier.LOW { color: #9ca3af; }
+    .shelf-life { color: #374151; }
+  </style>
+</head>
+<body>
+
+  <div class="doc-header">
+    <div>
+      <div class="title">Lifecycle Campaign Brief</div>
+      <div class="subtitle">Meridian Analytics &middot; https://www.meridiananalytics.io</div>
+    </div>
+    <div class="meta">
+      Generated 2026-05-19T22:05:27+00:00<br>
+      Vertical: Sales analytics SaaS for mid-market manufacturing — Series B, 160 employees<br>
+      Touches: 5
+    </div>
+  </div>
+
+  
+  <div class="why-now-block">
+    <div class="why-now-header">
+      <span class="why-now-badge HIGH">HIGH timing</span>
+      <span class="why-now-rationale">3 signals detected in the last 8 days. Buying window closes in ~6 days.</span>
+    </div>
+    
+    <div class="signal-row">
+      <span class="signal-type">g2 review velocity</span>
+      <span class="signal-desc">VP Marketing left a 3-star G2 review: &#39;HubSpot Enterprise doesn&#39;t talk to our Snowflake warehouse without a lot of duct tape. Our RevOps team spends 30% of their time on plumbing.&#39;</span>
+      <span class="signal-meta">
+        G2 &middot;
+        <span class="signal-tier HIGH">HIGH</span>
+        &middot; <span class="shelf-life">3d ago &middot; 11d left</span>
+      </span>
+    </div>
+    
+    <div class="signal-row">
+      <span class="signal-type">hiring</span>
+      <span class="signal-desc">Marketing Data Engineer posted on LinkedIn — JD requires Snowflake, Salesforce, and &#39;building marketing attribution models from scratch outside of a MAP&#39;</span>
+      <span class="signal-meta">
+        LinkedIn &middot;
+        <span class="signal-tier HIGH">HIGH</span>
+        &middot; <span class="shelf-life">5d ago &middot; 9d left</span>
+      </span>
+    </div>
+    
+    <div class="signal-row">
+      <span class="signal-type">conference registration</span>
+      <span class="signal-desc">VP Marketing (Jordan Kim) registered for Snowflake Data Cloud Summit 2026 (San Francisco, June 11–13). Conversion is a sponsor with a booth on the expo floor.</span>
+      <span class="signal-meta">
+        Eventbrite &middot;
+        <span class="signal-tier MEDIUM">MEDIUM</span>
+        &middot; <span class="shelf-life">8d ago &middot; 6d left</span>
+      </span>
+    </div>
+    
+  </div>
+  
+
+  <div class="campaign-block">
+    <div class="name">HubSpot Ceiling → Warehouse-Native MAP Adoption</div>
+    <div class="obj">Land Meridian Analytics as a net-new Conversion customer before the Snowflake Data Cloud Summit window closes. They are actively scoping a HubSpot replacement — hiring signal, frustrated G2 reviews, and conference registration all fired in the last 7 days. The buying committee is the VP Marketing + a newly hired Marketing Data Engineer. Move fast: shelf life ~6 days.
+</div>
+    <div class="stage">Prospect · New — active buying window, high urgency</div>
+  </div>
+
+  <div class="section-h">Segment</div>
+  <div class="segment-name">HubSpot Ceiling → Warehouse-Native MAP Adoption | Meridian Analytics</div>
+  <div class="segment-grid">
+    <div>
+      <div class="col-h">Salesforce filters</div>
+      <ul>
+        <li>Account.NumberOfEmployees &gt;= 100 AND Account.NumberOfEmployees &lt;= 300</li><li>Account.Financing_Stage__c = &#39;Series B&#39;</li><li>Account.Industry = &#39;Technology&#39;</li><li>Account.Current_MAP_Vendor__c = &#39;HubSpot&#39;</li><li>Account.Data_Warehouse_Platform__c = &#39;Snowflake&#39;</li><li>Account.CRM_Platform__c = &#39;Salesforce&#39;</li><li>Account.Active_Trial__c = FALSE</li><li>Account.BillingCountry = &#39;US&#39;</li><li>Contact.Title LIKE &#39;%VP Marketing%&#39; OR Contact.Title LIKE &#39;%Marketing Data Engineer%&#39;</li><li>Opportunity.StageName != &#39;Closed Won&#39; AND Opportunity.StageName != &#39;Closed Lost&#39;</li>
+      </ul>
+    </div>
+    <div>
+      <div class="col-h">Warehouse traits</div>
+      <ul>
+        <li>g2_review_velocity_signal = TRUE AND g2_review_score &lt;= 3 AND g2_review_vendor = &#39;HubSpot&#39; AND g2_review_age_days &lt;= 7</li><li>hiring_signal_role = &#39;Marketing Data Engineer&#39; AND hiring_signal_keywords_match IN (&#39;Snowflake&#39;,&#39;Salesforce&#39;,&#39;marketing attribution&#39;) AND hiring_signal_age_days &lt;= 7</li><li>conference_registration_event = &#39;Snowflake Data Cloud Summit 2026&#39; AND conference_registration_contact = &#39;Jordan Kim&#39; AND conference_registration_age_days &lt;= 10</li><li>reverse_etl_tool_detected IN (&#39;Hightouch&#39;,&#39;Census&#39;)</li><li>intent_topic_score_map_replacement &gt;= 70</li><li>account_id = &#39;meridian_analytics&#39;</li>
+      </ul>
+      <div class="col-h" style="margin-top: 10px;">Exclusions</div>
+      <ul>
+        <li>Account.Active_Trial__c = TRUE AND Account.Trial_Vendor__c IN (&#39;Marketo&#39;,&#39;Conversion&#39;)</li><li>Account.Competitor_Customer__c = TRUE</li><li>Contact.HasOptedOutOfEmail = TRUE</li><li>Contact.Unsubscribed__c = TRUE</li><li>Account.Do_Not_Contact__c = TRUE</li>
+      </ul>
+    </div>
+  </div>
+  <div class="segment-size">1 account / 2 contacts (Jordan Kim – VP Marketing; [MDE_FIRST_NAME] [MDE_LAST_NAME] – Marketing Data Engineer)</div>
+
+  <div class="section-h">Touch sequence</div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">1</span>Day 0 – send at 08:45 recipient local time, Tuesday or Wednesday preferred; do not send Friday–Sunday</span>
+      <span>
+        <span class="touch-channel">TouchChannel.EMAIL</span>
+        <span class="touch-agent">AgentRole.EXECUTION agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">{{contact.first_name}}, your Snowflake data deserves a better MAP than duct tape</div>
+    <div class="touch-body">Open by mirroring the exact language from Jordan&#39;s G2 review (&#39;duct tape&#39; + &#39;30% RevOps time on plumbing&#39;). Acknowledge the pain is architectural, not a configuration problem — HubSpot was not built for warehouse-native data flows. Bridge to Conversion: a MAP with a native Snowflake read/write layer that eliminates reverse ETL middleware. Include a 60-second Loom demo link showing Snowflake → Conversion → Salesforce bi-directional sync with zero middleware. Close with a single low-friction CTA: &#39;See how Meridian&#39;s stack would look inside Conversion — 20-min live walkthrough, I&#39;ll bring the data model.&#39; P.S. line: &#39;Saw you&#39;re heading to Data Cloud Summit — we&#39;re at Booth #412. Happy to show this live on the floor.&#39;</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{contact.first_name}}</span> &middot; <span class="v">{{account.name}}</span> &middot; <span class="v">{{account.current_map_vendor}}</span> &middot; <span class="v">{{account.data_warehouse_platform}}</span> &middot; <span class="v">{{signal.g2_review_quote}}</span> &middot; <span class="v">{{signal.g2_review_age_days}}</span> &middot; <span class="v">{{signal.conference_event_name}}</span> &middot; <span class="v">{{sender.first_name}}</span> &middot; <span class="v">{{sender.calendar_link}}</span> &middot; <span class="v">{{asset.loom_demo_url}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>Suppress if Contact.HasOptedOutOfEmail = TRUE or Contact.Unsubscribed__c = TRUE before send</li><li>Verify {{signal.g2_review_quote}} resolves to non-null string; block send if null</li><li>Verify {{asset.loom_demo_url}} returns HTTP 200 before send; block if dead link</li><li>Deduplicate: block send if a touch was already delivered to this contact within the last 24 hours on any channel</li><li>Spam-gate: subject line must not trigger HubSpot trademark policy flags — run subject through spam scorer, block if score &gt; 4.0</li><li>Validate {{sender.calendar_link}} is a live Calendly/Chili Piper URL returning 200</li><li>Confirm send window is Mon–Thu 08:00–17:00 recipient local time; reschedule if outside window</li>
+    </ul>
+
+    <div class="metric">Email open within 24 hours OR calendar link click within 48 hours</div>
+  </div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">2</span>Day 1 – 12 hours after Step 1 email confirmed delivered; send between 09:00–11:00 recipient local time</span>
+      <span>
+        <span class="touch-channel">TouchChannel.LINKEDIN</span>
+        <span class="touch-agent">AgentRole.EXECUTION agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">LinkedIn DM: Conversion + Snowflake — saw your Data Cloud Summit registration</div>
+    <div class="touch-body">Short, warm LinkedIn DM to Jordan Kim from the assigned AE. Reference the Data Cloud Summit registration organically (&#39;Looking forward to Summit next month — are you going to be on the expo floor?&#39;). Mention Conversion is a sponsor at Booth #412 and that we built our MAP ground-up on Snowflake. Offer to send a one-pager mapping Meridian&#39;s current stack (HubSpot + Hightouch/Census + Snowflake) to what a Conversion-native architecture removes. No hard pitch — goal is to open a conversation thread and establish presence before the conference. 300 characters max.</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{contact.first_name}}</span> &middot; <span class="v">{{account.name}}</span> &middot; <span class="v">{{signal.conference_event_name}}</span> &middot; <span class="v">{{signal.conference_event_date}}</span> &middot; <span class="v">{{signal.conference_event_location}}</span> &middot; <span class="v">{{sender.linkedin_profile_url}}</span> &middot; <span class="v">{{sender.first_name}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>Verify LinkedIn contact profile URL resolves before send; block if profile not found</li><li>Confirm Step 1 email was delivered (not bounced) before triggering this touch; suppress if Step 1 hard-bounced</li><li>Message length check: body must be &lt;= 300 characters after token injection; block if over limit</li><li>Deduplicate: block if a LinkedIn DM was already sent to this contact in the last 7 days</li><li>Suppress if contact LinkedIn connection status is not 1st-degree and AE has not sent a connection request; queue connection request first if needed</li>
+    </ul>
+
+    <div class="metric">LinkedIn DM read receipt OR reply within 48 hours</div>
+  </div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">3</span>Day 2 – create task at 08:00 AE local time; due same day by 17:00</span>
+      <span>
+        <span class="touch-channel">TouchChannel.AE_TASK</span>
+        <span class="touch-agent">AgentRole.EXECUTION agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">AE Task: Call Jordan Kim + loop in [MDE_NAME] — Meridian buying signal trifecta fired</div>
+    <div class="touch-body">AE task written for the assigned account executive. Summarize the three buying signals with source and age: (1) G2 3-star review quoting &#39;duct tape&#39; plumbing, 3 days ago; (2) Marketing Data Engineer hire posting requiring Snowflake + out-of-MAP attribution, 5 days ago; (3) Jordan Kim registered for Data Cloud Summit, 8 days ago. Instruct AE to: (a) attempt a warm call to Jordan Kim referencing the Summit and offering to meet at Booth #412; (b) find and connect with the newly hired Marketing Data Engineer on LinkedIn — their Snowflake/attribution background makes them a technical champion; (c) log call outcome in Salesforce Opportunity.Next_Step__c within 2 hours of attempt. Provide suggested call talk-track: lead with the Summit hook, pivot to the attribution-model-outside-MAP pain point from the JD, offer a bespoke data architecture review session.</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{contact.first_name}}</span> &middot; <span class="v">{{contact.phone}}</span> &middot; <span class="v">{{account.name}}</span> &middot; <span class="v">{{account.ae_owner_name}}</span> &middot; <span class="v">{{signal.g2_review_quote}}</span> &middot; <span class="v">{{signal.g2_review_age_days}}</span> &middot; <span class="v">{{signal.hiring_signal_role}}</span> &middot; <span class="v">{{signal.hiring_signal_age_days}}</span> &middot; <span class="v">{{signal.conference_event_name}}</span> &middot; <span class="v">{{signal.conference_event_date}}</span> &middot; <span class="v">{{account.opportunity_id}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>Verify Opportunity.OwnerId is populated and maps to an active Salesforce user before task creation; block if owner is inactive</li><li>Confirm Account.Active_Trial__c = FALSE at task creation time; suppress task if trial has since started</li><li>Validate {{contact.phone}} is non-null; flag task with &#39;Phone Missing — LinkedIn only&#39; if null</li><li>Check that Steps 1 and 2 were attempted before creating this task; log warning if either was suppressed</li><li>Deduplicate: block if an open AE task for this account was created in the last 48 hours</li>
+    </ul>
+
+    <div class="metric">AE logs call attempt in Salesforce within same business day; Opportunity.Next_Step__c updated</div>
+  </div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">4</span>Day 3 – send at 09:00 recipient local time if Step 1 email was opened but no meeting booked; suppress if meeting already booked</span>
+      <span>
+        <span class="touch-channel">TouchChannel.EMAIL</span>
+        <span class="touch-agent">AgentRole.EXECUTION agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">{{contact.first_name}}, the Meridian stack → Conversion architecture (took 11 minutes to map)</div>
+    <div class="touch-body">Value-forward nurture email addressed to Jordan Kim, cc-awareness for the Marketing Data Engineer persona. Lead with: &#39;I mapped Meridian&#39;s current stack in our sandbox — here&#39;s what it looks like.&#39; Include an inline architecture diagram (Snowflake ↔ Conversion ↔ Salesforce) that visually eliminates the Hightouch/Census middleware layer. Quantify the RevOps time savings: &#39;Teams in your profile recover ~25–30% of RevOps bandwidth in the first 90 days post-migration.&#39; Reference the hiring JD signal naturally: &#39;Your new Marketing Data Engineer hire will be able to build attribution models directly in SQL against live Conversion events — no ETL layer, no lag.&#39; Second CTA: link to a live sandbox environment pre-seeded with a fictional manufacturing SaaS dataset so Jordan/MDE can self-explore. Tertiary CTA: &#39;Still going to Summit? We&#39;d love 20 minutes at Booth #412 — I can reserve a private demo slot.&#39;</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{contact.first_name}}</span> &middot; <span class="v">{{account.name}}</span> &middot; <span class="v">{{account.current_map_vendor}}</span> &middot; <span class="v">{{account.data_warehouse_platform}}</span> &middot; <span class="v">{{signal.reverse_etl_tool_detected}}</span> &middot; <span class="v">{{signal.hiring_signal_role}}</span> &middot; <span class="v">{{asset.architecture_diagram_url}}</span> &middot; <span class="v">{{asset.sandbox_environment_url}}</span> &middot; <span class="v">{{signal.conference_event_name}}</span> &middot; <span class="v">{{sender.first_name}}</span> &middot; <span class="v">{{sender.calendar_link}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>Suppress entirely if Opportunity.StageName has advanced to &#39;Meeting Booked&#39; or beyond since Step 1</li><li>Suppress if contact replied to Step 1 email with a negative/unsubscribe signal</li><li>Verify {{asset.architecture_diagram_url}} returns HTTP 200 and renders inline image; block if broken</li><li>Verify {{asset.sandbox_environment_url}} returns HTTP 200 and sandbox is live; block if environment is down</li><li>Validate {{signal.reverse_etl_tool_detected}} resolves to &#39;Hightouch&#39;, &#39;Census&#39;, or another named tool — do not send generic placeholder text</li><li>Spam-gate: check for image-heavy layout triggering promotional tab classifiers; ensure text-to-image ratio &gt; 60:40</li><li>Confirm send is Mon–Thu 08:00–17:00 recipient local time; reschedule otherwise</li>
+    </ul>
+
+    <div class="metric">Sandbox environment link click OR calendar booking within 48 hours of send</div>
+  </div>
+  
+  <div class="touch">
+    <div class="touch-h">
+      <span class="touch-step"><span class="num">5</span>Day 5 – send at 08:30 recipient local time; this is the final pre-Summit urgency touch; suppress if meeting booked at any prior step</span>
+      <span>
+        <span class="touch-channel">TouchChannel.EMAIL</span>
+        <span class="touch-agent">AgentRole.EXECUTION agent</span>
+      </span>
+    </div>
+    <div class="touch-subject">Last call before Summit: reserved a private demo slot at Booth #412 for you, {{contact.first_name}}</div>
+    <div class="touch-body">Short, high-urgency close email. Open with explicit scarcity: &#39;We have 4 private 20-minute demo slots remaining at our Data Cloud Summit booth (June 11–13, Booth #412) — I&#39;ve held one under your name through EOD tomorrow.&#39; Reference the full buying-signal context in one tight paragraph: &#39;You flagged the Snowflake-HubSpot plumbing problem on G2, you&#39;re building out a data engineering function that lives outside a traditional MAP, and you&#39;re already coming to Summit — this feels like the right moment to see the warehouse-native alternative in person.&#39; Primary CTA: &#39;Claim your slot — 2 clicks&#39; (deep link to a pre-filled Summit booking form). Secondary CTA: &#39;Can&#39;t do Summit? Here&#39;s the async walkthrough instead&#39; (links back to Loom demo from Step 1). Closing line: &#39;If the timing genuinely isn&#39;t right, just reply and I&#39;ll stand down — no hard feelings.&#39; Signature includes AE direct mobile.</div>
+
+    <div class="kv">
+      <span class="k">Personalization tokens:</span>
+      <span class="v">{{contact.first_name}}</span> &middot; <span class="v">{{account.name}}</span> &middot; <span class="v">{{signal.conference_event_name}}</span> &middot; <span class="v">{{signal.conference_event_date}}</span> &middot; <span class="v">{{signal.conference_event_location}}</span> &middot; <span class="v">{{signal.g2_review_age_days}}</span> &middot; <span class="v">{{signal.hiring_signal_role}}</span> &middot; <span class="v">{{asset.summit_booking_url}}</span> &middot; <span class="v">{{asset.loom_demo_url}}</span> &middot; <span class="v">{{sender.first_name}}</span> &middot; <span class="v">{{sender.mobile_phone}}</span>
+    </div>
+
+    <div class="kv" style="margin-top: 6px;"><span class="k">QA rules:</span></div>
+    <ul class="qa-list">
+      <li>Hard suppress if Opportunity.StageName = &#39;Meeting Booked&#39;, &#39;Demo Scheduled&#39;, &#39;Closed Won&#39;, or &#39;Closed Lost&#39;</li><li>Hard suppress if contact replied &#39;not interested&#39;, &#39;unsubscribe&#39;, or equivalent at any prior touch — check reply sentiment score &lt; -0.4</li><li>Verify {{asset.summit_booking_url}} is live and the booking slot inventory shows &gt;= 1 slot remaining; block send if slots = 0</li><li>Verify {{asset.loom_demo_url}} still returns HTTP 200; block if dead</li><li>Validate {{sender.mobile_phone}} is non-null and E.164 formatted; block send if missing</li><li>Confirm campaign has not exceeded 5-touch send cap for this contact across all channels in this campaign</li><li>Spam-gate: &#39;Last call&#39; and urgency language — run subject through spam scorer; block if score &gt; 3.5</li>
+    </ul>
+
+    <div class="metric">Summit demo slot booking OR reply indicating interest/meeting request within 48 hours</div>
+  </div>
+  
+
+  <div class="section-h">Optimization triggers</div>
+  <div class="triggers">
+    <ul class="opt-list">
+      <li><strong>If</strong> contact.email_open_count &gt;= 2 AND calendar_link_click = FALSE AND hours_since_step1_send &lt;= 48 &rarr; Optimization agent accelerates Step 3 AE task to same day as repeated opens; adds SMS touch to AE task brief flagging &#39;high-intent lurker — opened twice, not yet clicked&#39;; reallocates Step 4 send to Day 2 instead of Day 3</li><li><strong>If</strong> signal.intent_topic_score_map_replacement spikes &gt;= 85 at any point during campaign runtime &rarr; Optimization agent triggers an out-of-sequence in_app_banner touch (if Meridian is already trialing any Conversion feature) AND escalates AE task priority to P0; notifies AE Slack channel with full signal context</li><li><strong>If</strong> signal.conference_registration_event = &#39;Snowflake Data Cloud Summit 2026&#39; AND days_until_conference &lt;= 7 AND Opportunity.StageName NOT IN (&#39;Meeting Booked&#39;,&#39;Demo Scheduled&#39;,&#39;Closed Won&#39;) &rarr; Optimization agent triggers conference_meet protocol: fast-tracks Step 5 to send immediately (overriding Day 5 schedule), reserves a Summit booth demo slot in the booking system under contact name, and creates a high-priority AE task to hand-deliver a physical one-pager to Jordan Kim at Booth #412 on Day 1 of Summit</li><li><strong>If</strong> contact.email_reply_sentiment_score &lt; -0.4 OR contact.unsubscribe_event = TRUE &rarr; Optimization agent immediately suppresses all remaining touches for this contact across all channels; updates Salesforce Contact.Campaign_Suppression_Reason__c = &#39;Negative reply or unsubscribe during HubSpot Ceiling campaign&#39;; flags opportunity for AE review before any future outreach</li><li><strong>If</strong> Step 1 email hard_bounce = TRUE OR Step 1 email delivery_status = &#39;invalid_address&#39; &rarr; Optimization agent pauses email channel for this contact; re-routes campaign to LinkedIn-first sequence (Step 2 promoted to Step 1 equivalent); triggers AE task to source valid email via ZoomInfo/Clearbit enrichment within 4 hours</li><li><strong>If</strong> Opportunity.StageName advances to &#39;Meeting Booked&#39; or &#39;Demo Scheduled&#39; at any step &rarr; Optimization agent halts all remaining campaign touches immediately; triggers a new AE task: &#39;Pre-demo prep — pull Meridian Snowflake schema from warehouse trait and prepare bespoke attribution model demo&#39;; logs campaign as conversion success</li>
+    </ul>
+  </div>
+
+  <div class="section-h">Pipeline projection</div>
+  <div class="projection-grid">
+    <div>
+      <div class="pk">Expected renewals</div>
+      <div class="pv">Net-new logo close: 65% probability of Closed Won within 21 days of campaign launch, contingent on Summit meeting booked by Day 6. Estimated ACV: $48,000–$72,000 (mid-market MAP contract, 100–300 seat band). If Summit meeting books, close probability increases to 80% within 30 days.</div>
+    </div>
+    <div>
+      <div class="pk">AE efficiency</div>
+      <div class="pv">AE active involvement limited to Step 3 call + Summit booth meeting. Estimated AE time investment: 2.5 hours total across campaign lifecycle (30 min call prep, 20 min call, 20 min LinkedIn research, 60 min Summit demo). All email and LinkedIn DM touches are execution-agent-automated. AE task creation, sequencing, and suppression are fully system-managed — zero manual scheduling overhead.</div>
+    </div>
+    <div>
+      <div class="pk">Runtime</div>
+      <div class="pv">6 days active (Day 0–5), aligned to shelf life of buying signals. Conference hard deadline: Snowflake Data Cloud Summit opens June 11, 2026. Campaign must reach a booked meeting or explicit pass by Day 6 (June 10 latest) to enable Summit activation. Post-Day 6: campaign enters dormant state; optimization agent re-activates only on new intent spike or AE discretion.</div>
+    </div>
+    <div>
+      <div class="pk">Downside scenario</div>
+      <div class="pv">Downside scenario (35% probability): No email reply, no LinkedIn engagement, no Summit booking by Day 5. In this case: AE logs &#39;no response&#39; in Opportunity.Next_Step__c; contact enters a 30-day cooling-off suppression window; account is re-queued for next buying signal event (e.g., next G2 review, expanded hiring signal, or post-Summit content engagement). No ACV recognized. Secondary downside: meeting books but deal stalls post-Summit demo — estimated 20% of booked meetings do not advance past discovery. In this sub-scenario, ACV = $0 in current quarter; account enters a 60-day nurture track with a warehouse-native attribution content series.</div>
+    </div>
+  </div>
+
+  <div class="platform-fit">
+    <span class="pf-h">Why this is a Conversion-shaped artifact</span>
+    Every field maps to a Conversion primitive: the segment is Salesforce SOQL plus warehouse trait joins, the touch sequence carries execution / QA / optimization agent assignments, and the whole brief is a typed JSON object delivered by webhook — no human translation step between signal and campaign.<br><br>
+    <strong>Build time on the platform:</strong> ~1 day. Segment, agent roles, and suppression rules drop straight into the campaign builder; the signal stack and shelf-life feed the trigger and optimization layers.<br><br>
+    <strong>What this proves:</strong> A GTM engineer can compile a buying-window signal stack into a ready-to-run lifecycle campaign — replacing intuition and manual research with a typed, schema-enforced system.
+  </div>
+
+  <div class="footer">
+    <span class="brand">SignalForce &middot; MarOps branch</span>
+    <span>Built by Sami Rahman &middot; github.com/sami2919</span>
+  </div>
+
+</body>
+</html>

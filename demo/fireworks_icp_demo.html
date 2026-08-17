@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SignalForce × Fireworks AI — ICP Demo</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --card: #12121a;
+    --border: #1e1e2e;
+    --text: #e0e0e8;
+    --muted: #8888a0;
+    --accent: #ff6b35;
+    --accent-dim: #ff6b3522;
+    --green: #22c55e;
+    --yellow: #eab308;
+    --orange: #f97316;
+    --red: #ef4444;
+    --radius: 12px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.6;
+    padding: 0;
+  }
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, #0d0d18 0%, #1a1020 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 40px 24px 32px;
+    text-align: center;
+  }
+  .header h1 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .header .fire {
+    font-size: 2rem;
+    margin-right: 8px;
+  }
+  .header .subtitle {
+    color: var(--muted);
+    font-size: 0.95rem;
+    margin-top: 8px;
+    max-width: 640px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .header .badges {
+    margin-top: 16px;
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .badge {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+  .badge.accent {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  /* Container */
+  .container {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 32px 24px 60px;
+  }
+  /* Summary bar */
+  .summary {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+  }
+  .summary-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 20px;
+    flex: 1;
+    min-width: 140px;
+  }
+  .summary-item .label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+  .summary-item .value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-top: 4px;
+  }
+  /* Account card */
+  .account-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 20px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .account-card:hover {
+    border-color: var(--accent);
+  }
+  .account-card-header {
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .account-name {
+    font-size: 1.25rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .rank {
+    color: var(--muted);
+    font-size: 1rem;
+    font-weight: 400;
+  }
+  .fit-score {
+    font-size: 1.5rem;
+    font-weight: 800;
+    padding: 4px 14px;
+    border-radius: 8px;
+    white-space: nowrap;
+  }
+  .fit-score.high { background: #22c55e22; color: var(--green); }
+  .fit-score.medium { background: #eab30822; color: var(--yellow); }
+  .fit-score.low { background: #ef444422; color: var(--red); }
+  .intent-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 3px 10px;
+    border-radius: 20px;
+  }
+  .intent-badge.urgent { background: #ef444422; color: var(--red); border: 1px solid var(--red); }
+  .intent-badge.high { background: #f9731622; color: var(--orange); border: 1px solid var(--orange); }
+  .intent-badge.medium { background: #eab30822; color: var(--yellow); border: 1px solid var(--yellow); }
+  .intent-badge.low { background: #22c55e22; color: var(--green); border: 1px solid var(--green); }
+  .chevron {
+    color: var(--muted);
+    font-size: 1.2rem;
+    transition: transform 0.2s;
+  }
+  .account-card.collapsed .chevron { transform: rotate(-90deg); }
+  .account-card-body {
+    padding: 0 24px 24px;
+    display: block;
+  }
+  .account-card.collapsed .account-card-body { display: none; }
+  /* Section within card */
+  .section {
+    margin-top: 16px;
+  }
+  .section-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .section-content {
+    font-size: 0.92rem;
+    color: var(--text);
+  }
+  /* Signal chips */
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .chip {
+    background: var(--accent-dim);
+    border: 1px solid #ff6b3544;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    color: #ffaa80;
+  }
+  /* Pain points */
+  .pain-points {
+    list-style: none;
+  }
+  .pain-points li {
+    padding: 4px 0 4px 20px;
+    position: relative;
+    font-size: 0.9rem;
+  }
+  .pain-points li::before {
+    content: "⚠";
+    position: absolute;
+    left: 0;
+    color: var(--orange);
+  }
+  /* Outbound angle */
+  .angle-box {
+    background: linear-gradient(135deg, #ff6b3511, #ff6b3511);
+    border: 1px solid #ff6b3533;
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 0.92rem;
+    font-weight: 600;
+  }
+  /* Outreach blocks */
+  .outreach-block {
+    background: #0a0a12;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-top: 8px;
+  }
+  .outreach-block .channel {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+  .outreach-block .subject {
+    font-weight: 700;
+    font-size: 0.9rem;
+    margin-bottom: 4px;
+  }
+  .outreach-block .body {
+    font-size: 0.85rem;
+    color: var(--muted);
+    white-space: pre-wrap;
+    line-height: 1.5;
+  }
+  /* Persona */
+  .persona-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #22c55e11;
+    border: 1px solid #22c55e33;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 0.85rem;
+    color: #4ade80;
+  }
+  /* Divider */
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 20px 0;
+  }
+  /* Footer */
+  .footer {
+    text-align: center;
+    padding: 24px;
+    color: var(--muted);
+    font-size: 0.8rem;
+    border-top: 1px solid var(--border);
+  }
+  .footer a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  /* Responsive */
+  @media (max-width: 600px) {
+    .header h1 { font-size: 1.4rem; }
+    .account-card-header { flex-direction: column; align-items: flex-start; }
+    .summary-item { min-width: 120px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span class="fire">🔥</span> SignalForce × Fireworks AI</h1>
+  <p class="subtitle">Using Fireworks as the inference layer to turn raw GTM signals into structured account intelligence for AI companies with inference-heavy workloads.</p>
+  <div class="badges">
+    <span class="badge accent">Fireworks AI Inference</span>
+    <span class="badge">3 accounts analyzed</span>
+    <span class="badge">ICP: fireworks_ai</span>
+    <span class="badge">Model: glm-5p2</span>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="summary">
+    <div class="summary-item">
+      <div class="label">Accounts</div>
+      <div class="value">3</div>
+    </div>
+    <div class="summary-item">
+      <div class="label">Avg Fit Score</div>
+      <div class="value">88</div>
+    </div>
+    <div class="summary-item">
+      <div class="label">Urgent</div>
+      <div class="value" style="color: var(--red);">1</div>
+    </div>
+    <div class="summary-item">
+      <div class="label">High Intent</div>
+      <div class="value" style="color: var(--orange);">2</div>
+    </div>
+  </div>
+
+  <!-- Account 1: Voice AI -->
+  <div class="account-card" id="card-0">
+    <div class="account-card-header" onclick="toggleCard('card-0')">
+      <div>
+        <div class="account-name"><span class="rank">#1</span> Voice AI Support Startup</div>
+        <div style="margin-top:4px"><span class="intent-badge urgent">Urgent</span></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="fit-score high">94<span style="font-size:0.8rem;color:var(--muted)">/100</span></span>
+        <span class="chevron">▼</span>
+      </div>
+    </div>
+    <div class="account-card-body">
+      <div class="section">
+        <div class="section-label">Matched Signals</div>
+        <div class="chips">
+          <span class="chip">Hiring real-time AI engineers</span>
+          <span class="chip">Mentions streaming responses</span>
+          <span class="chip">Needs sub-second latency</span>
+          <span class="chip">Recently raised Series A</span>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-label">Why Now</div>
+        <div class="section-content">Series A funding plus active hiring for real-time AI engineers signals they are scaling inference infrastructure right now. Voice AI workloads make latency a direct product bottleneck — every millisecond of inference delay degrades the user experience.</div>
+      </div>
+      <div class="section">
+        <div class="section-label">Fireworks Relevance</div>
+        <div class="section-content">Fireworks can serve low-latency inference for streaming voice AI interactions at scale. The platform's optimized serving for open-source models means this team could reduce response times without managing GPU infrastructure themselves.</div>
+      </div>
+      <div class="section">
+        <div class="section-label">Likely Pain Points</div>
+        <ul class="pain-points">
+          <li>Sub-second latency requirement for natural conversation flow</li>
+          <li>High token volume from always-on voice interactions driving inference cost</li>
+          <li>GPU infrastructure management pulling engineering focus from product</li>
+          <li>Scaling inference to handle concurrent conversations without quality degradation</li>
+        </ul>
+      </div>
+      <div class="section">
+        <div class="section-label">Recommended Persona</div>
+        <span class="persona-tag">👤 Head of AI Infrastructure</span>
+      </div>
+      <div class="section">
+        <div class="section-label">Outbound Angle</div>
+        <div class="angle-box">Low-latency inference for production voice AI — cut response times without managing GPUs</div>
+      </div>
+      <div class="divider"></div>
+      <div class="section">
+        <div class="section-label">Outreach</div>
+        <div class="outreach-block">
+          <div class="channel">🔗 LinkedIn Message</div>
+          <div class="body">Saw your team is hiring around real-time AI and streaming responses after the Series A. Curious if inference latency has become the bottleneck as conversation volume grows — we've been helping teams serve sub-second voice AI without managing GPU infrastructure.</div>
+        </div>
+        <div class="outreach-block">
+          <div class="channel">✉️ Cold Email</div>
+          <div class="subject">Scaling real-time AI inference after Series A</div>
+          <div class="body">Hi {{first_name}},
+
+Noticed your recent Series A and the push on real-time AI engineering hires. Voice AI workloads live or die by inference latency — and scaling concurrent conversations while keeping sub-second response times is one of the hardest infrastructure problems at this stage.
+
+Fireworks can help serve low-latency inference for streaming voice interactions without your team having to manage GPU clusters, CUDA optimizations, or model serving infrastructure. Teams building production voice AI use us to cut response times and scale concurrent sessions predictably.
+
+Worth a 15-minute conversation?
+
+— Sami</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Account 2: Cursor-like -->
+  <div class="account-card collapsed" id="card-1">
+    <div class="account-card-header" onclick="toggleCard('card-1')">
+      <div>
+        <div class="account-name"><span class="rank">#2</span> Cursor-like AI Coding Platform</div>
+        <div style="margin-top:4px"><span class="intent-badge high">High</span></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="fit-score high">88<span style="font-size:0.8rem;color:var(--muted)">/100</span></span>
+        <span class="chevron">▼</span>
+      </div>
+    </div>
+    <div class="account-card-body">
+      <div class="section">
+        <div class="section-label">Matched Signals</div>
+        <div class="chips">
+          <span class="chip">Hiring ML infrastructure engineers</span>
+          <span class="chip">Mentions low-latency code generation</span>
+          <span class="chip">Uses open-source models for evals</span>
+          <span class="chip">Launched faster code-editing workflows</span>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-label">Why Now</div>
+        <div class="section-content">They just launched faster code-editing workflows and are actively hiring ML infrastructure engineers. Code completion and code editing are latency-sensitive — users feel every delay between keystroke and suggestion. They're already using open-source models for evals, which means they're not locked into a single provider.</div>
+      </div>
+      <div class="section">
+        <div class="section-label">Fireworks Relevance</div>
+        <div class="section-content">Fireworks can serve fast inference for code generation models with low latency at high throughput. Since they already use open-source models, Fireworks gives them a production-grade serving layer without vendor lock-in — with the flexibility to swap or fine-tune models as their editing workflows evolve.</div>
+      </div>
+      <div class="section">
+        <div class="section-label">Likely Pain Points</div>
+        <ul class="pain-points">
+          <li>Latency between keystroke and code suggestion directly impacts user experience</li>
+          <li>Managing GPU infrastructure for real-time code completion at scale</li>
+          <li>Balancing model quality with inference speed for code generation</li>
+          <li>Need to iterate on model choice without being locked into one provider</li>
+        </ul>
+      </div>
+      <div class="section">
+        <div class="section-label">Recommended Persona</div>
+        <span class="persona-tag">👤 Head of ML Infrastructure</span>
+      </div>
+      <div class="section">
+        <div class="section-label">Outbound Angle</div>
+        <div class="angle-box">Fast inference for code generation — keep keystroke-to-suggestion latency low with production-grade serving</div>
+      </div>
+      <div class="divider"></div>
+      <div class="section">
+        <div class="section-label">Outreach</div>
+        <div class="outreach-block">
+          <div class="channel">🔗 LinkedIn Message</div>
+          <div class="body">Saw the faster code-editing launch and the ML infra hires. Curious how you're handling inference latency for real-time code completion — we help teams serve open-source models at sub-100ms without managing GPU infrastructure. Open to swapping thoughts?</div>
+        </div>
+        <div class="outreach-block">
+          <div class="channel">✉️ Cold Email</div>
+          <div class="subject">Keystroke-to-suggestion latency at scale</div>
+          <div class="body">Hi {{first_name}},
+
+Saw the recent launch of faster AI code-editing workflows and the ML infrastructure hiring push. Code completion is one of the most latency-sensitive AI use cases — users feel every millisecond between keystroke and suggestion.
+
+Since your team already uses open-source models for evals, Fireworks could be a natural fit for production serving: fast inference for code generation models, the flexibility to swap or fine-tune models without vendor lock-in, and no GPU infrastructure to manage.
+
+Would it be useful to compare inference latency numbers? Happy to share what teams building similar real-time code AI are seeing.
+
+— Sami</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Account 3: Enterprise RAG -->
+  <div class="account-card collapsed" id="card-2">
+    <div class="account-card-header" onclick="toggleCard('card-2')">
+      <div>
+        <div class="account-name"><span class="rank">#3</span> Enterprise RAG Platform</div>
+        <div style="margin-top:4px"><span class="intent-badge high">High</span></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="fit-score high">82<span style="font-size:0.8rem;color:var(--muted)">/100</span></span>
+        <span class="chevron">▼</span>
+      </div>
+    </div>
+    <div class="account-card-body">
+      <div class="section">
+        <div class="section-label">Matched Signals</div>
+        <div class="chips">
+          <span class="chip">Adding support for multiple open-source models</span>
+          <span class="chip">Hiring AI platform engineers</span>
+          <span class="chip">Publishing content around inference cost</span>
+          <span class="chip">Expanding enterprise deployments</span>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-label">Why Now</div>
+        <div class="section-content">They're expanding enterprise deployments while adding support for multiple open-source models. Enterprise RAG workloads need predictable serving costs and model flexibility — different enterprise customers may require different models for compliance, performance, or cost reasons. They're also publishing content about inference cost, which signals it's an active concern.</div>
+      </div>
+      <div class="section">
+        <div class="section-label">Fireworks Relevance</div>
+        <div class="section-content">Fireworks gives RAG platforms the model flexibility to serve multiple open-source models from a single API, with predictable per-token pricing that scales with enterprise deployments. Teams can offer model choice to enterprise customers without managing separate serving infrastructure for each model.</div>
+      </div>
+      <div class="section">
+        <div class="section-label">Likely Pain Points</div>
+        <ul class="pain-points">
+          <li>Managing serving infrastructure for multiple open-source models increases complexity</li>
+          <li>Inference costs scaling unpredictably with enterprise customer growth</li>
+          <li>Enterprise customers requesting specific models for compliance or data residency</li>
+          <li>Need to benchmark and swap models without downtime</li>
+        </ul>
+      </div>
+      <div class="section">
+        <div class="section-label">Recommended Persona</div>
+        <span class="persona-tag">👤 AI Platform Lead</span>
+      </div>
+      <div class="section">
+        <div class="section-label">Outbound Angle</div>
+        <div class="angle-box">Model flexibility and predictable inference costs for enterprise RAG at scale</div>
+      </div>
+      <div class="divider"></div>
+      <div class="section">
+        <div class="section-label">Outreach</div>
+        <div class="outreach-block">
+          <div class="channel">🔗 LinkedIn Message</div>
+          <div class="body">Noticed the multi-model support expansion and the content you've been publishing on inference cost. Curious how you're managing serving infrastructure across different open-source models as enterprise deployments grow — we help teams offer model choice from a single API with predictable per-token pricing.</div>
+        </div>
+        <div class="outreach-block">
+          <div class="channel">✉️ Cold Email</div>
+          <div class="subject">Multi-model serving costs as you scale enterprise RAG</div>
+          <div class="body">Hi {{first_name}},
+
+Saw the expansion into multi-model support and the recent content on inference costs. Enterprise RAG platforms hit a unique challenge: different customers want different models, and managing serving infrastructure for each one multiplies complexity and cost.
+
+Fireworks can help — serve multiple open-source models from a single API with predictable per-token pricing. Enterprise customers get model choice without your team maintaining separate GPU clusters per model. Swap or fine-tune models without downtime.
+
+Worth comparing cost-per-query numbers? Happy to share what other enterprise RAG teams are seeing.
+
+— Sami</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  <p>SignalForce uses <a href="https://fireworks.ai">Fireworks AI</a> as the inference layer to convert raw GTM signals into structured account intelligence.</p>
+  <p style="margin-top:4px">This demonstrates Fireworks powering a real business workflow, not just a chatbot.</p>
+</div>
+
+<script>
+function toggleCard(id) {
+  const card = document.getElementById(id);
+  card.classList.toggle('collapsed');
+}
+</script>
+
+</body>
+</html>
