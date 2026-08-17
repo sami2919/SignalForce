@@ -7,7 +7,6 @@ before any implementation exists.
 from __future__ import annotations
 
 
-
 from scripts.models import Signal, SignalStrength
 from scripts.icp_fit_scorer import compute_icp_fit
 
@@ -76,13 +75,7 @@ class TestComputeIcpFit:
         sig = _make_signal(
             "job_posting",
             raw_data={
-                "postings": [
-                    {
-                        "snippet": (
-                            "Marketo Salesforce Hightouch Snowflake BigQuery dbt"
-                        )
-                    }
-                ]
+                "postings": [{"snippet": ("Marketo Salesforce Hightouch Snowflake BigQuery dbt")}]
             },
             metadata={
                 "skills_mentioned": [

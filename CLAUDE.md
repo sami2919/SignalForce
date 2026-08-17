@@ -21,6 +21,7 @@ scripts/scanners/ — Per-source scanner modules (github_scanner, arxiv_scanner,
 n8n-workflows/    — JSON workflow definitions for n8n automation
 templates/        — Reusable email sequences and scoring rubrics
 docs/             — Architecture, setup guide, cost analysis, results framework
+docs/system-design/ — System design interview knowledge base (9 references + Circuit narrative)
 tests/            — pytest test suite (unit + integration)
 tasks/            — Current work tracking (todo.md, lessons.md)
 ```

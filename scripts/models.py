@@ -39,6 +39,7 @@ class EnrichmentSource(str, Enum):
     PROSPEO = "PROSPEO"
     PEOPLE_DATA_LABS = "PEOPLE_DATA_LABS"
     MANUAL = "MANUAL"
+    FIRECRAWL = "FIRECRAWL"
 
 
 class EmailVariant(str, Enum):
@@ -247,6 +248,55 @@ class MeetingOutcome(BaseModel):
     follow_up_resources: list[str] = Field(default_factory=list)
     notes: str = ""
     recorded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+# ---------------------------------------------------------------------------
+# Website enrichment model (Firecrawl)
+# ---------------------------------------------------------------------------
+
+
+class WebsiteEnrichment(BaseModel):
+    """Structured data extracted from a company website via Firecrawl.
+
+    Fed into the ICP scoring engine to match against configured keywords
+    and tech-stack indicators.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    domain: str
+    product_description: str = ""
+    tech_stack: list[str] = Field(default_factory=list)
+    product_category: str = ""
+    team_size: str | None = None
+    funding_stage: str | None = None
+    hiring_language: list[str] = Field(default_factory=list)
+    key_pages_scraped: list[str] = Field(default_factory=list)
+    raw_markdown: str = ""
+    scraped_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+# ---------------------------------------------------------------------------
+# G2 review extraction model (Firecrawl)
+# ---------------------------------------------------------------------------
+
+
+class G2ReviewExtraction(BaseModel):
+    """Structured G2 review data extracted via Firecrawl.
+
+    Replaces the fragile cookie-based G2 scanner with clean LLM extraction.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    company_name: str
+    rating: float
+    review_snippet: str = ""
+    frustration_signals: list[str] = Field(default_factory=list)
+    vendor_mentioned: str = ""
+    reviewer_title: str = ""
+    source_url: str = ""
+    extracted_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 # ---------------------------------------------------------------------------

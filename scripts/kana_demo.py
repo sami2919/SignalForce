@@ -322,17 +322,13 @@ def _signal_text(signal: Signal) -> str:
     for posting in postings:
         if isinstance(posting, dict):
             parts.extend(
-                str(posting.get(key, ""))
-                for key in ("title", "snippet")
-                if posting.get(key)
+                str(posting.get(key, "")) for key in ("title", "snippet") if posting.get(key)
             )
     activities = raw.get("activities", [])
     for activity in activities:
         if isinstance(activity, dict):
             parts.extend(
-                str(activity.get(key, ""))
-                for key in ("topic", "text")
-                if activity.get(key)
+                str(activity.get(key, "")) for key in ("topic", "text") if activity.get(key)
             )
     for key in ("skills_mentioned", "keywords", "job_titles"):
         value = metadata.get(key)
@@ -368,7 +364,9 @@ def _main(argv: list[str] | None = None) -> None:
     parser.add_argument("--lookback-days", type=int, default=30)
     parser.add_argument("--min-grade", choices=["A", "B", "C", "D"], default="B")
     parser.add_argument("--sample", action="store_true", help="Use committed sample signals")
-    parser.add_argument("--brief-only", action="store_true", help="Render only the supporting brief")
+    parser.add_argument(
+        "--brief-only", action="store_true", help="Render only the supporting brief"
+    )
     args = parser.parse_args(argv)
 
     brief = load_customer_zero_brief()

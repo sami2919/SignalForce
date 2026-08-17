@@ -1,12 +1,21 @@
 """Tests for cli.py — the live demo entry point."""
+
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 
-
 def _make_brief_mock() -> MagicMock:
-    from scripts.marops.models import LifecycleBrief, OptimizationTrigger, PipelineProjection, SegmentDefinition, Touch, AgentRole, TouchChannel
+    from scripts.marops.models import (
+        LifecycleBrief,
+        OptimizationTrigger,
+        PipelineProjection,
+        SegmentDefinition,
+        Touch,
+        AgentRole,
+        TouchChannel,
+    )
+
     return LifecycleBrief(
         prospect="Veriforce",
         prospect_url="https://www.veriforce.com",
@@ -68,19 +77,25 @@ def test_run_api_key_not_set(tmp_path):
     from scripts.marops import cli
 
     config_path = tmp_path / "veriforce.yaml"
-    config_path.write_text(yaml.dump({
-        "prospect": "Veriforce",
-        "prospect_url": "https://www.veriforce.com",
-        "vertical": "SaaS",
-        "campaign_name": "Re-engagement",
-        "lifecycle_stage": "Customer",
-        "objective": "Reactivate",
-        "segment_description": "Lapsed accounts",
-    }))
+    config_path.write_text(
+        yaml.dump(
+            {
+                "prospect": "Veriforce",
+                "prospect_url": "https://www.veriforce.com",
+                "vertical": "SaaS",
+                "campaign_name": "Re-engagement",
+                "lifecycle_stage": "Customer",
+                "objective": "Reactivate",
+                "segment_description": "Lapsed accounts",
+            }
+        )
+    )
 
-    with patch.object(cli, "EXAMPLES", tmp_path), \
-         patch.dict("os.environ", {}, clear=True), \
-         patch("scripts.marops.briefer.os.environ.get", return_value=None):
+    with (
+        patch.object(cli, "EXAMPLES", tmp_path),
+        patch.dict("os.environ", {}, clear=True),
+        patch("scripts.marops.briefer.os.environ.get", return_value=None),
+    ):
         with pytest.raises(SystemExit) as exc_info:
             cli.run("veriforce")
     assert exc_info.value.code == 1
@@ -92,18 +107,27 @@ def test_run_api_timeout(tmp_path):
     from scripts.marops import cli
 
     config_path = tmp_path / "veriforce.yaml"
-    config_path.write_text(yaml.dump({
-        "prospect": "Veriforce",
-        "prospect_url": "https://www.veriforce.com",
-        "vertical": "SaaS",
-        "campaign_name": "Re-engagement",
-        "lifecycle_stage": "Customer",
-        "objective": "Reactivate",
-        "segment_description": "Lapsed accounts",
-    }))
+    config_path.write_text(
+        yaml.dump(
+            {
+                "prospect": "Veriforce",
+                "prospect_url": "https://www.veriforce.com",
+                "vertical": "SaaS",
+                "campaign_name": "Re-engagement",
+                "lifecycle_stage": "Customer",
+                "objective": "Reactivate",
+                "segment_description": "Lapsed accounts",
+            }
+        )
+    )
 
-    with patch.object(cli, "EXAMPLES", tmp_path), \
-         patch("scripts.marops.cli.generate_brief", side_effect=anthropic.APITimeoutError(request=MagicMock())):
+    with (
+        patch.object(cli, "EXAMPLES", tmp_path),
+        patch(
+            "scripts.marops.briefer.generate_brief",
+            side_effect=anthropic.APITimeoutError(request=MagicMock()),
+        ),
+    ):
         with pytest.raises(SystemExit) as exc_info:
             cli.run("veriforce")
     assert exc_info.value.code == 1
@@ -114,22 +138,28 @@ def test_run_happy_path(tmp_path):
     from scripts.marops import cli
 
     config_path = tmp_path / "veriforce.yaml"
-    config_path.write_text(yaml.dump({
-        "prospect": "Veriforce",
-        "prospect_url": "https://www.veriforce.com",
-        "vertical": "SaaS",
-        "campaign_name": "Re-engagement",
-        "lifecycle_stage": "Customer",
-        "objective": "Reactivate",
-        "segment_description": "Lapsed accounts",
-    }))
+    config_path.write_text(
+        yaml.dump(
+            {
+                "prospect": "Veriforce",
+                "prospect_url": "https://www.veriforce.com",
+                "vertical": "SaaS",
+                "campaign_name": "Re-engagement",
+                "lifecycle_stage": "Customer",
+                "objective": "Reactivate",
+                "segment_description": "Lapsed accounts",
+            }
+        )
+    )
 
     brief = _make_brief_mock()
 
-    with patch.object(cli, "EXAMPLES", tmp_path), \
-         patch.object(cli, "OUT", tmp_path), \
-         patch("scripts.marops.cli.generate_brief", return_value=brief), \
-         patch("scripts.marops.cli.render_html") as mock_render:
+    with (
+        patch.object(cli, "EXAMPLES", tmp_path),
+        patch.object(cli, "OUT", tmp_path),
+        patch("scripts.marops.briefer.generate_brief", return_value=brief),
+        patch("scripts.marops.cli.render_html") as mock_render,
+    ):
         result = cli.run("veriforce")
 
     assert result == tmp_path / "veriforce.html"

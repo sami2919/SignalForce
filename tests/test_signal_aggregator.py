@@ -4,7 +4,9 @@ from scripts.signal_aggregator import aggregate_and_score
 from scripts.config_loader import load_config
 
 
-def _make_signal(company: str, signal_type: str, strength: SignalStrength, skills: list[str]) -> Signal:
+def _make_signal(
+    company: str, signal_type: str, strength: SignalStrength, skills: list[str]
+) -> Signal:
     return Signal(
         signal_type=signal_type,
         company_name=company,
@@ -38,8 +40,12 @@ def test_aggregate_groups_by_company(config):
 def test_marketo_salesforce_company_gets_b_or_a(config):
     """A company with Marketo+Salesforce job posting should be graded B or A."""
     signals = [
-        _make_signal("Marketo Corp", "job_posting", SignalStrength.MODERATE,
-                     ["Marketo", "Salesforce", "Hightouch"]),
+        _make_signal(
+            "Marketo Corp",
+            "job_posting",
+            SignalStrength.MODERATE,
+            ["Marketo", "Salesforce", "Hightouch"],
+        ),
     ]
     results = aggregate_and_score(signals, config)
     assert len(results) == 1
@@ -51,8 +57,12 @@ def test_results_sorted_by_combined_score_descending(config):
     """Results should be sorted highest combined score first."""
     signals = [
         _make_signal("Weak Co", "job_posting", SignalStrength.WEAK, []),
-        _make_signal("Strong Co", "job_posting", SignalStrength.STRONG,
-                     ["Marketo", "Salesforce", "Hightouch"]),
+        _make_signal(
+            "Strong Co",
+            "job_posting",
+            SignalStrength.STRONG,
+            ["Marketo", "Salesforce", "Hightouch"],
+        ),
     ]
     results = aggregate_and_score(signals, config)
     scores = [r.scoring_result.combined_score for r in results]

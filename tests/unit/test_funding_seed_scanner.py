@@ -30,17 +30,20 @@ class TestFundingSeedScanner:
         """Scanner reads funding_seeds.yaml and emits funding_event signals."""
         from scripts.scanners.funding_seed_scanner import scan
 
-        seed_file = _write_seeds(tmp_path, {
-            "events": [
-                {
-                    "company": "Vanta",
-                    "amount_usd": 150_000_000,
-                    "stage": "Series D",
-                    "snippet": "Vanta raises $150M Series D to expand enterprise security compliance.",
-                    "source_url": "https://techcrunch.com/vanta-series-d",
-                }
-            ]
-        })
+        seed_file = _write_seeds(
+            tmp_path,
+            {
+                "events": [
+                    {
+                        "company": "Vanta",
+                        "amount_usd": 150_000_000,
+                        "stage": "Series D",
+                        "snippet": "Vanta raises $150M Series D to expand enterprise security compliance.",
+                        "source_url": "https://techcrunch.com/vanta-series-d",
+                    }
+                ]
+            },
+        )
         config = _make_config(str(seed_file))
         result = scan(config)
         assert len(result.signals_found) == 1
@@ -71,17 +74,20 @@ class TestFundingSeedScanner:
         """Funding >= $50M should score STRONG signal strength."""
         from scripts.scanners.funding_seed_scanner import scan
 
-        seed_file = _write_seeds(tmp_path, {
-            "events": [
-                {
-                    "company": "BigCo",
-                    "amount_usd": 100_000_000,
-                    "stage": "Series C",
-                    "snippet": "Raised $100M.",
-                    "source_url": "https://example.com",
-                }
-            ]
-        })
+        seed_file = _write_seeds(
+            tmp_path,
+            {
+                "events": [
+                    {
+                        "company": "BigCo",
+                        "amount_usd": 100_000_000,
+                        "stage": "Series C",
+                        "snippet": "Raised $100M.",
+                        "source_url": "https://example.com",
+                    }
+                ]
+            },
+        )
         config = _make_config(str(seed_file))
         result = scan(config)
         assert result.signals_found[0].signal_strength == SignalStrength.STRONG
@@ -90,17 +96,20 @@ class TestFundingSeedScanner:
         """Funding < $10M should score WEAK signal strength."""
         from scripts.scanners.funding_seed_scanner import scan
 
-        seed_file = _write_seeds(tmp_path, {
-            "events": [
-                {
-                    "company": "SmallCo",
-                    "amount_usd": 5_000_000,
-                    "stage": "Seed",
-                    "snippet": "Raised $5M seed round.",
-                    "source_url": "https://example.com",
-                }
-            ]
-        })
+        seed_file = _write_seeds(
+            tmp_path,
+            {
+                "events": [
+                    {
+                        "company": "SmallCo",
+                        "amount_usd": 5_000_000,
+                        "stage": "Seed",
+                        "snippet": "Raised $5M seed round.",
+                        "source_url": "https://example.com",
+                    }
+                ]
+            },
+        )
         config = _make_config(str(seed_file))
         result = scan(config)
         assert result.signals_found[0].signal_strength == SignalStrength.WEAK
@@ -109,17 +118,20 @@ class TestFundingSeedScanner:
         """Funding >= $10M and < $50M should score MODERATE signal strength."""
         from scripts.scanners.funding_seed_scanner import scan
 
-        seed_file = _write_seeds(tmp_path, {
-            "events": [
-                {
-                    "company": "MidCo",
-                    "amount_usd": 25_000_000,
-                    "stage": "Series B",
-                    "snippet": "Raised $25M Series B.",
-                    "source_url": "https://example.com",
-                }
-            ]
-        })
+        seed_file = _write_seeds(
+            tmp_path,
+            {
+                "events": [
+                    {
+                        "company": "MidCo",
+                        "amount_usd": 25_000_000,
+                        "stage": "Series B",
+                        "snippet": "Raised $25M Series B.",
+                        "source_url": "https://example.com",
+                    }
+                ]
+            },
+        )
         config = _make_config(str(seed_file))
         result = scan(config)
         assert result.signals_found[0].signal_strength == SignalStrength.MODERATE

@@ -57,7 +57,7 @@ _PLG_KEYWORDS: dict[str, float] = {
 _MOPS_ROLE_KEYWORDS: dict[str, float] = {
     # A company hiring for these roles has an active MOPs function and a MAP dependency.
     "marketing operations": 3.0,
-    "marketing automation": 3.0,   # explicitly MAP
+    "marketing automation": 3.0,  # explicitly MAP
     "marketing technology": 2.5,
     "demand generation": 2.0,
     "lifecycle marketing": 2.0,
@@ -106,6 +106,31 @@ _STACK_PLUMBING_KEYWORDS: dict[str, float] = {
     "wiza": 1.2,
 }
 
+# Keywords extracted from Firecrawl website enrichment signals
+_WEBSITE_ENRICHMENT_KEYWORDS: dict[str, float] = {
+    "reinforcement learning": 2.5,
+    "rlhf": 3.0,
+    "grpo": 3.0,
+    "reward model": 2.5,
+    "reward modeling": 2.5,
+    "policy gradient": 2.0,
+    "sim-to-real": 2.5,
+    "post-training": 2.5,
+    "fine-tuning": 1.5,
+    "inference": 1.0,
+    "gpu": 1.0,
+    "cuda": 1.0,
+    "pytorch": 0.8,
+    "tensorflow": 0.8,
+    "jax": 0.8,
+    "agent": 1.5,
+    "llm": 1.5,
+    "machine learning": 1.0,
+    "ai infrastructure": 2.0,
+    "training cluster": 2.0,
+    "training platform": 2.0,
+}
+
 _ALL_TABLES: list[dict[str, float]] = [
     _MAP_PAIN_KEYWORDS,
     _SALESFORCE_KEYWORDS,
@@ -117,7 +142,9 @@ _ALL_TABLES: list[dict[str, float]] = [
     _AI_NATIVE_MARKETING_KEYWORDS,
     _CONTENT_SEO_KEYWORDS,
     _STACK_PLUMBING_KEYWORDS,
+    _WEBSITE_ENRICHMENT_KEYWORDS,
 ]
+
 
 _MAX_SCORE = 10.0
 
@@ -145,10 +172,35 @@ def _extract_text(signal: Signal) -> str:
             parts.append(activity.get("topic", ""))
 
     # MAP frustration / blog signals store content directly on raw_data
-    for key in ("snippet", "title", "body"):
+    for key in ("snippet", "title", "body", "markdown"):
         val = signal.raw_data.get(key)
         if isinstance(val, str):
             parts.append(val)
+
+    # Firecrawl website enrichment signals store structured data in metadata
+    if signal.signal_type == "website_enrichment":
+        meta = signal.metadata
+        desc = meta.get("product_description", "")
+        if isinstance(desc, str):
+            parts.append(desc)
+        tech = meta.get("tech_stack", [])
+        if isinstance(tech, list):
+            parts.extend(str(t) for t in tech)
+        hiring = meta.get("hiring_language", [])
+        if isinstance(hiring, list):
+            parts.extend(str(h) for h in hiring)
+
+    # Firecrawl search signals store content in raw_data markdown + description
+    if signal.signal_type == "firecrawl_search":
+        desc = signal.raw_data.get("description", "")
+        if isinstance(desc, str):
+            parts.append(desc)
+
+    # G2 Firecrawl signals store frustration keywords and vendor in metadata
+    if signal.signal_type == "g2_review":
+        vendor = signal.metadata.get("product_mentioned", "")
+        if isinstance(vendor, str):
+            parts.append(vendor)
 
     return " ".join(parts).lower()
 

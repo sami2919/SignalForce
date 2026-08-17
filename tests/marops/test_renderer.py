@@ -1,4 +1,5 @@
 """Tests for renderer — renders sample JSON to HTML without API call."""
+
 import json
 import sys
 from pathlib import Path

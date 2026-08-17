@@ -13,7 +13,7 @@ Company name or domain. Optionally: known signal type (GitHub, ArXiv, hiring, fu
 
 **1. Firmographics** — web search for: headcount, funding stage, HQ, founding year, investors.
 
-**2. Technographics** — look for: tech stack, open-source repos, domain-specific keywords from `config/gtm-context.md`.
+**2. Technographics (Firecrawl)** — use `scripts/firecrawl_client.py` to scrape the company website (`/scrape` endpoint on homepage + /about, /careers, /product). Extract tech stack, product description, hiring language, and domain-specific keywords from `config/gtm-context.md`. The Firecrawl scanner (`scripts/scanners/firecrawl_scanner.py`) automates this — run `python -m scripts.scanners.firecrawl_scanner --domains company.com` for a structured `website_enrichment` signal. For G2 review intelligence, use `scripts/scanners/g2_firecrawl_scanner.py` to extract frustration signals and vendor replacement intent without session cookies.
 
 **3. Domain Maturity** — classify using evidence based on maturity stages defined in `config/gtm-context.md`:
 - PRODUCTIONIZING: domain technology in production + papers or 3+ domain engineers

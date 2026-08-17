@@ -143,6 +143,7 @@ class JobPostingScanner:
         api_key: str | None = None,
     ) -> None:
         from scripts.config import get_config
+
         resolved_key = api_key or get_config().serpapi_key
         self._client = JobPostingClient(api_key=resolved_key)
         self.JOB_TITLES = titles or []
@@ -258,12 +259,21 @@ class JobPostingScanner:
         return found
 
     _MOPS_TITLE_KEYWORDS = {
-        "marketing operations", "marketing technology", "marketing automation",
-        "demand generation", "lifecycle marketing", "revenue operations",
-        "marketing data", "marketing analytics", "martech", "mops",
+        "marketing operations",
+        "marketing technology",
+        "marketing automation",
+        "demand generation",
+        "lifecycle marketing",
+        "revenue operations",
+        "marketing data",
+        "marketing analytics",
+        "martech",
+        "mops",
     }
 
-    def _score_company(self, posting_count: int, job_titles: list[str] | None = None) -> SignalStrength:
+    def _score_company(
+        self, posting_count: int, job_titles: list[str] | None = None
+    ) -> SignalStrength:
         """Score hiring intent by posting count, floored to MODERATE for MOPs roles."""
         if posting_count >= 4:
             return SignalStrength.STRONG
@@ -390,9 +400,9 @@ def main(argv: list[str] | None = None) -> None:
         print(f"  [{strength_label:8s}] {signal.company_name} — {posting_count} posting(s)")
 
     if args.output:
-        output_data = result.model_copy(
-            update={"signals_found": filtered_signals}
-        ).model_dump(mode="json")
+        output_data = result.model_copy(update={"signals_found": filtered_signals}).model_dump(
+            mode="json"
+        )
         with open(args.output, "w") as f:
             json.dump(output_data, f, indent=2, default=str)
         print(f"\nResults written to {args.output}")

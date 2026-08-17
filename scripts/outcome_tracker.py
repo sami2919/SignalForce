@@ -7,6 +7,7 @@ connection (production file-based DB vs. in-memory test DB).
 from __future__ import annotations
 
 import logging
+import secrets
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -44,6 +45,9 @@ def log_signal(
     signal_strength: int,
     source_url: str = "",
     detected_at: Optional[datetime] = None,
+    icp_grade: Optional[str] = None,
+    composite_score: Optional[float] = None,
+    scanner_name: Optional[str] = None,
 ) -> int:
     """Record a detected signal in the feedback loop.
 
@@ -59,6 +63,9 @@ def log_signal(
             signal_strength=signal_strength,
             source_url=source_url,
             detected_at=detected_at or _utcnow(),
+            icp_grade=icp_grade,
+            composite_score=composite_score,
+            scanner_name=scanner_name,
         )
         session.add(row)
         session.flush()
@@ -73,6 +80,12 @@ def log_outreach(
     template: str = "",
     angle: str = "",
     sent_at: Optional[datetime] = None,
+    template_variant: Optional[str] = None,
+    subject_variant: Optional[str] = None,
+    cta_variant: Optional[str] = None,
+    experiment_tag: Optional[str] = None,
+    external_id: Optional[str] = None,
+    tracking_token: Optional[str] = None,
 ) -> int:
     """Record an outreach event linked to a tracked signal.
 
@@ -83,16 +96,44 @@ def log_outreach(
         raise ValueError(f"channel must be 'email' or 'linkedin', got '{channel}'")
 
     with get_session(engine) as session:
+        signal = session.query(TrackedSignal).filter(TrackedSignal.id == tracked_signal_id).first()
+        detected_to_sent_hours = None
+        actual_sent_at = sent_at or _utcnow()
+        if signal is not None and signal.detected_at is not None:
+            detected_at = signal.detected_at
+            if detected_at.tzinfo is None:
+                detected_at = detected_at.replace(tzinfo=timezone.utc)
+            sent_at_for_delta = actual_sent_at
+            if sent_at_for_delta.tzinfo is None:
+                sent_at_for_delta = sent_at_for_delta.replace(tzinfo=timezone.utc)
+            detected_to_sent_hours = round(
+                (sent_at_for_delta - detected_at).total_seconds() / 3600,
+                4,
+            )
+
         row = OutreachEvent(
             tracked_signal_id=tracked_signal_id,
             channel=channel,
             template_used=template,
             angle_used=angle,
-            sent_at=sent_at or _utcnow(),
+            sent_at=actual_sent_at,
+            template_variant=template_variant,
+            subject_variant=subject_variant,
+            cta_variant=cta_variant,
+            experiment_tag=experiment_tag,
+            external_id=external_id,
+            tracking_token=tracking_token or _new_tracking_token(channel),
+            detected_to_sent_hours=detected_to_sent_hours,
         )
         session.add(row)
         session.flush()
         return int(row.id)  # type: ignore[arg-type]
+
+
+def _new_tracking_token(channel: str) -> Optional[str]:
+    if channel != "email":
+        return None
+    return secrets.token_urlsafe(24)
 
 
 def log_outcome(
@@ -102,6 +143,7 @@ def log_outcome(
     outcome_type: str,
     notes: str = "",
     occurred_at: Optional[datetime] = None,
+    external_id: Optional[str] = None,
 ) -> int:
     """Record an outcome event linked to an outreach event.
 
@@ -119,6 +161,7 @@ def log_outcome(
             outcome_type=outcome_type,
             notes=notes,
             occurred_at=occurred_at or _utcnow(),
+            external_id=external_id,
         )
         session.add(row)
         session.flush()
@@ -223,9 +266,7 @@ def get_conversion_rates(
             return round(numerator / denominator, 4) if denominator > 0 else 0.0
 
         reply_count = outcomes.get("reply", 0) + outcomes.get("positive_reply", 0)
-        meeting_count = outcomes.get("meeting_scheduled", 0) + outcomes.get(
-            "meeting_completed", 0
-        )
+        meeting_count = outcomes.get("meeting_scheduled", 0) + outcomes.get("meeting_completed", 0)
         deal_count = outcomes.get("deal_closed", 0)
 
         rates = {

@@ -5,7 +5,9 @@ from scripts.signal_aggregator import ScoredCompany
 from scripts.intent_scorer import ScoringResult
 
 
-def _make_signal(company: str, skills: list[str], strength: SignalStrength = SignalStrength.STRONG) -> Signal:
+def _make_signal(
+    company: str, skills: list[str], strength: SignalStrength = SignalStrength.STRONG
+) -> Signal:
     return Signal(
         signal_type="job_posting",
         company_name=company,

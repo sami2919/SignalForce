@@ -15,6 +15,7 @@ from typing import Iterator, Optional
 from sqlalchemy import (
     Column,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -71,6 +72,9 @@ class TrackedSignal(Base):  # type: ignore[misc]
     signal_strength = Column(Integer, nullable=False)
     source_url = Column(Text, nullable=False, default="")
     detected_at = Column(DateTime, nullable=False, default=_utcnow)
+    icp_grade = Column(String(10), nullable=True)
+    composite_score = Column(Float, nullable=True)
+    scanner_name = Column(String(100), nullable=True)
 
 
 class OutreachEvent(Base):  # type: ignore[misc]
@@ -84,6 +88,13 @@ class OutreachEvent(Base):  # type: ignore[misc]
     template_used = Column(String(255), nullable=False, default="")
     angle_used = Column(String(255), nullable=False, default="")
     sent_at = Column(DateTime, nullable=False, default=_utcnow)
+    template_variant = Column(String(255), nullable=True)
+    subject_variant = Column(String(255), nullable=True)
+    cta_variant = Column(String(255), nullable=True)
+    experiment_tag = Column(String(255), nullable=True)
+    external_id = Column(String(255), nullable=True)
+    tracking_token = Column(String(255), nullable=True, index=True)
+    detected_to_sent_hours = Column(Float, nullable=True)
 
 
 class OutcomeEvent(Base):  # type: ignore[misc]
@@ -96,6 +107,7 @@ class OutcomeEvent(Base):  # type: ignore[misc]
     outcome_type = Column(String(50), nullable=False)
     occurred_at = Column(DateTime, nullable=False, default=_utcnow)
     notes = Column(Text, nullable=False, default="")
+    external_id = Column(String(255), nullable=True)
 
 
 # ---------------------------------------------------------------------------
@@ -104,11 +116,18 @@ class OutcomeEvent(Base):  # type: ignore[misc]
 
 _VALID_OUTCOME_TYPES = frozenset(
     {
+        "bounced",
+        "clicked",
+        "delivered",
         "reply",
+        "negative_reply",
+        "no_response",
+        "opened",
         "positive_reply",
         "meeting_scheduled",
         "meeting_completed",
         "deal_closed",
+        "unsubscribed",
     }
 )
 
@@ -158,8 +177,49 @@ def init_db(engine: Optional[Engine] = None) -> Engine:
     if engine is None:
         engine = create_db_engine()
     Base.metadata.create_all(engine)
+    _migrate_existing_schema(engine)
     logger.info("Database initialized at %s", engine.url)
     return engine
+
+
+def _migrate_existing_schema(engine: Engine) -> None:
+    """Add newly introduced nullable columns to existing SQLite databases.
+
+    SQLAlchemy's create_all() does not alter existing tables. SignalForce uses a
+    local SQLite DB by default, so lightweight additive migrations keep existing
+    installs compatible without introducing a migration framework.
+    """
+    additive_columns = {
+        "tracked_signals": {
+            "icp_grade": "VARCHAR(10)",
+            "composite_score": "FLOAT",
+            "scanner_name": "VARCHAR(100)",
+        },
+        "outreach_events": {
+            "template_variant": "VARCHAR(255)",
+            "subject_variant": "VARCHAR(255)",
+            "cta_variant": "VARCHAR(255)",
+            "experiment_tag": "VARCHAR(255)",
+            "external_id": "VARCHAR(255)",
+            "tracking_token": "VARCHAR(255)",
+            "detected_to_sent_hours": "FLOAT",
+        },
+        "outcome_events": {
+            "external_id": "VARCHAR(255)",
+        },
+    }
+
+    with engine.begin() as conn:
+        for table_name, columns in additive_columns.items():
+            existing = {
+                row[1]
+                for row in conn.exec_driver_sql(f"PRAGMA table_info({table_name})").fetchall()
+            }
+            for column_name, column_type in columns.items():
+                if column_name not in existing:
+                    conn.exec_driver_sql(
+                        f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
+                    )
 
 
 @contextmanager

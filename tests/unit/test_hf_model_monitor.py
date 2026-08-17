@@ -34,7 +34,9 @@ def make_model(
     days_ago: int = 2,
 ) -> dict:
     """Build a minimal HF model dict matching the API shape."""
-    last_modified = (datetime.now(timezone.utc) - timedelta(days=days_ago)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    last_modified = (datetime.now(timezone.utc) - timedelta(days=days_ago)).strftime(
+        "%Y-%m-%dT%H:%M:%S.%fZ"
+    )
     return {
         "modelId": f"{org}/{model_name}",
         "id": f"{org}/{model_name}",
