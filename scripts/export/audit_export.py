@@ -84,8 +84,15 @@ def export_tenant(session: Session, tenant_id: int, out_dir: Path) -> dict[str, 
     ]
     events = session.execute(
         select(SignalEvent, Account.domain, AccountSource.source_type, AccountSource.url)
-        .join(Account, SignalEvent.account_id == Account.id)
-        .outerjoin(AccountSource, SignalEvent.account_source_id == AccountSource.id)
+        .join(
+            Account,
+            (SignalEvent.account_id == Account.id) & (Account.tenant_id == tenant_id),
+        )
+        .outerjoin(
+            AccountSource,
+            (SignalEvent.account_source_id == AccountSource.id)
+            & (AccountSource.tenant_id == tenant_id),
+        )
         .where(SignalEvent.tenant_id == tenant_id)
         .order_by(SignalEvent.id)
     ).all()
@@ -104,8 +111,14 @@ def export_tenant(session: Session, tenant_id: int, out_dir: Path) -> dict[str, 
     ]
     sends = session.execute(
         select(Outreach.sent_at, Outreach.replied_at, Account.domain)
-        .join(Contact, Outreach.contact_id == Contact.id)
-        .join(Account, Contact.account_id == Account.id)
+        .join(
+            Contact,
+            (Outreach.contact_id == Contact.id) & (Contact.tenant_id == tenant_id),
+        )
+        .join(
+            Account,
+            (Contact.account_id == Account.id) & (Account.tenant_id == tenant_id),
+        )
         .where(Outreach.tenant_id == tenant_id)
         .order_by(Outreach.id)
     ).all()

@@ -106,3 +106,101 @@ def test_export_writes_audit_inputs_without_person_data(session, tmp_path):
     for name in ("accounts.csv", "signals.csv", "outcomes.csv", "engagements.csv"):
         text = (tmp_path / name).read_text()
         assert "@" not in text and "Jane" not in text and "VP Sales" not in text, name
+
+
+def test_export_excludes_cross_tenant_rows_even_without_a_composite_fk(session, tmp_path):
+    """No composite (tenant_id, id) FK ties SignalEvent.account_id to a same-tenant
+    Account, or Outreach.contact_id to a same-tenant Contact -- those are plain integer
+    FKs. This test simulates that invariant being violated (e.g. a bug elsewhere writes
+    a row whose tenant_id doesn't match the tenant of the row it points to) and asserts
+    the export still never leaks the other tenant's domain: every join must be scoped
+    to the exporting tenant, not just the top-level WHERE.
+    """
+    tenant1 = Tenant(slug="acme", name="Acme")
+    tenant2 = Tenant(slug="evil", name="Evil Corp")
+    session.add_all([tenant1, tenant2])
+    session.flush()
+
+    account1 = Account(tenant_id=tenant1.id, domain="widgets.example", name="Widgets Inc")
+    account2 = Account(tenant_id=tenant2.id, domain="evil.example", name="Evil Inc")
+    session.add_all([account1, account2])
+    session.flush()
+
+    source1 = AccountSource(
+        tenant_id=tenant1.id,
+        account_id=account1.id,
+        source_type="careers",
+        url="https://widgets.example/careers",
+    )
+    source2 = AccountSource(
+        tenant_id=tenant2.id,
+        account_id=account2.id,
+        source_type="careers",
+        url="https://evil.example/careers",
+    )
+    session.add_all([source1, source2])
+    session.flush()
+
+    # Legitimate tenant1 signal.
+    session.add(
+        SignalEvent(
+            tenant_id=tenant1.id,
+            account_id=account1.id,
+            account_source_id=source1.id,
+            signal_type="careers_page_change",
+            detected_at=T0,
+            occurred_at=T0 - timedelta(hours=20),
+        )
+    )
+    # Simulated violated invariant: tenant_id says tenant1, but account_id/
+    # account_source_id point at tenant2's rows.
+    session.add(
+        SignalEvent(
+            tenant_id=tenant1.id,
+            account_id=account2.id,
+            account_source_id=source2.id,
+            signal_type="careers_page_change",
+            detected_at=T0,
+            occurred_at=T0 - timedelta(hours=20),
+        )
+    )
+
+    contact1 = Contact(
+        tenant_id=tenant1.id, account_id=account1.id, email="jane.doe@widgets.example"
+    )
+    # tenant2's own, legitimate contact.
+    contact2 = Contact(tenant_id=tenant2.id, account_id=account2.id, email="evil@evil.example")
+    session.add_all([contact1, contact2])
+    session.flush()
+
+    # Legitimate tenant1 outreach.
+    session.add(
+        Outreach(
+            tenant_id=tenant1.id,
+            contact_id=contact1.id,
+            agentmail_inbox_id="inbox",
+            agentmail_thread_id="t1",
+            sent_at=T0,
+            replied_at=T0 + timedelta(days=2),
+        )
+    )
+    # Simulated violated invariant: tenant_id says tenant1, but contact_id points at
+    # tenant2's contact (and thus tenant2's account/domain).
+    session.add(
+        Outreach(
+            tenant_id=tenant1.id,
+            contact_id=contact2.id,
+            agentmail_inbox_id="inbox",
+            agentmail_thread_id="t2",
+            sent_at=T0,
+            replied_at=T0 + timedelta(days=2),
+        )
+    )
+    session.commit()
+
+    counts = export_tenant(session, tenant1.id, tmp_path)
+
+    assert counts == {"accounts": 1, "signals": 1, "outcomes": 1, "engagements": 1}
+    for name in ("accounts.csv", "signals.csv", "outcomes.csv", "engagements.csv"):
+        text = (tmp_path / name).read_text()
+        assert "evil.example" not in text, name
