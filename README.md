@@ -115,6 +115,24 @@ An optional LLM layer turns signals into structured account briefs (fit score, w
 
 ---
 
+## Production system: watch, verify, score
+
+Beyond the config-driven scanners, `main` includes a persistent, multi-tenant pipeline that watches accounts continuously and measures its own accuracy. It is built from small, separately documented decisions (24 ADRs in [`docs/decisions/`](docs/decisions/)), and operated per [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
+
+| Layer | What it does |
+|---|---|
+| **Storage** | Postgres with a tenant-scoped schema, SQLAlchemy and Alembic migrations |
+| **Watch** | A daily worker probes each account's registered sources (careers pages, repos) with per-host politeness, and re-fetches to confirm a change before recording it |
+| **Verify** | Extracts the underlying fact from a changed page, diffs it, and gates spend with a budget |
+| **Measure** | An hourly holdout deep scan estimates **recall** and **detection lag**; source-health metrics flag sources that go quiet or unstable |
+| **Score** | A scoring engine over verified `signal_events`, with personas and composable audiences, and a read-only dashboard |
+| **Outcome loop** | Outreach is recorded, an AgentMail webhook captures replies, and cohort-lift analysis only reports a number once the sample is large enough to mean something |
+| **Export** | A tenant's data can be written out as input for [Signal Audit](https://github.com/sami2919/signal-audit) |
+
+It deploys to Fly.io (a web app plus daily and hourly scheduled machines) against Neon Postgres. **Today it runs one tenant, the author's own outbound, and has no outside users.** The schema is multi-tenant, but the live pipeline is configured around that one ICP rather than driven by the `config/config.yaml` described above.
+
+---
+
 ## Signal scanners
 
 Six built-in scanners collect live signals:
@@ -159,6 +177,7 @@ def scan(config: ScannerConfig) -> ScanResult:
 - [`docs/user-guide.md`](docs/user-guide.md) and [`docs/setup-guide.md`](docs/setup-guide.md): setup and day-to-day use
 - [`docs/architecture.md`](docs/architecture.md): how the layers fit together
 - [`docs/n8n-setup-guide.md`](docs/n8n-setup-guide.md): autonomous operation
+- [`docs/RUNBOOK.md`](docs/RUNBOOK.md) and [`docs/decisions/`](docs/decisions/): operating the production system and why it is built this way
 - [`docs/fireworks-demo.md`](docs/fireworks-demo.md): the optional LLM brief layer, worked for one ICP
 
 ---
@@ -169,7 +188,7 @@ def scan(config: ScannerConfig) -> ScanResult:
 pytest --tb=short -q
 ```
 
-The suite has 695 tests. At the time of writing, 693 pass and 2 fail: `tests/marops/test_cli.py::test_run_happy_path` and `tests/test_fireworks_client.py::TestAppConfigIntegration::test_appconfig_fireworks_defaults_none`. Both predate the config examples and are unrelated to the engine's scanners and scoring.
+The suite has 1,197 tests and all pass on the current `main`.
 
 ---
 

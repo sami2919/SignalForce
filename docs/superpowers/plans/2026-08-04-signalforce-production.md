@@ -1251,6 +1251,8 @@ git commit -m "feat: async watch layer with per-host politeness and probe persis
 
 **Phase 1 exit criteria:** a scheduled watch pass runs on Fly, writes `probes` rows, and `changes_detected / sources_probed` sits somewhere in the 3-20% band. If it's near 100%, normalization is broken — fix that before proceeding, because the entire cost model depends on this ratio.
 
+**MEASURED 2026-08-07 — MET, on a thin sample.** 10 `scan_runs` exist since the worker went live 2026-08-04, but `last_hash` is a single persistent field per source (not day-bucketed), so any manual run in between two "daily" runs resets the comparison baseline and invalidates the interval — most of the 10 runs were manual verification traffic from later phases' work, not the actual `--schedule daily` firing. Only **one** run (`id=4`, 2026-08-05 14:30 UTC) compares against a baseline exactly 23h59m old with nothing manual in between: `changes_detected=15 / sources_probed=90 = 16.7%`, squarely inside the 3-20% band. `id=10` (2026-08-07, 3.3%) looked like a second clean sample at first — it's the sole run of its calendar day too — but its real comparison window is ~3.4 hours, not 24, because manual runs earlier on Aug 6 reset the baseline; excluded as not a same-shape sample. **n=1 clean measurement, in-band.** Thin — the honest next step is letting the schedule run undisturbed for a few more real days before treating this as a confident number, same posture as every other statistical claim in this project (see Task 5.3's `compute_lift` success-failure guard).
+
 ---
 
 # PHASE 2 — Signals (Week 3, ~10h)
