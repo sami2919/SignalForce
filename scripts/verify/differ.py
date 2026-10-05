@@ -1,0 +1,351 @@
+"""Turn two consecutive fact snapshots into the list of changes between them.
+
+ADR-0007 (docs/decisions/0007-diff-based-signal-events.md), including its
+2026-08-05 "Implementation note," is the spec. A `signal_event` row is a
+change, not a state — Sami (Rippling interview, 13:42): "design for updates
+and not rebuilds… the difference first and not snapshot first."
+
+Five decisions, each fixing a defect in the plan's original sketch:
+
+1. Fact identity is a declared stable key (`Fact.identity_fields`, already
+   implemented in extractor.py), never the whole object. Read directly from
+   the Fact instance — identity is declared once, in the extractor, not
+   re-declared here.
+2. Every field type is diffed: lists of Fact by identity, scalars by
+   inequality, nested dicts by recursion (dotted field names). An unhandled
+   type raises. A field silently skipped is a change silently missed.
+3. A degraded extraction (current snapshot's list field goes fully empty
+   while the previous snapshot's wasn't) never emits a removal flood —
+   removals for that field are suppressed and it is named in
+   `degraded_fields`. No fractional threshold: a company closing most of
+   its roles is real news, not degradation.
+4. No previous snapshot (`previous is None`) means this is the first-ever
+   observation: record it, emit nothing, `outcome=SEEDING`.
+5. One `FactChange` per change, deterministically ordered (field, kind,
+   identity), with a visible cap — `truncated` and `truncated_total` must
+   always be read together, never `truncated_total` alone.
+
+Scope: this is a pure function. It does not write `SignalEvent` rows —
+persistence is a wiring task for whenever fact-snapshot storage is decided.
+When that lands: `SignalEvent.payload` is a plain JSON column, not
+MutableDict-wrapped (Task 0.1 finding) — assign a whole new dict, never
+mutate one fetched from a row in place.
+
+Raises `ValueError` on a duplicate identity within one snapshot side (fixed
+on review, 2026-08-05 — the shipped version silently collapsed colliding
+facts via a dict comprehension, reporting a pure reorder as a false
+MODIFIED and a real removal as a no-op modification). This is a real,
+observed case: extractor.py's degraded title+location fallback identity
+collides whenever two distinct facts share both fields, and railway.app
+measured that fallback path at 16/16 facts. Whoever wires this differ to a
+per-account run loop must catch `ValueError` per account, the same
+"one bad input must not abort the whole pass" posture
+`scripts/watch/fetcher.py` and `scripts/verify/gate.py` already have at
+their own call sites — this pure function raises rather than guessing at a
+suppression policy, deliberately, so the decision is made explicitly by
+whoever adds that caller rather than silently inside a diff.
+"""
+
+from __future__ import annotations
+
+from enum import Enum
+from typing import Sequence
+
+from pydantic import BaseModel, ConfigDict
+
+from scripts.verify.extractor import Fact
+
+_SCALAR_TYPES = (str, int, float, bool, type(None))
+
+
+class ChangeKind(str, Enum):
+    ADDED = "added"
+    REMOVED = "removed"
+    MODIFIED = "modified"
+
+
+class DiffOutcome(str, Enum):
+    NORMAL = "normal"
+    SEEDING = "seeding"
+    DEGRADED = "degraded"
+
+
+class FactChange(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    field: str
+    kind: ChangeKind
+    # The fact's identity for a list-item change; (field_name,) for a scalar
+    # or nested-dict change. Always a tuple, never a bare str|None, so
+    # consumers don't special-case the two shapes.
+    identity: tuple[str, ...]
+    previous: object = None
+    current: object = None
+    # Populated only for MODIFIED — which sub-fields actually differ. This is
+    # what ADR-0007 Decision 1's "reports … modified with the changed
+    # sub-fields" concretely means.
+    changed_fields: tuple[str, ...] = ()
+
+
+class DiffResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    outcome: DiffOutcome
+    changes: tuple[FactChange, ...]
+    truncated: bool = False
+    truncated_total: int | None = None
+    # Which list-valued top-level fields triggered Decision 3's
+    # removal-suppression. A snapshot with multiple list fields (a future
+    # source type with both `jobs` and `press_releases`) must not collapse
+    # "one field went empty" into an undifferentiated top-level flag.
+    degraded_fields: tuple[str, ...] = ()
+
+
+def _fact_identity(fact: Fact) -> tuple[str, ...]:
+    return tuple(str(getattr(fact, f)) for f in fact.identity_fields)
+
+
+def _index_by_identity(field: str, side: str, facts: Sequence[Fact]) -> dict[tuple[str, ...], Fact]:
+    """Build the identity->Fact map for one side of a diff, raising loudly on
+    a collision instead of a dict comprehension silently keeping the last."""
+    index: dict[tuple[str, ...], Fact] = {}
+    for fact in facts:
+        identity = _fact_identity(fact)
+        if identity in index:
+            raise ValueError(
+                f"field {field!r}: duplicate identity {identity!r} in the {side} "
+                "snapshot — a dict keyed on identity would silently drop one of "
+                "the colliding facts (or misreport a real change/removal as a "
+                "no-op or a false modification). This is expected on the "
+                "degraded title+location fallback identity when two distinct "
+                "facts share both fields; the caller must resolve or exclude "
+                "the collision before diffing, not diff through it."
+            )
+        index[identity] = fact
+    return index
+
+
+def _diff_fact_list(
+    field: str, previous: Sequence[Fact], current: Sequence[Fact]
+) -> tuple[list[FactChange], bool]:
+    """Diff one list-of-Fact field by identity. Returns (changes, degraded).
+
+    degraded is True iff `current` is empty while `previous` was not — in
+    that case NO removals are emitted for this field (Decision 3); the
+    caller is responsible for surfacing the field name in `degraded_fields`.
+
+    Raises ValueError on a duplicate identity within one snapshot side. A
+    dict comprehension over colliding keys silently keeps the last and drops
+    the rest — extractor.py's own degraded-identity fallback (title+location)
+    collides by construction whenever two real facts share both fields
+    (measured: railway.app's degraded path was 16/16 facts, any pair of which
+    could collide). Silently losing one of them, or reporting a pure list
+    reorder as a false MODIFIED, is exactly the "signal from zero real
+    change" failure Decision 1 exists to prevent — it would just be doing it
+    one layer downstream of where extract_careers already warns about it.
+    """
+    prev_by_id = _index_by_identity(field, "previous", previous)
+    curr_by_id = _index_by_identity(field, "current", current)
+
+    degraded = bool(previous) and not current
+    changes: list[FactChange] = []
+
+    for identity, curr_fact in curr_by_id.items():
+        prev_fact = prev_by_id.get(identity)
+        if prev_fact is None:
+            changes.append(
+                FactChange(
+                    field=field,
+                    kind=ChangeKind.ADDED,
+                    identity=identity,
+                    previous=None,
+                    current=curr_fact.model_dump(mode="json"),
+                )
+            )
+            continue
+
+        prev_dump = prev_fact.model_dump(mode="json")
+        curr_dump = curr_fact.model_dump(mode="json")
+        changed_fields = tuple(sorted(k for k in curr_dump if curr_dump[k] != prev_dump.get(k)))
+        if changed_fields:
+            changes.append(
+                FactChange(
+                    field=field,
+                    kind=ChangeKind.MODIFIED,
+                    identity=identity,
+                    previous=prev_dump,
+                    current=curr_dump,
+                    changed_fields=changed_fields,
+                )
+            )
+
+    if not degraded:
+        for identity, prev_fact in prev_by_id.items():
+            if identity not in curr_by_id:
+                changes.append(
+                    FactChange(
+                        field=field,
+                        kind=ChangeKind.REMOVED,
+                        identity=identity,
+                        previous=prev_fact.model_dump(mode="json"),
+                        current=None,
+                    )
+                )
+
+    return changes, degraded
+
+
+def _diff_scalar(field: str, previous: object, current: object) -> list[FactChange]:
+    if previous == current:
+        return []
+    return [
+        FactChange(
+            field=field,
+            kind=ChangeKind.MODIFIED,
+            identity=(field,),
+            previous=previous,
+            current=current,
+        )
+    ]
+
+
+def _coerce_fact_sequence(field: str, side: str, value: object) -> list[Fact]:
+    """Validate and normalize one side of a fact-list field before diffing.
+
+    `None` on either side means "no snapshot of this list yet" and is treated
+    as empty — this is what lets a list field go missing-then-populated
+    (first observation) or populated-then-None (fixed on review, 2026-08-05:
+    the shipped version let `current=None` reach `_diff_fact_list`'s internal
+    iteration and crash with a bare, field-less "NoneType is not iterable"
+    instead of being classified as degraded like an empty list already is).
+
+    Anything that is not None, not a Sequence, or a Sequence containing a
+    non-Fact item is a genuine type mismatch and raises here — with the
+    field name attached — rather than reaching `_diff_fact_list`'s dict
+    comprehension and raising an uninformative bare TypeError from inside
+    the iteration.
+    """
+    if value is None:
+        return []
+    if isinstance(value, Fact):
+        # A bare Fact where a list was expected is not itself a list — treat
+        # as a type mismatch rather than silently wrapping it.
+        pass
+    elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        if all(isinstance(item, Fact) for item in value):
+            return list(value)
+    raise TypeError(
+        f"field {field!r} ({side}): expected a sequence of Fact or None, got "
+        f"{type(value).__name__}. Snapshots may only contain Sequence[Fact], "
+        "scalars, or nested dicts."
+    )
+
+
+def _diff_value(
+    field: str, previous: object, current: object
+) -> tuple[list[FactChange], list[str]]:
+    """Dispatch one field by type. Returns (changes, degraded_field_names).
+
+    Raises TypeError for any value that is neither a Sequence of Fact, a
+    scalar, nor a dict (Decision 2: unhandled types raise, they don't skip).
+    """
+    if isinstance(current, dict) and (previous is None or isinstance(previous, dict)):
+        # previous=None means this dict field is new in `current` — fixed on
+        # review, 2026-08-05: the shipped version required BOTH sides to
+        # already be dicts, so a nested dict field appearing for the first
+        # time raised TypeError instead of being handled like a new scalar
+        # or a new fact-list field already are.
+        prev_dict = previous if previous is not None else {}
+        changes: list[FactChange] = []
+        degraded: list[str] = []
+        all_keys = set(prev_dict) | set(current)
+        for key in all_keys:
+            if key not in current:
+                raise KeyError(
+                    f"field {field}.{key} present in previous snapshot but missing "
+                    "from current — a real extractor should not drop a field between "
+                    "calls; treating this as 'went empty' would be indistinguishable "
+                    "from a genuine content change"
+                )
+            sub_changes, sub_degraded = _diff_value(
+                f"{field}.{key}", prev_dict.get(key), current[key]
+            )
+            changes.extend(sub_changes)
+            degraded.extend(sub_degraded)
+        return changes, degraded
+
+    if _is_fact_sequence(current) or _is_fact_sequence(previous):
+        prev_seq = _coerce_fact_sequence(field, "previous", previous)
+        curr_seq = _coerce_fact_sequence(field, "current", current)
+        changes, is_degraded = _diff_fact_list(field, prev_seq, curr_seq)
+        return changes, [field] if is_degraded else []
+
+    if isinstance(current, _SCALAR_TYPES) and isinstance(previous, _SCALAR_TYPES):
+        return _diff_scalar(field, previous, current), []
+
+    raise TypeError(
+        f"field {field!r} has an unhandled value type for diffing: "
+        f"previous={type(previous).__name__}, current={type(current).__name__}. "
+        "Snapshots may only contain Sequence[Fact], scalars, or nested dicts."
+    )
+
+
+def _is_fact_sequence(value: object) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, (str, bytes, dict)):
+        return False
+    if not isinstance(value, Sequence):
+        return False
+    return all(isinstance(item, Fact) for item in value) if value else True
+
+
+def diff_facts(
+    previous: dict[str, object] | None,
+    current: dict[str, object],
+    *,
+    # 200 is a number to measure against, not trust blindly (Task 2.2's
+    # lesson: a cap whose warning threshold doesn't match the actual cut
+    # point hides a real sampling gap for as long as nobody checks).
+    max_changes: int = 200,
+) -> DiffResult:
+    """Diff two fact snapshots. See module docstring for the five decisions
+    this implements. `previous=None` means "no snapshot exists yet" and
+    always seeds silently (Decision 4), regardless of what `current` holds.
+    """
+    if max_changes < 0:
+        # Fixed on review, 2026-08-05: list[:negative_N] means "all but the
+        # last N", not "select nothing" — the exact defect commit 4f9ce50
+        # fixed one commit earlier in scripts/verify/gate.py for max_calls.
+        # A negative cap here would silently look self-reporting (truncated
+        # is still set correctly) while returning near-maximum output.
+        raise ValueError(f"max_changes must be >= 0, got {max_changes}")
+
+    if previous is None:
+        return DiffResult(outcome=DiffOutcome.SEEDING, changes=())
+
+    all_changes: list[FactChange] = []
+    degraded_fields: list[str] = []
+    for key in set(previous) | set(current):
+        if key not in current:
+            raise KeyError(
+                f"field {key!r} present in previous snapshot but missing from "
+                "current — a real extractor should not drop a field between calls"
+            )
+        sub_changes, sub_degraded = _diff_value(key, previous.get(key), current[key])
+        all_changes.extend(sub_changes)
+        degraded_fields.extend(sub_degraded)
+
+    all_changes.sort(key=lambda c: (c.field, c.kind.value, c.identity))
+
+    truncated_total = len(all_changes)
+    truncated = truncated_total > max_changes
+    kept = tuple(all_changes[:max_changes])
+
+    return DiffResult(
+        outcome=DiffOutcome.DEGRADED if degraded_fields else DiffOutcome.NORMAL,
+        changes=kept,
+        truncated=truncated,
+        truncated_total=truncated_total if truncated else None,
+        degraded_fields=tuple(sorted(degraded_fields)),
+    )

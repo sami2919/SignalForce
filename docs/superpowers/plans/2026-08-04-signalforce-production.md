@@ -733,6 +733,18 @@ git commit -m "chore: docker, fly deploy, and CI"
 
 ### Task 1.1: Source resolution
 
+> **ADR-0004 amendment (2026-08-04): EXECUTE TASK 1.2 FIRST.** Soft-404 detection
+> (ADR-0004 Decision 3) compares a candidate page's normalized content hash against
+> the homepage's, which requires `normalize_html` / `content_hash` from Task 1.2.
+> Task 1.2 has no dependencies. Order is 1.2 → 1.1 → 1.3; the numbering is kept as-is
+> so existing references stay valid.
+>
+> ADR-0004 also adds to this task, beyond what is written below: robots.txt compliance,
+> storing the post-redirect final URL, a `resolution_method` of `blocked_by_robots`,
+> re-runnable resolution (closes failure-mode gap #4), and **reporting resolution
+> recall per source type** — the number that decides whether to climb the fallback
+> ladder to sitemap parsing or LLM extraction.
+
 **Files:**
 - Create: `scripts/registry/resolver.py`, `scripts/registry/models.py`
 - Test: `tests/registry/test_resolver.py`
@@ -950,6 +962,30 @@ git commit -m "feat: stable HTML normalization for content hashing"
 ```
 
 ### Task 1.3: Async watch layer
+
+> **MEASURED FINDING (2026-08-04) — add confirm-on-change.** Fetching
+> `boards.greenhouse.io/anthropic` six times produced **two distinct content hashes**.
+> The delta is 5 characters: Greenhouse intermittently renders the unresolved i18n
+> template key `tags.new` instead of the string `New`. It is a rendering race in
+> their app, pure noise, and it fires on ~17% of fetches — which would consume the
+> entire 3-20% change-rate budget by itself.
+>
+> **Mitigation: confirm-on-change.** When a hash differs from `last_hash`, re-fetch
+> that source once immediately and require both fetches to agree before recording a
+> change. Costs one extra cheap GET on only the ~5-17% of sources that changed, and
+> adds no detection lag.
+>
+> Rejected alternative: requiring a change to persist across two consecutive daily
+> runs. Same false-positive reduction (0.17² ≈ 3%), but it adds ~24h to detection
+> lag — the exact metric Phase 3 exists to minimise. Confirming within one run is
+> strictly better.
+>
+> Rejected alternative: stripping `tags.*` placeholders. Fixes this instance and
+> nothing else; every ATS will have its own flake. Confirm-on-change is source-agnostic.
+>
+> **Also add:** count confirm-on-change rejections on the `scan_runs` row. A rising
+> rejection rate is an early signal that a source has become unstable, and it is the
+> number that tells you whether normalization needs to get more aggressive.
 
 **Files:**
 - Create: `scripts/watch/fetcher.py`, `scripts/watch/runner.py`
@@ -2540,7 +2576,8 @@ Bank these only once the number exists in the database. Every one is "ran," not 
 | "How do you know you caught a change fast enough?" | 40-account holdout deep-scanned weekly. Recall N%, p50 lag N hours, p95 N hours. |
 | "How do you know a scanner isn't broken?" | Zero-result rate per source vs trailing-14d mean. Alert at 3σ. It caught [real incident]. |
 | "What does it cost?" | $N/month. Two-tier design; verify runs on N% of probes. |
-| "How do you know the signal works?" | Cohort: signal-present replied at N% vs N% baseline, n=N, p=N. |
+| "How do you know the signal works?" | Cohort: signal-present replied at N% vs N% baseline, n=N, p=N — **not yet populated.** `compute_lift` (Task 5.3, ADR-0021) is built, tested, and mutation-hardened, with a stronger validity guard than a bare n≥30 (success-failure condition, n·p̂≥5 per arm) — but production has only 1 recorded `Outreach` row so far (the round-trip test below), nowhere near the volume the guard requires to emit a real number. Honest answer today: "the statistical layer is built and gated correctly; it has nothing to say yet because there isn't enough real outreach volume — here's the guard logic that keeps it from reporting a number before it's valid." |
+| "How do you know outreach and replies are actually captured?" | Ran the full loop for real, no mocks, 2026-08-07: sent a real message via `AgentMailClient.send()` to a real inbox, replied from that inbox, AgentMail delivered a `message.received` webhook, `/webhooks/agentmail` verified the real Svix signature, matched it to `Outreach.id=1` by `thread_id`, and wrote `replied_at` to production Postgres — confirmed via a read-only query (`NULL` → `2026-08-07 05:52:44 UTC`) — in about 12 minutes end to end. |
 | "Would this scale to 2M accounts?" | Watch layer is the bottleneck — 2M×4 sources at 100 concurrent is N hours. Fixes in order: raise concurrency, shard by `hash(account_id)`, tier cadence by score. Sharding math says not until ~500M. |
 | "What broke?" | [Whatever actually broke.] Keep an incident log from day one. |
 

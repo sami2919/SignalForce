@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}{{ account.name or account.domain }} — SignalForce{% endblock %}
+{% block nav_accounts %}active{% endblock %}
+{% block content %}
+<p><a class="row-link muted" href="/dashboard">&larr; Accounts</a></p>
+<h1>{{ account.name or account.domain }}</h1>
+
+<section>
+  <div class="metric">
+    <span class="value">{{ "%.1f"|format(score.score) if score else "—" }}</span>
+    <span class="label">Current score</span>
+  </div>
+  {% if score %}
+    <p class="muted">Computed {{ score.computed_at.strftime("%Y-%m-%d %H:%M") }}</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Zero-out analysis</h2>
+  {% if not zero_out_rows %}
+    <p class="empty">No signals in the trailing 90 days.</p>
+  {% else %}
+  <table>
+    <thead>
+      <tr><th>Signal type</th><th>Full score</th><th>Without this type</th><th>Contribution</th></tr>
+    </thead>
+    <tbody>
+      {% for row in zero_out_rows %}
+      <tr>
+        <td>{{ row.signal_type }}</td>
+        <td>{{ "%.1f"|format(row.full_score) }}</td>
+        <td>{{ "%.1f"|format(row.without_score) }}</td>
+        <td>{{ "%.1f"|format(row.full_score - row.without_score) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Signal timeline</h2>
+  {% if not signal_events %}
+    <p class="empty">No signals recorded yet.</p>
+  {% else %}
+  <table>
+    <thead><tr><th>Detected</th><th>Type</th><th>Detail</th></tr></thead>
+    <tbody>
+      {% for event in signal_events %}
+      <tr>
+        <td class="muted">{{ event.detected_at.strftime("%Y-%m-%d %H:%M") }}</td>
+        <td>{{ event.signal_type }}</td>
+        <td class="muted">{{ event.payload.get("kind", "") }} {{ event.payload.get("field", "") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Source registry</h2>
+  <table>
+    <thead><tr><th>Source type</th><th>URL</th><th>Active</th><th>Last fetched</th></tr></thead>
+    <tbody>
+      {% for source in sources %}
+      <tr>
+        <td>{{ source.source_type }}</td>
+        <td class="muted">{{ source.url }}</td>
+        <td>{{ "yes" if source.active else "no" }}</td>
+        <td class="muted">{{ source.last_fetched_at.strftime("%Y-%m-%d %H:%M") if source.last_fetched_at else "never" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

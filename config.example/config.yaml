@@ -250,6 +250,43 @@ scanners:
     lookback_days: 30
     custom_params:
       use_extraction: true
+  # Agent+email repo scanner (scripts/scanners/agent_email_scanner.py).
+  # See docs/decisions/0006-agent-email-repo-scanner.md — the signal is an
+  # Organization-owned repo whose manifest declares BOTH an agent framework
+  # AND an email library, new to us. Not part of the default GTM examples
+  # above; this block is specific to AgentMail-shaped ICPs. Requires a
+  # `--sqlite-path` (or a wired-up ledger session) to run — it does not
+  # participate in scanner_runner's config-only dispatch because the recency
+  # filter IS the repo_observations ledger (Decision 5).
+  agent_email:
+    enabled: false
+    module: "scripts.scanners.agent_email_scanner"
+    custom_params:
+      python_frameworks:
+        - "openai-agents"
+        - "langgraph"
+        - "crewai"
+        - "agno"
+        - "autogen"
+        - "pydantic-ai"
+      python_email_libs:
+        - "resend"
+        - "sendgrid"
+        - "postmark"
+        - "mailgun"
+      python_manifests:
+        - "requirements.txt"
+        - "pyproject.toml"
+      js_frameworks:
+        - "mastra"
+        - "@openai/agents"
+        - "@langchain/langgraph"
+      js_email_libs:
+        - "resend"
+        - "nodemailer"
+        - "@sendgrid/mail"
+        - "postmark"
+      js_manifest: "package.json"
 
 scoring:
   intent_weights:

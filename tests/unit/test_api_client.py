@@ -130,6 +130,56 @@ def test_403_rate_limit_triggers_retry():
     assert mock_req.call_count == 2
 
 
+def test_403_rate_limit_reset_is_epoch_not_duration():
+    """X-RateLimit-Reset is an absolute Unix epoch timestamp (GitHub's docs),
+    not a countdown in seconds. Found live during Task 2.2 real-data
+    verification: sleeping for the raw header value slept for decades.
+    """
+    client = BaseAPIClient(base_url="https://api.example.com")
+    fixed_now = 1_700_000_000
+    reset_at = fixed_now + 42  # 42 seconds in the future
+
+    resp_403 = make_response(
+        403,
+        headers={
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": str(reset_at),
+        },
+    )
+    resp_200 = make_response(200, {"ok": True})
+
+    with patch("requests.Session.request", side_effect=[resp_403, resp_200]):
+        with patch("time.time", return_value=fixed_now):
+            with patch("time.sleep") as mock_sleep:
+                result = client.get("/v1/resource")
+
+    assert result == {"ok": True}
+    mock_sleep.assert_called_once_with(42)
+
+
+def test_403_rate_limit_reset_in_the_past_sleeps_minimum_one_second():
+    """A reset timestamp that has already passed must not produce a negative sleep."""
+    client = BaseAPIClient(base_url="https://api.example.com")
+    fixed_now = 1_700_000_000
+    reset_at = fixed_now - 10  # already in the past
+
+    resp_403 = make_response(
+        403,
+        headers={
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": str(reset_at),
+        },
+    )
+    resp_200 = make_response(200, {"ok": True})
+
+    with patch("requests.Session.request", side_effect=[resp_403, resp_200]):
+        with patch("time.time", return_value=fixed_now):
+            with patch("time.sleep") as mock_sleep:
+                client.get("/v1/resource")
+
+    mock_sleep.assert_called_once_with(1)
+
+
 # ---------------------------------------------------------------------------
 # Server error retry / backoff tests
 # ---------------------------------------------------------------------------

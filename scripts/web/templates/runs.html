@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Runs — SignalForce{% endblock %}
+{% block nav_runs %}active{% endblock %}
+{% block content %}
+<h1>Scan Run History</h1>
+{% if not rows %}
+  <p class="empty">No runs yet.</p>
+{% else %}
+<table>
+  <thead>
+    <tr>
+      <th>Started</th><th>Status</th><th>Duration</th><th>Sources probed</th>
+      <th>Change rate</th><th>Verify calls</th><th>Signals emitted</th><th>Cost</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td class="muted">{{ row.run.started_at.strftime("%Y-%m-%d %H:%M") if row.run.started_at else "—" }}</td>
+      <td class="{{ 'badge-ok' if row.run.status == 'completed' else 'badge-warn' }}">{{ row.run.status }}</td>
+      <td>{{ "%.1fs"|format(row.duration_s) if row.duration_s is not none else "—" }}</td>
+      <td>{{ row.run.sources_probed }}</td>
+      <td>{{ "%.0f%%"|format(row.change_rate * 100) if row.change_rate is not none else "—" }}</td>
+      <td>{{ row.run.verify_calls }}</td>
+      <td>{{ row.run.signals_emitted }}</td>
+      <td>${{ "%.3f"|format(row.run.cost_usd) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

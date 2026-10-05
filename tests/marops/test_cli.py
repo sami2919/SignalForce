@@ -162,7 +162,7 @@ def test_run_happy_path(tmp_path):
     ):
         result = cli.run("veriforce")
 
-    assert result == tmp_path / "meridian.html"
+    assert result == tmp_path / "veriforce.html"
     mock_render.assert_called_once()
-    json_out = tmp_path / "meridian.json"
+    json_out = tmp_path / "veriforce.json"
     assert json_out.exists()

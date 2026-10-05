@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Accounts — SignalForce{% endblock %}
+{% block nav_accounts %}active{% endblock %}
+{% block content %}
+<h1>Accounts</h1>
+{% if not tenant_configured %}
+  <p class="empty">TENANT_SLUG is not set — no tenant to show.</p>
+{% elif not rows %}
+  <p class="empty">No accounts yet.</p>
+{% else %}
+<table>
+  <thead>
+    <tr>
+      <th>Account</th>
+      <th>Score</th>
+      <th>Recent signals</th>
+      <th>Last changed</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td><a class="row-link" href="/dashboard/account/{{ row.account.id }}">{{ row.account.name or row.account.domain }}</a></td>
+      <td>{{ "%.1f"|format(row.score) if row.score is not none else "—" }}</td>
+      <td>
+        {% for signal_type in row.signal_types %}<span class="chip">{{ signal_type }}</span>{% endfor %}
+        {% if not row.signal_types %}<span class="muted">none</span>{% endif %}
+      </td>
+      <td class="muted">{{ row.last_changed_at.strftime("%Y-%m-%d %H:%M") if row.last_changed_at else "never" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,102 @@
+# Fly configuration. Deployed by a human via `fly deploy` — CI does not deploy.
+# See docs/decisions/0003-deployment-and-scheduling.md.
+
+app = "signalforce"
+primary_region = "sjc"          # co-located with Neon's AWS us-west-2 (Oregon)
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # Non-secret configuration only. Anything that would be bad in a screenshot
+  # belongs in `fly secrets set`.
+  LOG_LEVEL = "INFO"
+  TENANT_SLUG = "agentmail"
+  PYTHONUNBUFFERED = "1"
+
+[deploy]
+  # Runs once in a temporary machine BEFORE new machines take traffic. A failed
+  # migration aborts the deploy and the previous version keeps serving, instead
+  # of every booting machine racing on the same schema.
+  release_command = "alembic upgrade head"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "suspend"   # snapshots memory; restore is ~1-3s
+  auto_start_machines = true
+  min_machines_running = 0         # dashboard is read-only and rarely hit
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/healthz"              # liveness ONLY — never /readyz, see ADR-0002
+
+# NOTE: `fly deploy` creates 2 machines by default for HA regardless of
+# min_machines_running. Use `fly deploy --ha=false` to keep it at 1, or
+# `fly scale count 1` after the fact. For a single-user read-only dashboard
+# HA buys nothing and doubles rootfs storage cost.
+#
+# Scheduled workers are NOT defined here — they're created as standalone
+# machines (starts, runs, exits — you pay only for runtime), not part of
+# `fly deploy`'s process group. `fly deploy` does NOT update them; after any
+# deploy that changes worker or holdout code, re-point each at the new image
+# with `fly machine update <id> --image registry.fly.io/signalforce:<tag>`.
+#
+# signalforce-worker (daily, Phase 1 — deployed 2026-08-04):
+#
+#   fly machine run registry.fly.io/signalforce:<deployment-tag> \
+#     --app signalforce --name signalforce-worker --region sjc \
+#     --schedule daily --vm-memory 1024 --vm-cpus 1 --restart no \
+#     -e TENANT_SLUG=agentmail -e LOG_LEVEL=INFO -e PYTHONUNBUFFERED=1 \
+#     --entrypoint "/bin/sh -c" "python -m scripts.watch.runner scan"
+#
+#   As of ADR-0013 (2026-08-06), this same entrypoint also runs Phase 3's
+#   health rollup + anomaly check, recall report, and retention pruning
+#   after the watch pass — see scripts/measure/daily_postprocess.py.
+#
+# signalforce-holdout (hourly, ADR-0010 Task 3.1 — deployed 2026-08-06):
+#
+#   fly machine run registry.fly.io/signalforce:<deployment-tag> \
+#     --app signalforce --name signalforce-holdout --region sjc \
+#     --schedule hourly --vm-memory 1024 --vm-cpus 1 --restart no \
+#     -e TENANT_SLUG=agentmail -e LOG_LEVEL=INFO -e PYTHONUNBUFFERED=1 \
+#     --entrypoint "/bin/sh -c" "python -m scripts.measure.holdout"
+#
+#   Runs hourly, not daily, because ADR-0010 Decision 1's whole point is a
+#   faster-than-watch cadence — a same-cadence deep scan can only measure
+#   detection lag in multiples of 24h, defeating its purpose.
+#
+# TWO THINGS THAT BIT ON THE FIRST ATTEMPT (2026-08-04):
+#
+#   1. The [env] block above does NOT propagate to machines created by
+#      `fly machine run`. It applies only to machines created by `fly deploy`.
+#      SECRETS (fly secrets set) DO propagate app-wide. The worker exited 1 with
+#      "TENANT_SLUG is not set" until the -e flags were passed explicitly.
+#
+#   2. The default --restart policy is `on-failure`, which turns a failing
+#      scheduled job into a crash loop — it restarted every ~10s. For a scheduled
+#      machine the SCHEDULE is the retry mechanism, so --restart no is correct:
+#      a failed run should wait for tomorrow, not hammer.
+#
+#   --vm-memory 1024 is required, not optional: 100 concurrency x the 8MB body
+#   cap is 800MB worst case. Fly's 256MB default would OOM mid-pass.
+#
+# A THIRD THING BIT ON 2026-08-06, adding ANTHROPIC_API_KEY for ADR-0014's verify-layer
+# wiring: `fly secrets set`/`import` DOES update the app-wide secret store immediately
+# and auto-restarts machines in the `app` process group (the web machine) to pick it
+# up -- but it does NOT touch standalone scheduled machines (signalforce-worker,
+# signalforce-holdout). A plain `fly machine start` on one of those after a secrets
+# change is NOT enough; it resumes from that machine's last-updated config snapshot,
+# which does not include the new secret. The fix is an explicit
+# `fly machine update <id> --image <current-image> --yes` (even with the same image)
+# on EVERY standalone scheduled machine after ANY secrets change -- confirmed by
+# reproducing the failure twice (ANTHROPIC_API_KEY missing at runtime, both after
+# `fly secrets import` alone and after a plain machine restart) before the explicit
+# `fly machine update` fixed it.
+#
+# It must NOT be an in-process scheduler on the web machine: with
+# min_machines_running = 0 the web machine suspends and an in-process scheduler
+# would silently stop firing. See ADR-0003 Decision 2.

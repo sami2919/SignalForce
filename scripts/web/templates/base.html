@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}SignalForce{% endblock %}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; background: #0e1117; color: #e6e6e6; }
+    nav { display: flex; gap: 1.5rem; padding: 1rem 2rem; background: #161b22; border-bottom: 1px solid #30363d; }
+    nav a { color: #8b949e; text-decoration: none; font-size: 0.9rem; }
+    nav a.active, nav a:hover { color: #58a6ff; }
+    main { padding: 2rem; max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 1.4rem; margin-bottom: 1rem; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; }
+    th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #30363d; font-size: 0.88rem; }
+    th { color: #8b949e; font-weight: 600; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.03em; }
+    tr:hover td { background: #161b22; }
+    a.row-link { color: #e6e6e6; text-decoration: none; }
+    a.row-link:hover { color: #58a6ff; }
+    .chip { display: inline-block; background: #1f2a3a; color: #79c0ff; border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.72rem; margin-right: 0.25rem; }
+    .empty { color: #8b949e; font-style: italic; padding: 1rem 0; }
+    .metric { display: inline-block; margin-right: 2rem; margin-bottom: 1rem; }
+    .metric .value { font-size: 1.6rem; font-weight: 600; display: block; }
+    .metric .label { font-size: 0.75rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.03em; }
+    .muted { color: #8b949e; }
+    section { margin-bottom: 2rem; }
+    .badge-ok { color: #3fb950; }
+    .badge-warn { color: #d29922; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/dashboard" class="{% block nav_accounts %}{% endblock %}">Accounts</a>
+    <a href="/dashboard/health" class="{% block nav_health %}{% endblock %}">Health</a>
+    <a href="/dashboard/runs" class="{% block nav_runs %}{% endblock %}">Runs</a>
+  </nav>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

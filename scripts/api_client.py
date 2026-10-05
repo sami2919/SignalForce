@@ -179,8 +179,13 @@ class BaseAPIClient:
             # --- Rate limit: 403 with exhausted quota ---
             if status == 403 and response.headers.get("X-RateLimit-Remaining") == "0":
                 reset_raw = response.headers.get("X-RateLimit-Reset", "1")
+                # X-RateLimit-Reset is an absolute Unix epoch timestamp (per GitHub's
+                # docs), not a countdown. Sleeping for the raw value slept for
+                # decades in practice — found live during Task 2.2 real-data
+                # verification (docs/decisions/0006-agent-email-repo-scanner.md).
                 try:
-                    sleep_for = max(0, min(int(reset_raw), _MAX_RETRY_SLEEP))
+                    reset_epoch = int(reset_raw)
+                    sleep_for = max(1, min(reset_epoch - int(time.time()), _MAX_RETRY_SLEEP))
                 except (ValueError, TypeError):
                     sleep_for = 1
                 logger.warning("403 quota exhausted on %s — sleeping %ds", safe_url, sleep_for)
