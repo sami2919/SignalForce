@@ -1,0 +1,185 @@
+# SignalForce configuration — inference infrastructure ICP
+# An open-source LLM inference / serving vendor (vLLM ecosystem). Illustrative: swap in your own.
+# Copy this directory to config/ to activate: cp -r examples/inference-infra/ config/
+
+company:
+  name: "Inference Platform (example)"
+  product: "Managed, open-source-based LLM inference and serving"
+  category: "AI inference infrastructure"
+  website: "https://example.com"
+
+icp:
+  tiers:
+    - name: "AI-Native Product Companies at Scale"
+      description: "Companies whose product is an LLM feature (coding assistants, voice agents, search, support) and whose GPU bill or latency is now a board-level concern"
+      signals:
+        - "LLM serving"
+        - "inference latency"
+        - "GPU cost"
+        - "self-hosted models"
+        - "vLLM"
+
+    - name: "Enterprises Moving Models In-House"
+      description: "Large organisations standing up internal LLM platforms for data-residency, cost or customisation reasons"
+      signals:
+        - "internal LLM platform"
+        - "private LLM deployment"
+        - "model serving"
+        - "open-weight models"
+
+    - name: "Model Builders and Fine-Tuners"
+      description: "Labs and startups that train or fine-tune open models and need to serve them efficiently"
+      signals:
+        - "fine-tuned model"
+        - "quantization"
+        - "speculative decoding"
+        - "multi-LoRA serving"
+
+    - name: "GPU Cloud and Platform Teams"
+      description: "Infra teams running shared GPU clusters who need higher utilisation and an inference layer on top"
+      signals:
+        - "GPU cluster"
+        - "Kubernetes GPU scheduling"
+        - "inference autoscaling"
+        - "KV cache"
+
+  maturity_stages:
+    - EXPLORING
+    - PROTOTYPING
+    - SCALING
+    - COST_OPTIMISING
+
+  target_titles:
+    - "Head of AI Infrastructure"
+    - "Head of ML Platform"
+    - "VP Engineering"
+    - "CTO"
+    - "Staff ML Engineer"
+    - "Inference Engineer"
+    - "ML Platform Lead"
+    - "Director of AI"
+
+  disqualifiers:
+    - "Only calls a hosted model API and shows no sign of running models themselves"
+    - "Already committed to a single-vendor managed inference contract"
+    - "Pre-product with no production traffic"
+
+scanners:
+  github:
+    enabled: true
+    module: "scripts.scanners.github_scanner"
+    lookback_days: 7
+    topics:
+      - "llm-inference"
+      - "llm-serving"
+      - "model-serving"
+      - "vllm"
+      - "speculative-decoding"
+      - "quantization"
+      - "kv-cache"
+    libraries:
+      - "vllm"
+      - "sglang"
+      - "tensorrt-llm"
+      - "triton-inference-server"
+      - "llama-cpp-python"
+      - "ray[serve]"
+    keywords: []
+
+  arxiv:
+    enabled: true
+    module: "scripts.scanners.arxiv_scanner"
+    lookback_days: 7
+    queries:
+      - "LLM inference serving"
+      - "speculative decoding"
+      - "KV cache compression"
+      - "PagedAttention"
+      - "continuous batching"
+      - "LLM quantization serving"
+
+  huggingface:
+    enabled: true
+    module: "scripts.scanners.hf_scanner"
+    lookback_days: 7
+    training_tags:
+      - "awq"
+      - "gptq"
+      - "gguf"
+      - "fp8"
+      - "text-generation-inference"
+    card_keywords:
+      - "vLLM"
+      - "inference"
+      - "quantized"
+      - "serving"
+
+  jobs:
+    enabled: true
+    module: "scripts.scanners.job_scanner"
+    lookback_days: 7
+    titles:
+      - "inference engineer"
+      - "ML infrastructure engineer"
+      - "LLM serving engineer"
+      - "GPU infrastructure engineer"
+      - "model optimization engineer"
+      - "ML platform engineer"
+    skills:
+      - "vllm"
+      - "cuda"
+      - "triton"
+      - "tensorrt"
+      - "kubernetes"
+      - "quantization"
+      - "model serving"
+
+  funding:
+    enabled: true
+    module: "scripts.scanners.funding_scanner"
+    lookback_days: 21
+    keywords:
+      - "AI infrastructure"
+      - "LLM"
+      - "AI agents"
+      - "generative AI"
+      - "AI-native"
+
+  linkedin:
+    enabled: true
+    module: "scripts.scanners.linkedin_scanner"
+    lookback_days: 2
+    keywords:
+      - "inference latency"
+      - "LLM serving"
+      - "GPU cost"
+      - "vllm"
+      - "model deployment"
+      - "ml infrastructure"
+
+scoring:
+  # Hiring for inference roles and shipping on serving libraries are the strongest
+  # buying signals for this ICP, so they carry more weight than funding news.
+  intent_weights:
+    github_repo: 3.0
+    arxiv_paper: 2.0
+    huggingface_model: 2.0
+    job_posting: 3.0
+    funding_event: 1.5
+    linkedin_activity: 2.5
+
+  half_lives_days:
+    github_repo: 7.0
+    arxiv_paper: 10.0
+    huggingface_model: 7.0
+    job_posting: 14.0
+    funding_event: 21.0
+    linkedin_activity: 2.0
+
+  icp_weight: 0.4
+  intent_weight: 0.6
+
+  grade_thresholds:
+    A: 8.0
+    B: 5.0
+    C: 2.0
