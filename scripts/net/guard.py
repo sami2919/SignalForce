@@ -148,6 +148,10 @@ class _BoundedInflater:
 
 async def _decoded_chunks(streamed: httpx.Response, max_bytes: int) -> AsyncIterator[bytes]:
     encoding = streamed.headers.get("content-encoding", "").strip().lower()
+    if "," in encoding:
+        # Stacked encodings (e.g. "gzip, gzip") multiply the inflation ratio and
+        # httpx would decode each chunk whole. No real page needs them.
+        raise httpx.DecodingError(f"stacked content-encoding refused: {encoding}")
     # A body already in memory (a pre-read response) has nothing left to bound.
     if encoding in ("gzip", "x-gzip", "deflate") and not streamed.is_stream_consumed:
         inflater = _BoundedInflater("deflate" if encoding == "deflate" else "gzip")

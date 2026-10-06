@@ -195,3 +195,19 @@ async def test_a_pre_read_compressed_response_is_still_returned_decoded():
     async with _client(handler) as client:
         resp = await get_capped(client, "https://site.example/", max_bytes=CAP)
     assert resp.content == page
+
+
+@pytest.mark.asyncio
+async def test_stacked_content_encodings_are_refused_not_inflated():
+    # gzip-inside-gzip multiplies the ratio; httpx would inflate a whole chunk
+    # at once, so the helper refuses stacked encodings as a decoding error.
+    inner = gzip.compress(b"\0" * (10 * 1024 * 1024))
+
+    def handler(request):
+        return httpx.Response(
+            200, headers={"content-encoding": "gzip, gzip"}, stream=_Chunks([gzip.compress(inner)])
+        )
+
+    async with _client(handler) as client:
+        with pytest.raises(httpx.DecodingError):
+            await get_capped(client, "https://bomb.example/", max_bytes=CAP)
