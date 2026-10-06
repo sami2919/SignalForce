@@ -1,4 +1,5 @@
 import socket
+from pathlib import Path
 
 import httpx
 import pytest
@@ -23,11 +24,45 @@ def _resolver(*addresses: str):
         "0.0.0.0", "::1", "fe80::1", "fdaa::1",
         "::ffff:10.0.0.1",          # IPv4-mapped private
         "224.0.0.1",                # multicast
+        "64:ff9b::a00:1", "64:ff9b::7f00:1", "64:ff9b::a9fe:a9fe",  # NAT64 embedding private v4
+        "64:ff9b:1::1",             # local-use NAT64
+        "::10.0.0.1", "::127.0.0.1", "::a9fe:a9fe",  # IPv4-compatible
+        "::ffff:0:10.0.0.1",        # SIIT
+        "2002:a00:1::", "2002:a9fe:a9fe::",  # 6to4 embedding private v4
+        "fec0::1",                  # deprecated site-local
     ],
 )
 def test_non_public_addresses_are_blocked(address):
     with pytest.raises(BlockedAddress):
         assert_public_host("anything.example", resolver=_resolver(address))
+
+
+@pytest.mark.parametrize("address", ["64:ff9b::5db8:d822", "2002:5db8:d822::"])
+def test_public_ipv4_embedded_in_ipv6_is_allowed(address):
+    assert_public_host("good.example", resolver=_resolver(address))
+
+
+def test_resolver_exceptions_become_blocked_address():
+    def boom(host, port):
+        raise UnicodeError("bad idna")
+
+    with pytest.raises(BlockedAddress):
+        assert_public_host("xn--.example", resolver=boom)
+
+
+def test_malformed_address_becomes_blocked_address():
+    with pytest.raises(BlockedAddress):
+        assert_public_host("odd.example", resolver=_resolver("not-an-ip"))
+
+
+def test_no_raw_async_client_outside_the_guard():
+    root = Path(guard.__file__).resolve().parents[1]
+    offenders = [
+        str(path)
+        for path in root.rglob("*.py")
+        if path.name != "guard.py" and "httpx.AsyncClient(" in path.read_text()
+    ]
+    assert offenders == []
 
 
 def test_public_address_is_allowed():
