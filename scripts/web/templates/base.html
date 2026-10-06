@@ -33,6 +33,11 @@
     <a href="/dashboard" class="{% block nav_accounts %}{% endblock %}">Accounts</a>
     <a href="/dashboard/health" class="{% block nav_health %}{% endblock %}">Health</a>
     <a href="/dashboard/runs" class="{% block nav_runs %}{% endblock %}">Runs</a>
+    {% if request.session.get("invite_id") %}
+    <form method="post" action="/logout" style="margin-left:auto">
+      <button type="submit" style="background:none;border:0;color:#8b949e;cursor:pointer">Log out</button>
+    </form>
+    {% endif %}
   </nav>
   <main>
     {% block content %}{% endblock %}

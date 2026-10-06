@@ -20,7 +20,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
@@ -39,8 +39,9 @@ from scripts.storage.models import (
     Tenant,
 )
 from scripts.storage.session import get_session
+from scripts.web.auth import require_invite
 
-router = APIRouter(tags=["dashboard"])
+router = APIRouter(tags=["dashboard"], dependencies=[Depends(require_invite)])
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 _RECENT_SIGNAL_WINDOW_DAYS = 30

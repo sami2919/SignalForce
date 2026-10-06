@@ -18,6 +18,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from scripts.web.auth import InviteIdentity, require_invite
+
 from scripts.storage.models import (
     Account,
     AccountSource,
@@ -76,7 +78,11 @@ def _patch_session(monkeypatch, session_factory):
 
 @pytest.fixture
 def client() -> TestClient:
-    return TestClient(create_app())
+    app = create_app()
+    app.dependency_overrides[require_invite] = lambda: InviteIdentity(
+        id=1, label="test", tenant_id=None, is_owner=True
+    )
+    return TestClient(app)
 
 
 @pytest.fixture

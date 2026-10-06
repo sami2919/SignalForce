@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}SignalForce{% endblock %}
+{% block content %}
+<h1>Which of your GTM signals actually come before meetings?</h1>
+<p>SignalForce is an invite-only toolkit for GTM engineers and founders doing their own sales.</p>
+<section>
+  <h2>Signal Audit</h2>
+  <p>Upload three CSVs (accounts, timestamped signals, CRM outcomes). Get one report: which signals preceded meetings, how stale each source was, and what a "two independent sources must agree" routing rule would have caught or missed.</p>
+  <p class="muted">Your files are processed in memory for that one request and deleted. Nothing is stored. Company-level data only: contact names are dropped and emails are reduced to a domain.</p>
+</section>
+<section>
+  <h2>Watchlist</h2>
+  <p>Give it up to 25 target companies. It watches their careers pages and repos daily and tells you which accounts just changed.</p>
+</section>
+<p><a href="/login">Sign in with an invite code</a></p>
+{% endblock %}
