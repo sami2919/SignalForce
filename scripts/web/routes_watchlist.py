@@ -1,9 +1,16 @@
-"""Watchlist: up to MAX_WATCHLIST target domains per tenant, watched daily."""
+"""Watchlist: up to MAX_WATCHLIST target domains per tenant, watched daily.
+
+Each account records its last resolution outcome in
+`account_metadata["resolution"]` ({"outcome", "at"}) so the page never shows
+"resolving…" forever: a domain with no active sources whose outcome is not a
+fresh pending is re-queued when it is added again.
+"""
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, Request
@@ -25,6 +32,70 @@ router = APIRouter(tags=["watchlist"])
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 MAX_WATCHLIST = 25
+RESOLUTION_KEY = "resolution"
+STALE_PENDING_AFTER = timedelta(minutes=15)
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _state(sources: int, metadata: dict | None, now: datetime) -> str:
+    """What the page shows for a row.
+
+    "sources" (>=1 active source), "no_sources", "failed", "pending" (fresh,
+    under STALE_PENDING_AFTER), "stale" (pending too long) or "unknown" (no
+    outcome recorded). A "resolved" outcome whose sources were all since
+    deactivated shows as "no_sources".
+    """
+    if sources:
+        return "sources"
+    resolution = (metadata or {}).get(RESOLUTION_KEY) or {}
+    outcome = resolution.get("outcome")
+    if outcome in ("no_sources", "failed"):
+        return outcome
+    if outcome == "resolved":
+        return "no_sources"
+    if outcome != "pending":
+        return "unknown"
+    try:
+        at = datetime.fromisoformat(resolution["at"])
+    except (KeyError, TypeError, ValueError):
+        return "stale"
+    if at.tzinfo is None:
+        at = at.replace(tzinfo=timezone.utc)
+    return "stale" if now - at > STALE_PENDING_AFTER else "pending"
+
+
+def _needs_requeue(row: dict[str, object]) -> bool:
+    """Zero active sources and not a fresh pending: adding it again retries."""
+    return row["state"] not in ("sources", "pending")
+
+
+def _record_outcome(tenant_id: int, domains: list[str], outcome: str | None, session: Session) -> None:
+    """Write {"outcome", "at"} for each domain. outcome=None derives it from active sources.
+
+    Assigns a NEW dict so SQLAlchemy sees the change on the JSON column, and
+    keeps every other metadata key.
+    """
+    at = _utcnow().isoformat()
+    accounts = session.scalars(
+        select(Account).where(Account.tenant_id == tenant_id, Account.domain.in_(domains))
+    ).all()
+    for account in accounts:
+        value = outcome
+        if value is None:
+            active = session.scalar(
+                select(func.count()).select_from(AccountSource).where(
+                    AccountSource.account_id == account.id, AccountSource.active.is_(True)
+                )
+            )
+            value = "resolved" if active else "no_sources"
+        account.account_metadata = {
+            **(account.account_metadata or {}),
+            RESOLUTION_KEY: {"outcome": value, "at": at},
+        }
+    session.commit()
 
 
 def _rows(tenant_id: int, session: Session) -> list[dict[str, object]]:
@@ -35,12 +106,16 @@ def _rows(tenant_id: int, session: Session) -> list[dict[str, object]]:
         .subquery()
     )
     stmt = (
-        select(Account.domain, func.coalesce(active.c.n, 0))
+        select(Account.domain, Account.account_metadata, func.coalesce(active.c.n, 0))
         .outerjoin(active, active.c.account_id == Account.id)
         .where(Account.tenant_id == tenant_id)
         .order_by(Account.domain)
     )
-    return [{"domain": d, "sources": n} for d, n in session.execute(stmt).all()]
+    now = _utcnow()
+    rows = []
+    for domain, metadata, n in session.execute(stmt).all():
+        rows.append({"domain": domain, "sources": n, "state": _state(n, metadata, now)})
+    return rows
 
 
 def _page(request: Request, invite: InviteIdentity, error: str = "", status: int = 200) -> HTMLResponse:
@@ -57,10 +132,23 @@ def _page(request: Request, invite: InviteIdentity, error: str = "", status: int
 
 
 def _resolve_in_background(tenant_id: int, domains: list[str]) -> None:
+    outcome: str | None = None  # derived from active sources after a clean run
     try:
         asyncio.run(resolve_and_store(tenant_id, domains))
     except Exception as exc:  # noqa: BLE001 -- a background failure must never surface as a 500
-        logger.error("watchlist resolution failed", extra={"tenant_id": tenant_id, "error": str(exc)})
+        outcome = "failed"
+        logger.error(
+            "watchlist resolution failed",
+            extra={"tenant_id": tenant_id, "error_type": type(exc).__name__},
+        )
+    try:
+        with get_session() as session:
+            _record_outcome(tenant_id, domains, outcome, session)
+    except Exception as exc:  # noqa: BLE001 -- same: never a 500; a stale pending re-queues later
+        logger.error(
+            "recording watchlist resolution outcome failed",
+            extra={"tenant_id": tenant_id, "error_type": type(exc).__name__},
+        )
 
 
 def _refused(domains: list[str]) -> list[str]:
@@ -92,16 +180,20 @@ def add_domains(
     except InvalidDomain as exc:
         return _page(request, invite, str(exc), 422)
     with get_session() as session:
-        existing = {r["domain"] for r in _rows(invite.tenant_id, session)}
+        existing = {r["domain"]: r for r in _rows(invite.tenant_id, session)}
     new = [d for d in wanted if d not in existing]
+    requeue = [d for d in wanted if d in existing and _needs_requeue(existing[d])]
     if len(existing) + len(new) > MAX_WATCHLIST:
         return _page(request, invite, f"A watchlist holds at most {MAX_WATCHLIST} domains.", 422)
-    refused = _refused(new)
+    queued = new + requeue
+    refused = _refused(queued)
     if refused:
         return _page(request, invite, "Refused: " + "; ".join(refused), 422)
     with get_session() as session:
         for domain in new:
             ensure_account(invite.tenant_id, domain, session)
-    if new:
-        background.add_task(_resolve_in_background, invite.tenant_id, new)
+        if queued:
+            _record_outcome(invite.tenant_id, queued, "pending", session)
+    if queued:
+        background.add_task(_resolve_in_background, invite.tenant_id, queued)
     return RedirectResponse("/watchlist", status_code=303)

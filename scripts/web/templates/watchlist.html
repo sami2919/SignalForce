@@ -17,7 +17,11 @@
   <thead><tr><th>Domain</th><th>Sources watched</th></tr></thead>
   <tbody>
   {% for row in rows %}
-    <tr><td>{{ row.domain }}</td><td>{% if row.sources %}{{ row.sources }}{% else %}<span class="muted">resolving…</span>{% endif %}</td></tr>
+    <tr><td>{{ row.domain }}</td><td>{% if row.state == "sources" %}{{ row.sources }}
+      {%- elif row.state == "no_sources" %}<span class="muted">no public careers page or repo found</span>
+      {%- elif row.state == "failed" %}<span class="badge-warn">resolution failed — add the domain again to retry</span>
+      {%- elif row.state == "stale" %}<span class="badge-warn">resolution did not finish — add the domain again to retry</span>
+      {%- else %}<span class="muted">resolving…</span>{% endif %}</td></tr>
   {% endfor %}
   </tbody>
 </table>
