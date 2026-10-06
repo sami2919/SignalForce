@@ -6,7 +6,7 @@
 
 <section>
   {% if recall is none %}
-    <p class="empty">No tenant configured — nothing to measure.</p>
+    <p class="empty">Your invite has no workspace yet.</p>
   {% else %}
     <div class="metric">
       <span class="value">{{ "%.0f%%"|format(recall.recall * 100) if recall.recall is not none else "—" }}</span>

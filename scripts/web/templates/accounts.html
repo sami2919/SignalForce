@@ -4,7 +4,7 @@
 {% block content %}
 <h1>Accounts</h1>
 {% if not tenant_configured %}
-  <p class="empty">TENANT_SLUG is not set — no tenant to show.</p>
+  <p class="empty">Your invite has no workspace yet.</p>
 {% elif not rows %}
   <p class="empty">No accounts yet.</p>
 {% else %}

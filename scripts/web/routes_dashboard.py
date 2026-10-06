@@ -1,13 +1,14 @@
 """Read-only dashboard: accounts, account detail, source health, run history.
 
 ADR-0018 is the spec. Four pages, Jinja2 + HTMX, no build step (ADR-0002
-Decision 2). Every route scopes to the single tenant named by TENANT_SLUG,
-the same env var every CLI entrypoint in this codebase already reads
-(ADR-0018 Decision 2) -- no tenant selector, since ADR-0001 Decision 4
-deferred auth entirely and a selector with no auth in front of it would let
-anyone URL-guess their way into another tenant's data.
+Decision 2). Every route requires a signed-in invite and scopes to that
+invite's tenant (`_tenant_id`). An invite with no tenant sees the "no
+workspace" empty state, with one exception: the OWNER invite falls back to
+the tenant named by TENANT_SLUG (the env var the CLI entrypoints read), so the
+operator still sees the hosted tenant. A non-owner invite never falls back.
+There is no tenant selector: the tenant comes from the invite, never the URL.
 
-Never raises on missing data: an unset TENANT_SLUG, a tenant with no rows
+Never raises on missing data: an invite with no tenant, a tenant with no rows
 yet, or a requested account_id that doesn't exist all render a normal page
 (or a 404 for the single case where "this specific thing wasn't found" is
 the correct HTTP semantics) -- never a 500, matching ADR-0002's "health
