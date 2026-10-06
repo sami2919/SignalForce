@@ -53,6 +53,10 @@ def create_app() -> FastAPI:
         title="SignalForce",
         version="0.3.0",
         description="Signal detection engine and Signal Audit — invite-only.",
+        # Invite-only site: no public schema or interactive docs.
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
     )
     # Added before SessionMiddleware so it runs inside it (last added is outermost).
     # Upload paths: login required, MAX_TOTAL_BYTES + overhead. Every other POST:

@@ -86,7 +86,8 @@ def test_create_app_returns_independent_instances() -> None:
     assert create_app() is not create_app()
 
 
-def test_openapi_schema_is_available(client: TestClient) -> None:
-    resp = client.get("/openapi.json")
-    assert resp.status_code == 200
-    assert "/healthz" in resp.json()["paths"]
+def test_openapi_schema_is_built_but_not_served(client: TestClient) -> None:
+    # The invite-only site does not publish /openapi.json (see
+    # test_login.py::test_framework_docs_are_disabled); the schema still builds.
+    assert client.get("/openapi.json").status_code == 404
+    assert "/healthz" in create_app().openapi()["paths"]

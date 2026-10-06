@@ -69,3 +69,8 @@ def test_production_refuses_to_start_without_a_session_secret(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     with pytest.raises(RuntimeError, match="SESSION_SECRET"):
         create_app()
+
+
+@pytest.mark.parametrize("path", ["/docs", "/redoc", "/openapi.json"])
+def test_framework_docs_are_disabled(client, path):
+    assert client.get(path).status_code == 404
