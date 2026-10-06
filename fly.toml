@@ -13,6 +13,7 @@ primary_region = "sjc"          # co-located with Neon's AWS us-west-2 (Oregon)
   LOG_LEVEL = "INFO"
   TENANT_SLUG = "agentmail"
   PYTHONUNBUFFERED = "1"
+  APP_ENV = "production"
 
 [deploy]
   # Runs once in a temporary machine BEFORE new machines take traffic. A failed
@@ -33,6 +34,12 @@ primary_region = "sjc"          # co-located with Neon's AWS us-west-2 (Oregon)
     grace_period = "10s"
     method = "GET"
     path = "/healthz"              # liveness ONLY — never /readyz, see ADR-0002
+
+# pandas + numpy for the audit need more than the default 256 MB.
+[[vm]]
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1
 
 # NOTE: `fly deploy` creates 2 machines by default for HA regardless of
 # min_machines_running. Use `fly deploy --ha=false` to keep it at 1, or

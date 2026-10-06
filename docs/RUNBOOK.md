@@ -263,3 +263,33 @@ machine-update step in §4, since that's a secrets change.
 - `docs/superpowers/plans/2026-08-04-signalforce-production.md` — the original plan,
   including the "Interview Answers This Unlocks" table (kept up to date with real
   numbers, not placeholders) and the Failure Modes table.
+
+---
+
+## 9. Web access (ADR-0025)
+
+Secrets: `fly secrets set SESSION_SECRET=$(openssl rand -hex 32) -a signalforce`. The app refuses to start in production without it.
+
+Manage invites on the running machine (codes are shown once; only the hash is stored):
+
+```bash
+fly ssh console -a signalforce -C "python -m scripts.web.invites create --label owner --tenant-slug agentmail --owner"
+fly ssh console -a signalforce -C "python -m scripts.web.invites create --label maya --tenant-slug maya"
+fly ssh console -a signalforce -C "python -m scripts.web.invites list"
+fly ssh console -a signalforce -C "python -m scripts.web.invites revoke --label maya"
+```
+
+Smoke test after a deploy (replace `$CODE`):
+
+```bash
+J=$(mktemp)
+curl -s -o /dev/null -w "%{http_code}\n" https://signalforce.fly.dev/healthz               # 200
+curl -s -o /dev/null -w "%{http_code} %{redirect_url}\n" https://signalforce.fly.dev/dashboard   # 303 .../login
+curl -s -c $J -o /dev/null -w "%{http_code}\n" -d "code=$CODE" https://signalforce.fly.dev/login   # 303
+curl -s -b $J -o /tmp/sample.zip https://signalforce.fly.dev/audit/sample.zip && unzip -o -q /tmp/sample.zip -d /tmp/sample
+curl -s -b $J -o /tmp/report.html -w "%{http_code}\n" -F accounts=@/tmp/sample/accounts.csv \
+  -F signals=@/tmp/sample/signals.csv -F outcomes=@/tmp/sample/outcomes.csv \
+  -F engagements=@/tmp/sample/engagements.csv -F config=@/tmp/sample/audit.json \
+  https://signalforce.fly.dev/audit/run                                                      # 200
+head -c 15 /tmp/report.html                                                                  # <!DOCTYPE html>
+```
