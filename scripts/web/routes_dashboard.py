@@ -39,7 +39,7 @@ from scripts.storage.models import (
     Tenant,
 )
 from scripts.storage.session import get_session
-from scripts.web.auth import require_invite
+from scripts.web.auth import InviteIdentity, require_invite
 
 router = APIRouter(tags=["dashboard"], dependencies=[Depends(require_invite)])
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
@@ -54,11 +54,14 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _tenant_id(session: Session) -> int | None:
+def _tenant_id(session: Session, invite: InviteIdentity) -> int | None:
+    """The signed-in invite's tenant. The owner invite may still resolve through TENANT_SLUG."""
+    if invite.tenant_id is not None:
+        return invite.tenant_id
     slug = os.environ.get("TENANT_SLUG")
-    if not slug:
-        return None
-    return session.execute(select(Tenant.id).where(Tenant.slug == slug)).scalar_one_or_none()
+    if invite.is_owner and slug:
+        return session.execute(select(Tenant.id).where(Tenant.slug == slug)).scalar_one_or_none()
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +129,7 @@ def _load_account_rows(tenant_id: int, session: Session) -> list[dict[str, objec
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
-def dashboard(request: Request) -> HTMLResponse:
+def dashboard(request: Request, invite: InviteIdentity = Depends(require_invite)) -> HTMLResponse:
     # Rendered INSIDE the session block, not after: get_session()'s commit
     # expires every loaded ORM attribute by default (expire_on_commit=True),
     # and Jinja2's TemplateResponse renders synchronously in __init__ -- if
@@ -134,7 +137,7 @@ def dashboard(request: Request) -> HTMLResponse:
     # attribute the template touches that wasn't already materialized would
     # raise DetachedInstanceError. Reproduced directly before this fix.
     with get_session() as session:
-        tenant_id = _tenant_id(session)
+        tenant_id = _tenant_id(session, invite)
         rows = _load_account_rows(tenant_id, session) if tenant_id is not None else []
         return templates.TemplateResponse(
             request, "accounts.html", {"rows": rows, "tenant_configured": tenant_id is not None}
@@ -221,9 +224,11 @@ def _compute_zero_out_table(
 
 
 @router.get("/dashboard/account/{account_id}", response_class=HTMLResponse)
-def account_detail(request: Request, account_id: int) -> HTMLResponse:
+def account_detail(
+    request: Request, account_id: int, invite: InviteIdentity = Depends(require_invite)
+) -> HTMLResponse:
     with get_session() as session:
-        tenant_id = _tenant_id(session)
+        tenant_id = _tenant_id(session, invite)
         detail = (
             _load_account_detail(tenant_id, account_id, session) if tenant_id is not None else None
         )
@@ -277,9 +282,9 @@ def _load_health_rows(tenant_id: int, session: Session) -> list[dict[str, object
 
 
 @router.get("/dashboard/health", response_class=HTMLResponse)
-def health(request: Request) -> HTMLResponse:
+def health(request: Request, invite: InviteIdentity = Depends(require_invite)) -> HTMLResponse:
     with get_session() as session:
-        tenant_id = _tenant_id(session)
+        tenant_id = _tenant_id(session, invite)
         if tenant_id is None:
             recall_report = None
             health_rows: list[dict[str, object]] = []
@@ -328,8 +333,8 @@ def _load_runs(tenant_id: int, session: Session) -> list[dict[str, object]]:
 
 
 @router.get("/dashboard/runs", response_class=HTMLResponse)
-def runs(request: Request) -> HTMLResponse:
+def runs(request: Request, invite: InviteIdentity = Depends(require_invite)) -> HTMLResponse:
     with get_session() as session:
-        tenant_id = _tenant_id(session)
+        tenant_id = _tenant_id(session, invite)
         rows = _load_runs(tenant_id, session) if tenant_id is not None else []
         return templates.TemplateResponse(request, "runs.html", {"rows": rows})
