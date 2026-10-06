@@ -16,7 +16,7 @@ from urllib.robotparser import RobotFileParser
 
 import httpx
 
-from scripts.net.guard import guarded_client
+from scripts.net.guard import get_capped, guarded_client
 from scripts.registry.models import (
     ResolutionOutcome,
     ResolutionReport,
@@ -66,6 +66,11 @@ _KNOWN_ATS_HOSTS = (
 
 _USER_AGENT = "SignalForce/0.2 (+https://signalforce.fly.dev)"
 _TIMEOUT = httpx.Timeout(15.0, connect=5.0)
+# Same DoS bound as the watch fetcher (scripts/watch/fetcher.py). A body over it
+# raises BodyTooLarge (an httpx.HTTPError) mid-stream, so each call site's
+# existing fetch-error path handles it: robots -> permissive, homepage ->
+# unreachable, candidate path -> fetch_error.
+_MAX_BYTES = 8_000_000
 
 # When no candidate path resolves, several different outcomes can occur across
 # the list of paths tried for one source type (e.g. one path is blocked by
@@ -98,8 +103,13 @@ async def _fetch_robots(domain: str, client: httpx.AsyncClient) -> RobotFilePars
     parser = RobotFileParser()
     url = f"https://{domain}/robots.txt"
     try:
-        resp = await client.get(
-            url, headers={"User-Agent": _USER_AGENT}, timeout=_TIMEOUT, follow_redirects=True
+        resp = await get_capped(
+            client,
+            url,
+            max_bytes=_MAX_BYTES,
+            headers={"User-Agent": _USER_AGENT},
+            timeout=_TIMEOUT,
+            follow_redirects=True,
         )
         if resp.status_code == 200:
             parser.parse(resp.text.splitlines())
@@ -120,8 +130,13 @@ async def _fetch_homepage(
     """Fetch the homepage once. Returns (reachable, final_url, content_hash)."""
     url = f"https://{domain}/"
     try:
-        resp = await client.get(
-            url, headers={"User-Agent": _USER_AGENT}, timeout=_TIMEOUT, follow_redirects=True
+        resp = await get_capped(
+            client,
+            url,
+            max_bytes=_MAX_BYTES,
+            headers={"User-Agent": _USER_AGENT},
+            timeout=_TIMEOUT,
+            follow_redirects=True,
         )
     except httpx.HTTPError:
         logger.info(
@@ -173,8 +188,10 @@ async def _resolve_one_type(
             continue
 
         try:
-            resp = await client.get(
+            resp = await get_capped(
+                client,
                 url,
+                max_bytes=_MAX_BYTES,
                 headers={"User-Agent": _USER_AGENT},
                 timeout=_TIMEOUT,
                 follow_redirects=True,

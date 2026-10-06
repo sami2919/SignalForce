@@ -31,6 +31,7 @@ from urllib.robotparser import RobotFileParser
 import httpx
 from pydantic import BaseModel
 
+from scripts.net.guard import BodyTooLarge, get_capped
 from scripts.watch.normalize import content_hash
 
 logger = logging.getLogger(__name__)
@@ -81,8 +82,13 @@ async def _fetch_robots(host: str, client: httpx.AsyncClient) -> RobotFileParser
     parser = RobotFileParser()
     url = f"https://{host}/robots.txt"
     try:
-        resp = await client.get(
-            url, headers={"User-Agent": _USER_AGENT}, timeout=_TIMEOUT, follow_redirects=True
+        resp = await get_capped(
+            client,
+            url,
+            max_bytes=_MAX_BYTES,
+            headers={"User-Agent": _USER_AGENT},
+            timeout=_TIMEOUT,
+            follow_redirects=True,
         )
         if resp.status_code == 200:
             parser.parse(resp.text.splitlines())
@@ -95,6 +101,30 @@ async def _fetch_robots(host: str, client: httpx.AsyncClient) -> RobotFileParser
         )
         parser.parse([])
     return parser
+
+
+def _too_large(ref: SourceRef, exc: BodyTooLarge, latency_ms: int) -> ProbeResult:
+    """The streamed read stopped at the cap: the same results an oversize
+    buffered body produced, with `bytes` = what was read before stopping."""
+    if exc.status_code != 200:
+        return ProbeResult(
+            source_id=ref.source_id,
+            status_code=exc.status_code,
+            latency_ms=latency_ms,
+            bytes=exc.bytes_read,
+            error=f"non-200 status: {exc.status_code}",
+        )
+    logger.warning(
+        "oversized body skipped",
+        extra={"source_id": ref.source_id, "url": ref.url, "bytes": exc.bytes_read},
+    )
+    return ProbeResult(
+        source_id=ref.source_id,
+        status_code=exc.status_code,
+        latency_ms=latency_ms,
+        bytes=exc.bytes_read,
+        error=f"body too large: over {_MAX_BYTES} bytes",
+    )
 
 
 async def _fetch_one(
@@ -127,12 +157,18 @@ async def _fetch_one(
         async with global_sem:
             async with host_sem:
                 start = time.perf_counter()
-                resp = await client.get(
-                    ref.url,
-                    headers={"User-Agent": _USER_AGENT},
-                    timeout=_TIMEOUT,
-                    follow_redirects=True,
-                )
+                try:
+                    resp = await get_capped(
+                        client,
+                        ref.url,
+                        max_bytes=_MAX_BYTES,
+                        headers={"User-Agent": _USER_AGENT},
+                        timeout=_TIMEOUT,
+                        follow_redirects=True,
+                    )
+                except BodyTooLarge as exc:
+                    latency_ms = int((time.perf_counter() - start) * 1000)
+                    return _too_large(ref, exc, latency_ms)
                 latency_ms = int((time.perf_counter() - start) * 1000)
 
         body = resp.content
@@ -145,19 +181,6 @@ async def _fetch_one(
                 latency_ms=latency_ms,
                 bytes=n_bytes,
                 error=f"non-200 status: {resp.status_code}",
-            )
-
-        if n_bytes > _MAX_BYTES:
-            logger.warning(
-                "oversized body skipped",
-                extra={"source_id": ref.source_id, "url": ref.url, "bytes": n_bytes},
-            )
-            return ProbeResult(
-                source_id=ref.source_id,
-                status_code=resp.status_code,
-                latency_ms=latency_ms,
-                bytes=n_bytes,
-                error=f"body too large: {n_bytes} bytes",
             )
 
         text = resp.text

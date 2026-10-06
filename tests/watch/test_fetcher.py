@@ -392,3 +392,62 @@ async def test_large_but_reasonable_body_is_hashed() -> None:
         results = await fetch_all([SourceRef(source_id=1, url="https://x.com/c")], client=c)
     assert results[0].content_hash is not None
     assert results[0].error is None
+
+
+# --- streaming size cap (gzip bomb / endless body) ---
+
+
+class _CountingStream(httpx.AsyncByteStream):
+    def __init__(self, chunks):
+        self._chunks = chunks
+        self.pulled = 0
+
+    async def __aiter__(self):
+        for chunk in self._chunks:
+            self.pulled += 1
+            yield chunk
+
+
+def _gzip_bomb(decoded: int, raw_chunk: int = 1024) -> list[bytes]:
+    import gzip
+
+    data = gzip.compress(b"\0" * decoded)
+    return [data[i : i + raw_chunk] for i in range(0, len(data), raw_chunk)]
+
+
+@pytest.mark.asyncio
+async def test_a_gzip_bomb_page_is_aborted_early_and_recorded_as_too_large(monkeypatch) -> None:
+    from scripts.watch import fetcher
+
+    monkeypatch.setattr(fetcher, "_MAX_BYTES", 100_000)
+    chunks = _gzip_bomb(100 * 1024 * 1024)
+    stream = _CountingStream(chunks)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text=ROBOTS_ALLOW)
+        return httpx.Response(200, headers={"content-encoding": "gzip"}, stream=stream)
+
+    async with _client(handler) as c:
+        results = await fetch_all([SourceRef(source_id=1, url="https://x.com/c")], client=c)
+    assert stream.pulled < len(chunks)
+    assert results[0].content_hash is None
+    assert results[0].status_code == 200
+    assert results[0].error is not None and results[0].error.startswith("body too large")
+
+
+@pytest.mark.asyncio
+async def test_an_endless_robots_txt_is_aborted_and_treated_as_permissive(monkeypatch) -> None:
+    from scripts.watch import fetcher
+
+    monkeypatch.setattr(fetcher, "_MAX_BYTES", 100_000)
+    stream = _CountingStream(iter(lambda: b"Disallow: /\n" * 100, None))
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, stream=stream)
+        return httpx.Response(200, text=PAGE)
+
+    async with _client(handler) as c:
+        results = await fetch_all([SourceRef(source_id=1, url="https://x.com/careers")], client=c)
+    assert results[0].content_hash is not None and not results[0].robots_blocked

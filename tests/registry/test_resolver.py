@@ -297,3 +297,66 @@ async def test_resolution_is_idempotent() -> None:
     first = await _resolve(routes)
     second = await _resolve(routes)
     assert [s.url for s in first.sources] == [s.url for s in second.sources]
+
+
+# --- streaming size cap (gzip bomb / endless body) ---
+
+
+class _Endless(httpx.AsyncByteStream):
+    def __init__(self, chunk: bytes = b"<p>" + b"x" * 4093):
+        self._chunk = chunk
+        self.pulled = 0
+
+    async def __aiter__(self):
+        while True:
+            self.pulled += 1
+            yield self._chunk
+
+
+@pytest.mark.asyncio
+async def test_an_endless_homepage_is_aborted_and_treated_as_unreachable(monkeypatch) -> None:
+    from scripts.registry import resolver
+
+    monkeypatch.setattr(resolver, "_MAX_BYTES", 100_000)
+    stream = _Endless()
+    report = await _resolve(
+        {"/robots.txt": httpx.Response(200, text=ROBOTS_ALLOW_ALL), "/": httpx.Response(200, stream=stream)}
+    )
+    assert report.homepage_reachable is False
+    assert stream.pulled <= 100_000 // 4096 + 1
+
+
+@pytest.mark.asyncio
+async def test_a_gzip_bomb_candidate_is_a_fetch_error_not_a_crash(monkeypatch) -> None:
+    import gzip
+
+    from scripts.registry import resolver
+
+    monkeypatch.setattr(resolver, "_MAX_BYTES", 100_000)
+    bomb = gzip.compress(b"\0" * (50 * 1024 * 1024))
+    report = await _resolve(
+        {
+            "/robots.txt": httpx.Response(200, text=ROBOTS_ALLOW_ALL),
+            "/": httpx.Response(200, text=HOMEPAGE),
+            "/careers": httpx.Response(
+                200, headers={"content-encoding": "gzip"}, stream=httpx.ByteStream(bomb)
+            ),
+        }
+    )
+    careers = next(a for a in report.attempts if a.source_type == "careers")
+    assert careers.outcome == "fetch_error" and "BodyTooLarge" in careers.detail
+
+
+@pytest.mark.asyncio
+async def test_an_endless_robots_txt_is_treated_as_permissive(monkeypatch) -> None:
+    from scripts.registry import resolver
+
+    monkeypatch.setattr(resolver, "_MAX_BYTES", 100_000)
+    report = await _resolve(
+        {
+            "/robots.txt": httpx.Response(200, stream=_Endless(b"Disallow: /\n" * 300)),
+            "/": httpx.Response(200, text=HOMEPAGE),
+            "/careers": httpx.Response(200, text=CAREERS),
+        }
+    )
+    assert "careers" in report.resolved_types
