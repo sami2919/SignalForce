@@ -307,3 +307,28 @@ def test_re_queue_is_tenant_scoped(patched_sessions, fake):
     assert _metadata(patched_sessions, "shared.example.com", "alpha")["resolution"]["outcome"] == "no_sources"
     assert _metadata(patched_sessions, "shared.example.com", "bravo")["resolution"]["outcome"] == "failed"
     assert FAILED_TEXT not in alpha.get("/watchlist").text
+
+
+def test_a_concurrent_add_of_the_same_domain_is_treated_as_already_added(patched_sessions, fake, monkeypatch):
+    from sqlalchemy.exc import IntegrityError
+
+    from scripts.registry.store import ensure_account as real_ensure_account
+
+    raced: list[str] = []
+
+    def racing_ensure_account(tenant_id, domain, session):
+        if domain == "stripe.com" and not raced:
+            raced.append(domain)
+            with patched_sessions() as other:  # the other request wins the insert
+                real_ensure_account(tenant_id, domain, other)
+            raise IntegrityError("INSERT INTO accounts", {}, Exception("UNIQUE constraint failed"))
+        return real_ensure_account(tenant_id, domain, session)
+
+    monkeypatch.setattr(routes_watchlist, "ensure_account", racing_ensure_account)
+    client = _client(patched_sessions, "alpha")
+    response = client.post("/watchlist", data={"domains": "stripe.com vercel.com"}, follow_redirects=False)
+    assert response.status_code == 303
+    assert raced == ["stripe.com"]
+    assert fake.calls == [["vercel.com"]]
+    with patched_sessions() as session:
+        assert {a.domain for a in session.scalars(select(Account))} == {"stripe.com", "vercel.com"}

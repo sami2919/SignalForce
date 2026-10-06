@@ -17,6 +17,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from scripts.net.guard import BlockedAddress, assert_public_host
@@ -185,13 +186,21 @@ def add_domains(
     requeue = [d for d in wanted if d in existing and _needs_requeue(existing[d])]
     if len(existing) + len(new) > MAX_WATCHLIST:
         return _page(request, invite, f"A watchlist holds at most {MAX_WATCHLIST} domains.", 422)
-    queued = new + requeue
-    refused = _refused(queued)
+    refused = _refused(new + requeue)
     if refused:
         return _page(request, invite, "Refused: " + "; ".join(refused), 422)
     with get_session() as session:
+        added = []
         for domain in new:
-            ensure_account(invite.tenant_id, domain, session)
+            try:
+                ensure_account(invite.tenant_id, domain, session)
+            except IntegrityError:
+                # A concurrent POST inserted it first (tenant_id, domain unique):
+                # already added, and that request queued its resolution.
+                session.rollback()
+                continue
+            added.append(domain)
+        queued = added + requeue
         if queued:
             _record_outcome(invite.tenant_id, queued, "pending", session)
     if queued:
