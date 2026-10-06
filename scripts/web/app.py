@@ -23,7 +23,7 @@ from scripts.web.routes_dashboard import router as dashboard_router
 from scripts.web.routes_health import router as health_router
 from scripts.web.routes_watchlist import router as watchlist_router
 from scripts.web.routes_webhooks import router as webhooks_router
-from scripts.web.upload_guard import UploadGuardMiddleware
+from scripts.web.upload_guard import DEFAULT_POST_CAP, POST_CAPS, UploadGuardMiddleware
 
 _SESSION_DAYS = 14
 _MULTIPART_OVERHEAD = 1024 * 1024
@@ -55,10 +55,14 @@ def create_app() -> FastAPI:
         description="Signal detection engine and Signal Audit — invite-only.",
     )
     # Added before SessionMiddleware so it runs inside it (last added is outermost).
+    # Upload paths: login required, MAX_TOTAL_BYTES + overhead. Every other POST:
+    # POST_CAPS[path] or DEFAULT_POST_CAP.
     app.add_middleware(
         UploadGuardMiddleware,
         paths=("/audit/run", "/audit/from-watchlist"),
         limit=lambda: routes_audit.MAX_TOTAL_BYTES + _MULTIPART_OVERHEAD,
+        caps=POST_CAPS,
+        default_cap=DEFAULT_POST_CAP,
     )
     app.add_middleware(
         SessionMiddleware,

@@ -75,7 +75,7 @@ def _guard(limit=100):
     return UploadGuardMiddleware(inner, paths=("/audit/run",), limit=lambda: limit)
 
 
-async def _run(guard, session, headers, chunks=()):
+async def _run(guard, session, headers, chunks=(), path="/audit/run", method="POST"):
     sent, calls, queue = [], [], list(chunks)
 
     async def receive():
@@ -87,7 +87,7 @@ async def _run(guard, session, headers, chunks=()):
     async def send(message):
         sent.append(message)
 
-    scope = {"type": "http", "method": "POST", "path": "/audit/run",
+    scope = {"type": "http", "method": method, "path": path,
              "headers": headers, "session": session}
     await guard(scope, receive, send)
     return [m["status"] for m in sent if m["type"] == "http.response.start"], len(calls)
@@ -112,3 +112,45 @@ async def test_guard_sends_exactly_one_response_for_streamed_oversize():
     chunks = [b"x" * 60, b"x" * 60, b"x" * 60]
     statuses, _ = await _run(_guard(), {"invite_id": 1}, [], chunks)
     assert statuses == [413]
+
+
+def _capped_guard(default_cap=100, caps=None):
+    from scripts.web.upload_guard import UploadGuardMiddleware
+
+    async def inner(scope, receive, send):
+        while (await receive()).get("more_body"):
+            pass
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+    return UploadGuardMiddleware(
+        inner, paths=("/audit/run",), limit=lambda: 10_000,
+        caps=caps or {"/hook": 300}, default_cap=default_cap,
+    )
+
+
+@pytest.mark.anyio
+async def test_other_posts_never_read_a_declared_oversize_body_even_anonymously():
+    statuses, reads = await _run(
+        _capped_guard(), {}, [(b"content-length", b"500")], [b"x" * 500], path="/login"
+    )
+    assert statuses == [413] and reads == 0
+
+
+@pytest.mark.anyio
+async def test_other_posts_send_exactly_one_413_for_streamed_oversize():
+    statuses, _ = await _run(_capped_guard(), {}, [], [b"x" * 60] * 3, path="/login")
+    assert statuses == [413]
+
+
+@pytest.mark.anyio
+async def test_a_path_specific_cap_overrides_the_default():
+    ok, _ = await _run(_capped_guard(), {}, [], [b"x" * 60] * 3, path="/hook")
+    over, _ = await _run(_capped_guard(), {}, [], [b"x" * 60] * 6, path="/hook")
+    assert ok == [200] and over == [413]
+
+
+@pytest.mark.anyio
+async def test_non_post_requests_are_not_capped():
+    statuses, _ = await _run(_capped_guard(), {}, [], [b"x" * 60] * 6, path="/login", method="PUT")
+    assert statuses == [200]

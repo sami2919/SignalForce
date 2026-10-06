@@ -295,3 +295,20 @@ def test_a_second_reply_does_not_overwrite_the_first_replied_at(
     row = session.get(Outreach, seeded_outreach)
     assert row.replied_at == first_replied_at
     session.close()
+
+
+# ---------------------------------------------------------------------------
+# Body cap -- the webhook gets 1 MiB, not the 64 KiB default
+# ---------------------------------------------------------------------------
+
+
+def test_signed_event_above_the_default_cap_but_under_the_webhook_cap_is_accepted(client):
+    body = _received_payload("th_nope", text="y" * (200 * 1024))
+    resp = client.post("/webhooks/agentmail", content=body, headers=_sign(body))
+    assert resp.status_code == 200
+
+
+def test_webhook_body_over_its_cap_is_a_413(client):
+    body = b"{" + b" " * (2 * 1024 * 1024) + b"}"
+    resp = client.post("/webhooks/agentmail", content=body, headers=_sign(body))
+    assert resp.status_code == 413
