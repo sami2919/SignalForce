@@ -21,6 +21,7 @@ from scripts.web.routes_audit import router as audit_router
 from scripts.web.routes_auth import router as auth_router
 from scripts.web.routes_dashboard import router as dashboard_router
 from scripts.web.routes_health import router as health_router
+from scripts.web.routes_watchlist import router as watchlist_router
 from scripts.web.routes_webhooks import router as webhooks_router
 from scripts.web.upload_guard import UploadGuardMiddleware
 
@@ -71,6 +72,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(audit_router)
+    app.include_router(watchlist_router)
     app.include_router(dashboard_router)
     app.include_router(webhooks_router)
     return app
