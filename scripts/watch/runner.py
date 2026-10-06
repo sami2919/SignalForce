@@ -43,7 +43,7 @@ from scripts.net.guard import guarded_client
 from scripts.registry.resolver import resolve_sources
 from scripts.registry.store import StoreResult, ensure_tenant, store_resolution
 from scripts.scoring.wiring import run_scoring_stage
-from scripts.storage.models import AccountSource, Probe, ScanRun
+from scripts.storage.models import AccountSource, Probe, ScanRun, Tenant
 from scripts.storage.session import get_session
 from scripts.verify.wiring import run_verify_stage
 from scripts.watch.fetcher import ProbeResult, SourceRef, fetch_all
@@ -315,12 +315,7 @@ def _write_results(
 # --- CLI ---
 
 
-def _cli_scan() -> int:
-    tenant_slug = os.environ.get("TENANT_SLUG")
-    if not tenant_slug:
-        logger.error("TENANT_SLUG is not set")
-        return 1
-
+def _scan_tenant(tenant_slug: str) -> int:
     with get_session() as session:
         tenant_id = ensure_tenant(tenant_slug, tenant_slug, session)
 
@@ -400,6 +395,39 @@ def _cli_scan() -> int:
     )
 
     return 0 if (watch_ok and verify_ok and scoring_ok and postprocess_report.all_ok) else 1
+
+
+def _tenant_slugs_to_scan(session: Session) -> list[str]:
+    """SCAN_TENANTS=all scans every tenant with an active source; else TENANT_SLUG; else nothing."""
+    if os.environ.get("SCAN_TENANTS") == "all":
+        rows = session.execute(
+            select(Tenant.slug)
+            .join(AccountSource, AccountSource.tenant_id == Tenant.id)
+            .where(AccountSource.active.is_(True))
+            .distinct()
+            .order_by(Tenant.slug)
+        )
+        return list(rows.scalars())
+    slug = os.environ.get("TENANT_SLUG")
+    return [slug] if slug else []
+
+
+def _scan_tenant_safely(tenant_slug: str) -> int:
+    try:
+        return _scan_tenant(tenant_slug)
+    except Exception as exc:  # noqa: BLE001 -- one tenant must never stop the rest
+        logger.error("tenant scan crashed", extra={"tenant": tenant_slug, "error": str(exc)})
+        return 1
+
+
+def _cli_scan() -> int:
+    with get_session() as session:
+        slugs = _tenant_slugs_to_scan(session)
+    if not slugs:
+        logger.error("nothing to scan: set TENANT_SLUG or SCAN_TENANTS=all")
+        return 1
+    codes = [_scan_tenant_safely(slug) for slug in slugs]
+    return 0 if all(code == 0 for code in codes) else 1
 
 
 def _cli_resolve(domains: list[str]) -> int:
