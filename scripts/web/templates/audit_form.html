@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Signal Audit — SignalForce{% endblock %}
+{% block nav_audit %}active{% endblock %}
+{% block content %}
+<h1>Signal Audit</h1>
+<p>Which of your signals came before meetings, how stale each source was, and what a "two independent sources must agree" rule would have caught or missed.</p>
+<p class="muted"><strong>Nothing is stored.</strong> Your files are processed in memory for this one request and deleted before the page loads, and only file sizes are logged. Company-level data only: contact names are dropped and emails are reduced to a domain. Processed on Fly.io. Files up to {{ max_mb }} MB each.</p>
+{% if error %}<p class="badge-warn">{{ error }}</p>{% endif %}
+<form method="post" action="/audit/run" enctype="multipart/form-data">
+  <p><label>Accounts (.csv, required)<br><input type="file" name="accounts" accept=".csv" required></label></p>
+  <p><label>Signals (.csv, required)<br><input type="file" name="signals" accept=".csv" required></label></p>
+  <p><label>Outcomes: meetings, opportunities, replies (.csv, required)<br><input type="file" name="outcomes" accept=".csv" required></label></p>
+  <p><label>Engagements (.csv, optional)<br><input type="file" name="engagements" accept=".csv"></label></p>
+  <p><label>Detection lag (.csv, optional)<br><input type="file" name="holdout_lag" accept=".csv"></label></p>
+  <p><label>Config (.json, optional)<br><input type="file" name="config" accept=".json"></label></p>
+  <button type="submit">Run the audit</button>
+</form>
+<p>No data handy? <a href="/audit/sample.zip">Download a synthetic sample</a> and upload it to see a report.</p>
+{% endblock %}

@@ -16,6 +16,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from scripts.logging_config import configure_logging
 from scripts.web.auth import LoginRequired
+from scripts.web.routes_audit import router as audit_router
 from scripts.web.routes_auth import router as auth_router
 from scripts.web.routes_dashboard import router as dashboard_router
 from scripts.web.routes_health import router as health_router
@@ -60,6 +61,7 @@ def create_app() -> FastAPI:
     app.add_exception_handler(LoginRequired, _redirect_to_login)
     app.include_router(health_router)
     app.include_router(auth_router)
+    app.include_router(audit_router)
     app.include_router(dashboard_router)
     app.include_router(webhooks_router)
     return app
