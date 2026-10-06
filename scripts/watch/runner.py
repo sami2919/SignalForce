@@ -39,6 +39,7 @@ from sqlalchemy.orm import Session
 
 from scripts.logging_config import configure_logging
 from scripts.measure.daily_postprocess import run_daily_postprocess
+from scripts.net.guard import guarded_client
 from scripts.registry.resolver import resolve_sources
 from scripts.registry.store import StoreResult, ensure_tenant, store_resolution
 from scripts.scoring.wiring import run_scoring_stage
@@ -70,7 +71,7 @@ async def resolve_and_store(tenant_id: int, domains: list[str]) -> StoreResult:
     created = 0
     updated = 0
     deactivated = 0
-    async with httpx.AsyncClient() as client:
+    async with guarded_client() as client:
         for domain in domains:
             report = await resolve_sources(domain, client)
             with get_session() as session:
@@ -141,7 +142,7 @@ async def run_watch_pass(
         url_by_id = {sid: url for sid, _, url, _ in sources}
         account_id_by_source_id = {sid: account_id for sid, account_id, _, _ in sources}
 
-        async with httpx.AsyncClient() as client:
+        async with guarded_client() as client:
             first_results = await fetch_all(refs, client=client, concurrency=concurrency)
 
             # --- Phase 3: async confirm ---

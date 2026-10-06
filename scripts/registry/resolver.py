@@ -16,6 +16,7 @@ from urllib.robotparser import RobotFileParser
 
 import httpx
 
+from scripts.net.guard import guarded_client
 from scripts.registry.models import (
     ResolutionOutcome,
     ResolutionReport,
@@ -274,7 +275,7 @@ if __name__ == "__main__":
 
     async def _main() -> None:
         domain = sys.argv[1] if len(sys.argv) > 1 else "example.com"
-        async with httpx.AsyncClient() as client:
+        async with guarded_client() as client:
             report = await resolve_sources(domain, client)
         print(report.model_dump_json(indent=2))
 

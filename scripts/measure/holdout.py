@@ -36,6 +36,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from scripts.logging_config import configure_logging
+from scripts.net.guard import guarded_client
 from scripts.registry.store import ensure_tenant
 from scripts.storage.models import AccountSource, HoldoutScan
 from scripts.storage.session import get_session
@@ -163,7 +164,7 @@ async def run_deep_scan(tenant_id: int, *, holdout_size: int = 5, seed: int = 42
     refs = [SourceRef(source_id=sid, url=url) for sid, _, url in sources]
     results: list[ProbeResult] = []
     if refs:
-        async with httpx.AsyncClient() as client:
+        async with guarded_client() as client:
             results = await fetch_all(refs, client=client)
 
     # --- Phase 3: sync DB write ---
