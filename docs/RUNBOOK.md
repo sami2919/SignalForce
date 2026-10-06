@@ -314,9 +314,11 @@ The daily worker scans every tenant with an active source when `SCAN_TENANTS=all
 fly machine update <worker-machine-id> --env SCAN_TENANTS=all -a signalforce
 ```
 
+Note: `fly machine update` restarts the machine unless you pass `--skip-start`. The worker's job is the daily scan, so applying `SCAN_TENANTS=all` this way may start a scan run immediately. Pass `--skip-start` if the change should wait for the next scheduled run.
+
 After any deploy that changes worker code, re-point the worker (and the holdout machine) at the new image as described in the notes in `fly.toml`.
 
-A new tenant's first scan happens at the next daily run; the watchlist page shows "resolving…" until the background source resolution finishes.
+A new tenant's first scan happens at the next daily run. Each watchlist row shows its source count, or the stored resolution outcome (`account_metadata["resolution"]`): "resolving…" while pending, "no public careers page or repo found", "resolution failed — add the domain again to retry", or, for a pending older than 15 minutes (for example, the machine was suspended mid-resolution), "resolution did not finish — add the domain again to retry". Adding such a domain again re-queues it.
 
 A tenant whose scan crashes is logged (`tenant scan crashed`) and the other tenants still run; the run then exits 1. The hourly holdout machine still measures the owner tenant only.
 

@@ -184,7 +184,7 @@ def scan(config: ScannerConfig) -> ScanResult:
 
 ## Hosted version
 
-An invite-only deployment runs Signal Audit as a web page: upload three CSVs, get the report. Files are held only for the one request (in memory and short-lived temporary files, including framework upload spooling) and deleted before the response is sent; nothing is stored or logged. See [`docs/decisions/0025-invite-only-web-access.md`](docs/decisions/0025-invite-only-web-access.md). To run it yourself, set `SESSION_SECRET` and `DATABASE_URL`, run `alembic upgrade head`, create an invite with `python -m scripts.web.invites create --label you --owner`, and start `uvicorn scripts.web.app:app`. Signed-in users can also keep a watchlist of up to 25 company domains that the daily worker scans, then audit those signals against their CRM outcomes. Outbound fetches refuse non-public addresses; see [`docs/decisions/0026-outbound-request-guard.md`](docs/decisions/0026-outbound-request-guard.md).
+An invite-only deployment runs Signal Audit as a web page: upload three CSVs, get the report. Files are held only for the one request (in memory and short-lived temporary files, including framework upload spooling) and deleted before the response is sent; nothing is stored or logged. See [`docs/decisions/0025-invite-only-web-access.md`](docs/decisions/0025-invite-only-web-access.md). To run it yourself, set `SESSION_SECRET` and `DATABASE_URL`, run `alembic upgrade head`, create an owner invite with its own workspace with `python -m scripts.web.invites create --label you --tenant-slug you --owner` (without `--tenant-slug`, the watchlist and the audit bridge say the invite has no workspace), and start `uvicorn scripts.web.app:app`. Signed-in users can also keep a watchlist of up to 25 company domains that the daily worker scans, then audit those signals against their CRM outcomes. Outbound fetches refuse non-public addresses; see [`docs/decisions/0026-outbound-request-guard.md`](docs/decisions/0026-outbound-request-guard.md).
 
 Before the first deploy: the image installs `signal-audit` from the tarball of tag `v0.2.0` of github.com/sami2919/signal-audit, and that tag must exist and contain `signal_audit/service.py` (today it is on the signal-audit branch `feat/audit-uploads`, commit `590e93f`, not on `main`). Merge that branch (or tag `590e93f`), tag `v0.2.0`, push the tag, check `curl -sIL https://github.com/sami2919/signal-audit/archive/refs/tags/v0.2.0.tar.gz | grep -m1 '^HTTP'` prints 200, run `fly secrets set SESSION_SECRET=...`, then deploy. If you skip this and the tag lacks `service.py`, the image builds but the app fails on import at boot, so the health check fails. The full steps are in [`docs/RUNBOOK.md`](docs/RUNBOOK.md) section 9.
 
@@ -194,7 +194,7 @@ Before the first deploy: the image installs `signal-audit` from the tarball of t
 pytest --tb=short -q
 ```
 
-The suite has 1,313 tests and all pass on the current `main`.
+The suite has 1,371 tests and all pass on the current `main`.
 
 ---
 
