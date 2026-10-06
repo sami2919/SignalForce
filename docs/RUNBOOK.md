@@ -293,3 +293,19 @@ curl -s -b $J -o /tmp/report.html -w "%{http_code}\n" -F accounts=@/tmp/sample/a
   https://signalforce.fly.dev/audit/run                                                      # 200
 head -c 15 /tmp/report.html                                                                  # <!DOCTYPE html>
 ```
+
+## Multi-tenant scanning (ADR-0026)
+
+The daily worker scans every tenant with an active source when `SCAN_TENANTS=all` is set on the machine. `TENANT_SLUG` still works for a single tenant. The `[env]` block in `fly.toml` does not reach `fly machine run` machines, so set it on the machine itself:
+
+```bash
+fly machine update <worker-machine-id> --env SCAN_TENANTS=all -a signalforce
+```
+
+After any deploy that changes worker code, re-point the worker (and the holdout machine) at the new image as described in the notes in `fly.toml`.
+
+A new tenant's first scan happens at the next daily run; the watchlist page shows "resolving…" until the background source resolution finishes.
+
+A tenant whose scan crashes is logged (`tenant scan crashed`) and the other tenants still run; the run then exits 1. The hourly holdout machine still measures the owner tenant only.
+
+Outbound fetches refuse non-public addresses (ADR-0026). A watchlist domain that resolves to an internal address is refused with a 422 at intake, and a refused fetch during a scan is recorded as a failed fetch. A watchlist holds at most 25 domains, and there is no UI to remove one; removing an account is an operator task in the database.

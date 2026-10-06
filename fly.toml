@@ -26,7 +26,7 @@ primary_region = "sjc"          # co-located with Neon's AWS us-west-2 (Oregon)
   force_https = true
   auto_stop_machines = "suspend"   # snapshots memory; restore is ~1-3s
   auto_start_machines = true
-  min_machines_running = 0         # dashboard is read-only and rarely hit
+  min_machines_running = 0         # invite-only site with light, bursty traffic; cold start is acceptable
 
   [[http_service.checks]]
     interval = "30s"
@@ -43,8 +43,8 @@ primary_region = "sjc"          # co-located with Neon's AWS us-west-2 (Oregon)
 
 # NOTE: `fly deploy` creates 2 machines by default for HA regardless of
 # min_machines_running. Use `fly deploy --ha=false` to keep it at 1, or
-# `fly scale count 1` after the fact. For a single-user read-only dashboard
-# HA buys nothing and doubles rootfs storage cost.
+# `fly scale count 1` after the fact. For an invite-only site with a handful of
+# users, HA buys nothing and doubles rootfs storage cost.
 #
 # Scheduled workers are NOT defined here — they're created as standalone
 # machines (starts, runs, exits — you pay only for runtime), not part of

@@ -184,7 +184,7 @@ def scan(config: ScannerConfig) -> ScanResult:
 
 ## Hosted version
 
-An invite-only deployment runs Signal Audit as a web page: upload three CSVs, get the report. Files are held only for the one request (in memory and short-lived temporary files, including framework upload spooling) and deleted before the response is sent; nothing is stored or logged. See [`docs/decisions/0025-invite-only-web-access.md`](docs/decisions/0025-invite-only-web-access.md). To run it yourself, set `SESSION_SECRET` and `DATABASE_URL`, run `alembic upgrade head`, create an invite with `python -m scripts.web.invites create --label you --owner`, and start `uvicorn scripts.web.app:app`.
+An invite-only deployment runs Signal Audit as a web page: upload three CSVs, get the report. Files are held only for the one request (in memory and short-lived temporary files, including framework upload spooling) and deleted before the response is sent; nothing is stored or logged. See [`docs/decisions/0025-invite-only-web-access.md`](docs/decisions/0025-invite-only-web-access.md). To run it yourself, set `SESSION_SECRET` and `DATABASE_URL`, run `alembic upgrade head`, create an invite with `python -m scripts.web.invites create --label you --owner`, and start `uvicorn scripts.web.app:app`. Signed-in users can also keep a watchlist of up to 25 company domains that the daily worker scans, then audit those signals against their CRM outcomes. Outbound fetches refuse non-public addresses; see [`docs/decisions/0026-outbound-request-guard.md`](docs/decisions/0026-outbound-request-guard.md).
 
 ## Tests
 
@@ -192,7 +192,7 @@ An invite-only deployment runs Signal Audit as a web page: upload three CSVs, ge
 pytest --tb=short -q
 ```
 
-The suite has 1,197 tests and all pass on the current `main`.
+The suite has 1,313 tests and all pass on the current `main`.
 
 ---
 
