@@ -67,13 +67,13 @@ def test_missing_required_file_is_a_422_that_names_it(logged_in, sample_files):
     files = _files(sample_files)
     del files["signals"]
     response = logged_in.post("/audit/run", files=files)
-    assert response.status_code == 422 and "signals" in response.text
+    assert response.status_code == 422 and "missing required file(s): signals" in response.text
 
 
 def test_wrong_extension_is_rejected(logged_in, sample_files):
     files = _files(sample_files, signals=("signals.xlsx", b"x", "application/octet-stream"))
     response = logged_in.post("/audit/run", files=files)
-    assert response.status_code == 422 and ".csv" in response.text
+    assert response.status_code == 422 and "please upload a .csv file" in response.text
 
 
 def test_non_utf8_csv_gets_the_clear_error_not_a_traceback(logged_in, sample_files):
@@ -90,16 +90,21 @@ def test_oversized_file_is_a_413(logged_in, sample_files, monkeypatch):
 
 
 def test_hostile_markup_in_the_csv_is_escaped_in_the_report(logged_in, sample_files):
-    accounts = sample_files["accounts.csv"].decode()
-    header, *rows = accounts.splitlines()
+    payload = "<script>alert(1)</script>"
+    header, *rows = sample_files["signals.csv"].decode().splitlines()
     columns = header.split(",")
-    name_at = columns.index("company_name")
-    evil = rows[0].split(",")
-    evil[name_at] = "<script>alert(1)</script>"
-    poisoned = "\n".join([header, ",".join(evil), *rows[1:]]).encode()
-    files = _files(sample_files, accounts=("accounts.csv", poisoned, "text/csv"))
+    type_at, source_at = columns.index("signal_type"), columns.index("source")
+    poisoned_rows = []
+    for row in rows[:20]:
+        cells = row.split(",")
+        cells[type_at] = payload
+        cells[source_at] = payload
+        poisoned_rows.append(",".join(cells))
+    poisoned = "\n".join([header, *poisoned_rows, *rows[20:]]).encode()
+    files = _files(sample_files, signals=("signals.csv", poisoned, "text/csv"))
     response = logged_in.post("/audit/run", files=files)
     assert response.status_code == 200
+    assert "&lt;script&gt;" in response.text
     assert "<script>alert(1)" not in response.text
 
 

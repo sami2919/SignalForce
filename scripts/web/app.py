@@ -15,14 +15,17 @@ from fastapi.responses import RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 from scripts.logging_config import configure_logging
+from scripts.web import routes_audit
 from scripts.web.auth import LoginRequired
 from scripts.web.routes_audit import router as audit_router
 from scripts.web.routes_auth import router as auth_router
 from scripts.web.routes_dashboard import router as dashboard_router
 from scripts.web.routes_health import router as health_router
 from scripts.web.routes_webhooks import router as webhooks_router
+from scripts.web.upload_guard import UploadGuardMiddleware
 
 _SESSION_DAYS = 14
+_MULTIPART_OVERHEAD = 1024 * 1024
 
 
 def _is_production() -> bool:
@@ -49,6 +52,12 @@ def create_app() -> FastAPI:
         title="SignalForce",
         version="0.3.0",
         description="Signal detection engine and Signal Audit — invite-only.",
+    )
+    # Added before SessionMiddleware so it runs inside it (last added is outermost).
+    app.add_middleware(
+        UploadGuardMiddleware,
+        paths=("/audit/run", "/audit/from-watchlist"),
+        limit=lambda: routes_audit.MAX_TOTAL_BYTES + _MULTIPART_OVERHEAD,
     )
     app.add_middleware(
         SessionMiddleware,
