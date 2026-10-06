@@ -268,6 +268,18 @@ machine-update step in §4, since that's a secrets change.
 
 ## 9. Web access (ADR-0025)
 
+### Before the first deploy
+
+The image installs `signal-audit` from the tarball of tag `v0.2.0` of github.com/sami2919/signal-audit (see `pyproject.toml`). That tag must exist and must contain `signal_audit/service.py`, which the web app imports. Today that file lives on the signal-audit branch `feat/audit-uploads` (commit `590e93f`), not on its `main`. Do these in order, by hand:
+
+1. In the signal-audit repo, merge `feat/audit-uploads` into `main` (or tag commit `590e93f` directly).
+2. Tag that commit `v0.2.0` and push the tag: `git tag v0.2.0 <commit> && git push origin v0.2.0`.
+3. Check the tarball resolves: `curl -sIL https://github.com/sami2919/signal-audit/archive/refs/tags/v0.2.0.tar.gz | grep -m1 '^HTTP'` should print a 200 line.
+4. Set the session secret: `fly secrets set SESSION_SECRET=$(openssl rand -hex 32) -a signalforce`.
+5. Deploy.
+
+If you skip steps 1-3, the deploy fails in a confusing way: if the tag is missing, the image build fails when pip cannot download the tarball. If the tag exists without `service.py`, the image builds, but the app fails on import at boot (`ModuleNotFoundError: signal_audit.service`), so the health check fails and the release does not go live.
+
 Secrets: `fly secrets set SESSION_SECRET=$(openssl rand -hex 32) -a signalforce`. The app refuses to start in production without it.
 
 Manage invites on the running machine (codes are shown once; only the hash is stored):
