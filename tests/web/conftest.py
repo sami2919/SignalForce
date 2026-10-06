@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from scripts.storage.models import Base
 from scripts.web import auth as auth_module
+from scripts.web import routes_audit as audit_module
 from scripts.web import invites as invites_module
 from scripts.web import routes_dashboard as dashboard_module
 from scripts.web import routes_watchlist as watchlist_module
@@ -21,7 +22,7 @@ from scripts.web.invites import create_invite
 
 # Every module that opens its own DB session. Add a module here when a task
 # introduces a new route or CLI that calls get_session().
-SESSION_MODULES = [auth_module, invites_module, dashboard_module, watchlist_module]
+SESSION_MODULES = [auth_module, invites_module, dashboard_module, watchlist_module, audit_module]
 
 
 @pytest.fixture(autouse=True)

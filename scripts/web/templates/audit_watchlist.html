@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Audit my watchlist — SignalForce{% endblock %}
+{% block nav_audit %}active{% endblock %}
+{% block content %}
+<h1>Audit my watchlist signals</h1>
+<p>Upload your CRM outcomes (meetings, opportunities, replies). The signals come from your watchlist's own history.</p>
+<p class="muted"><strong>Nothing is stored.</strong> Your outcomes file is held only for this one request (in memory and short-lived temporary files) and deleted before the page loads. <strong>One limit:</strong> every watchlist signal is a web-change signal (one source family), so the "two independent sources must agree" rule cannot fire here. You will see freshness and single-source evidence.</p>
+{% if error %}<p class="badge-warn">{{ error }}</p>{% endif %}
+<form method="post" action="/audit/from-watchlist" enctype="multipart/form-data">
+  <p><label>Outcomes (.csv, required)<br><input type="file" name="outcomes" accept=".csv" required></label></p>
+  <p><label>Engagements (.csv, optional)<br><input type="file" name="engagements" accept=".csv"></label></p>
+  <button type="submit">Run the audit</button>
+</form>
+{% endblock %}

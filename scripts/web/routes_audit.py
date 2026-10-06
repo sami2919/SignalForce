@@ -17,6 +17,8 @@ from signal_audit.service import audit_uploads
 from signal_audit.synth import generate, write_sample
 from starlette.concurrency import run_in_threadpool
 
+from scripts.export.audit_export import export_tenant
+from scripts.storage.session import get_session
 from scripts.web.auth import InviteIdentity, require_invite
 
 logger = logging.getLogger(__name__)
@@ -145,3 +147,58 @@ def sample_zip(invite: InviteIdentity = Depends(require_invite)) -> Response:
         media_type="application/zip",
         headers={"Content-Disposition": 'attachment; filename="signal-audit-sample.zip"'},
     )
+
+
+_BRIDGE_FILES = ("accounts", "signals")
+
+
+def _export_for_tenant(tenant_id: int) -> tuple[dict[str, bytes], int, bytes]:
+    """Export one tenant's accounts and signals as bytes. Returns (files, signal_rows, audit_config)."""
+    with tempfile.TemporaryDirectory(prefix="signal-audit-export-") as tmp:
+        root = Path(tmp)
+        with get_session() as session:
+            counts = export_tenant(session, tenant_id, root)
+        if counts.get("signals", 0) == 0:  # nothing to audit; skip reading files
+            return {}, 0, b""
+        files = {name: (root / f"{name}.csv").read_bytes() for name in _BRIDGE_FILES}
+        return files, counts.get("signals", 0), (root / "audit.json").read_bytes()
+
+
+@router.get("/audit/from-watchlist", response_class=HTMLResponse)
+def bridge_form(request: Request, invite: InviteIdentity = Depends(require_invite)) -> HTMLResponse:
+    return templates.TemplateResponse(request, "audit_watchlist.html", {"error": ""})
+
+
+@router.post("/audit/from-watchlist", response_model=None)
+async def run_bridge(
+    request: Request,
+    outcomes: UploadFile | None = File(None),
+    engagements: UploadFile | None = File(None),
+    invite: InviteIdentity = Depends(require_invite),
+) -> Response:
+    def failure(message: str, status: int) -> HTMLResponse:
+        return templates.TemplateResponse(
+            request, "audit_watchlist.html", {"error": message}, status_code=status
+        )
+
+    if invite.tenant_id is None:  # the tenant comes from the invite, never from the request
+        return failure("Your invite has no workspace yet.", 403)
+    try:
+        uploads = await _collect({"outcomes": outcomes, "engagements": engagements})
+        files, signal_rows, config_bytes = await run_in_threadpool(_export_for_tenant, invite.tenant_id)
+        if signal_rows == 0:
+            return failure(
+                "No signals yet: your watchlist has not produced any signal events. "
+                "Check back after the daily scan has seen a change.", 422,
+            )
+        html = await run_in_threadpool(_run_guarded, {**files, **uploads}, config_bytes)
+    except UploadRejected as exc:
+        return failure(str(exc), exc.status)
+    except Busy:
+        return failure("The audit is busy with other runs. Try again in a minute.", 429)
+    except AuditError as exc:
+        return failure(str(exc), 422)
+    except Exception as exc:  # noqa: BLE001 -- log the type only
+        logger.error("bridge audit failed", extra={"invite_id": invite.id, "error_type": type(exc).__name__})
+        return failure("Something went wrong running the audit. Nothing was stored.", 500)
+    return HTMLResponse(html, headers=REPORT_HEADERS)
