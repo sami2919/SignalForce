@@ -451,3 +451,31 @@ async def test_an_endless_robots_txt_is_aborted_and_treated_as_permissive(monkey
     async with _client(handler) as c:
         results = await fetch_all([SourceRef(source_id=1, url="https://x.com/careers")], client=c)
     assert results[0].content_hash is not None and not results[0].robots_blocked
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("hostile_path", ["/robots.txt", "/careers"])
+async def test_a_corrupt_deflate_body_is_recorded_not_raised(hostile_path) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "hostile.com" and request.url.path == hostile_path:
+            return httpx.Response(
+                200,
+                headers={"content-encoding": "deflate"},
+                stream=_CountingStream([b"garbage-not-deflate"]),
+            )
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text=ROBOTS_ALLOW)
+        return httpx.Response(200, text=PAGE)
+
+    sources = [
+        SourceRef(source_id=1, url="https://hostile.com/careers"),
+        SourceRef(source_id=2, url="https://healthy.com/careers"),
+    ]
+    async with _client(handler) as c:
+        results = await fetch_all(sources, client=c)
+    assert len(results) == 2
+    healthy = next(r for r in results if r.source_id == 2)
+    assert healthy.content_hash is not None and healthy.error is None
+    if hostile_path == "/careers":
+        hostile = next(r for r in results if r.source_id == 1)
+        assert hostile.content_hash is None and hostile.error is not None

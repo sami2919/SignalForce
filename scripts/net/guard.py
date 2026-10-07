@@ -127,10 +127,17 @@ class _BoundedInflater:
     def feed(self, data: bytes, budget: int) -> bytes:
         """Decode `data`, stopping once more than `budget` bytes are produced."""
         try:
+            return self._feed(data, budget)
+        except zlib.error:
+            # Same type httpx raises; never echo response bytes in the message.
+            raise httpx.DecodingError("malformed compressed body") from None
+
+    def _feed(self, data: bytes, budget: int) -> bytes:
+        try:
             out = self._d.decompress(data, budget + 1)
         except zlib.error:
             if not (self._deflate and self._first):
-                raise httpx.DecodingError("malformed compressed body") from None
+                raise
             self._d = zlib.decompressobj(-zlib.MAX_WBITS)  # raw deflate, as httpx does
             out = self._d.decompress(data, budget + 1)
         self._first = False
@@ -143,7 +150,10 @@ class _BoundedInflater:
         return b"".join(parts)
 
     def flush(self) -> bytes:
-        return self._d.flush()
+        try:
+            return self._d.flush()
+        except zlib.error:
+            raise httpx.DecodingError("malformed compressed body") from None
 
 
 async def _decoded_chunks(streamed: httpx.Response, max_bytes: int) -> AsyncIterator[bytes]:

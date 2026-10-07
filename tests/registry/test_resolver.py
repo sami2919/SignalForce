@@ -360,3 +360,24 @@ async def test_an_endless_robots_txt_is_treated_as_permissive(monkeypatch) -> No
         }
     )
     assert "careers" in report.resolved_types
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("hostile_path", ["/robots.txt", "/careers", "/"])
+async def test_a_corrupt_deflate_body_does_not_raise(hostile_path) -> None:
+    routes = {
+        "/robots.txt": httpx.Response(200, text=ROBOTS_ALLOW_ALL),
+        "/": httpx.Response(200, text=HOMEPAGE),
+        "/careers": httpx.Response(200, text=CAREERS),
+    }
+    routes[hostile_path] = httpx.Response(
+        200,
+        headers={"content-encoding": "deflate"},
+        stream=httpx.ByteStream(b"garbage-not-deflate"),
+    )
+    report = await _resolve(routes)
+    if hostile_path == "/":
+        assert report.homepage_reachable is False
+    elif hostile_path == "/careers":
+        careers = next(a for a in report.attempts if a.source_type == "careers")
+        assert careers.outcome == "fetch_error" and "DecodingError" in careers.detail

@@ -211,3 +211,25 @@ async def test_stacked_content_encodings_are_refused_not_inflated():
     async with _client(handler) as client:
         with pytest.raises(httpx.DecodingError):
             await get_capped(client, "https://bomb.example/", max_bytes=CAP)
+
+
+_CORRUPT_BODIES = {
+    "deflate": ("deflate", b"garbage-not-deflate"),
+    "gzip": ("gzip", b"garbage-not-gzip"),
+    "gzip-after-valid-header": ("gzip", gzip.compress(b"hello" * 1000)[:10] + b"\xff" * 50),
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("encoding,body", list(_CORRUPT_BODIES.values()), ids=list(_CORRUPT_BODIES))
+async def test_a_corrupt_compressed_body_is_a_decoding_error_not_a_zlib_error(encoding, body):
+    def handler(request):
+        return httpx.Response(
+            200, headers={"content-encoding": encoding}, stream=_Chunks([body])
+        )
+
+    async with _client(handler) as client:
+        with pytest.raises(httpx.DecodingError) as excinfo:
+            await get_capped(client, "https://hostile.example/", max_bytes=CAP)
+    assert not isinstance(excinfo.value, zlib.error)
+    assert body[:8].decode("latin-1") not in str(excinfo.value)
