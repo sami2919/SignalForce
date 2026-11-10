@@ -117,7 +117,7 @@ An optional LLM layer turns signals into structured account briefs (fit score, w
 
 ## Production system: watch, verify, score
 
-Beyond the config-driven scanners, `main` includes a persistent, multi-tenant pipeline that watches accounts continuously and measures its own accuracy. It is built from small, separately documented decisions (24 ADRs in [`docs/decisions/`](docs/decisions/)), and operated per [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
+Beyond the config-driven scanners, `main` includes a persistent, multi-tenant pipeline that watches accounts continuously and measures its own accuracy. It is built from small, separately documented decisions (26 ADRs in [`docs/decisions/`](docs/decisions/)), and operated per [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
 
 | Layer | What it does |
 |---|---|
@@ -130,6 +130,58 @@ Beyond the config-driven scanners, `main` includes a persistent, multi-tenant pi
 | **Export** | A tenant's data can be written out as input for [Signal Audit](https://github.com/sami2919/signal-audit) |
 
 It deploys to Fly.io (a web app plus daily and hourly scheduled machines) against Neon Postgres. **Today it runs one tenant, the author's own outbound, and has no outside users.** The schema is multi-tenant, but the live pipeline is configured around that one ICP rather than driven by the `config/config.yaml` described above.
+
+### The data model, read as an ontology
+
+The pipeline is easiest to understand as objects, links between them, and governed actions, not as tables:
+
+| Object | Linked to | Written by |
+|---|---|---|
+| **Tenant** | owns everything below; every query is tenant-scoped | invite + workspace setup |
+| **Account** | its Sources, Signals, Scores, Contacts | resolver |
+| **Source** (careers page, repo) | its Account; its Probes | registry; deactivated after repeated failures |
+| **Probe** / **Holdout scan** | its Source and Scan run | watch worker (daily) / holdout worker (hourly) |
+| **Signal event** | its Account, Source and Scan run (provenance) | verify stage, only after a confirmed, diffed change |
+| **Score** | its Account; stores the full per-signal trace | scoring stage |
+| **Contact** → **Outreach** | the Signals that triggered it; the reply | send recorder; reply webhook |
+
+Every signal traces back to the page fetch that produced it, and every score stores the arithmetic that produced it, so any number on the dashboard can be explained.
+
+### Measured results
+
+All figures come from runs recorded in the build log, not from projections.
+
+| What was measured | Result |
+|---|---|
+| Fetch speed | 37 sources across 8 domains in **7.8 s** at concurrency 20; p50 229 ms, p95 1,835 ms. Extrapolates to about 7 minutes for 2,000 sources |
+| Extraction accuracy | **50 of 50** job postings extracted with stable IDs on a Greenhouse careers page, matching an independently measured baseline, on two runs |
+| Cost per extraction | Cut from $0.916 to **$0.031** on the worst page (−97%) by trimming input HTML from 179,561 to 2,662 tokens. Model choice was not the lever; input size was |
+| False-signal defence | A naive page diff turned a 6-character cosmetic edit into 2 signals from 0 real changes, and about 17% of Greenhouse fetches churned from translation glitches alone. Confirm-on-change plus fact-level diffing (ADR-0005, ADR-0008) emits signals only for real changes |
+| Accuracy over time | An hourly holdout deep scan measures **recall** (share of real changes the daily watch caught) and **detection lag** (p50/p95 hours) on the same account population |
+| Quality gates | 1,400 tests, an 80% coverage gate in CI, and 26 ADRs that record what was rejected and why |
+
+The one number not yet measured is end-to-end lift: reply-rate lift needs a larger outreach sample, and the cohort analysis refuses to report a figure until the sample is big enough to mean something.
+
+---
+
+## Roadmap: deployment-grade extensions (in progress)
+
+The next stage is planned task by task in [`docs/superpowers/plans/2026-11-10-palantir-gap-curriculum.md`](docs/superpowers/plans/2026-11-10-palantir-gap-curriculum.md). None of it is merged yet. Each item ships with tests and an ADR.
+
+| Area | What gets built | Why it matters |
+|---|---|---|
+| **Entity resolution** | Union-find clustering of the same company seen under different domains and names | One golden record per account, so signals stack instead of splitting |
+| **Idempotent ingestion** | A content-hash `dedupe_key` with a unique constraint and insert-or-ignore | Re-running a scan can never double-count a signal |
+| **History** | Slowly-changing (SCD Type 2) account attributes with `attributes_as_of(ts)` | Any past decision can be replayed with the facts known at that time |
+| **Human-in-the-loop review** | Every drafted message is accepted, edited, or rejected with a reason code; edit distance is stored | The approval gate before anything reaches a real prospect, and the cheapest preference data there is |
+| **Trajectory export** | One JSONL record per draft: evidence, review, final text, send, delayed reply, joined by ID | Training-ready data that blocks future-data leakage, flags stale evidence, hashes PII and honours a per-tenant opt-out |
+| **Semantic search** | Evidence chunks, a BM25 index, pgvector embeddings, and reciprocal-rank-fusion hybrid search, filtered by tenant before ranking | Ask "who is struggling with GPU cost?" and get cited evidence, not just keyword hits |
+| **Evals** | A golden question set scored on recall@k and MRR; labelled detector snippets scored on precision and recall | Every retrieval or detector change is judged by a number, not a demo |
+| **Analytical SQL** | Window-function rank history, gaps-and-islands signal streaks, and a CTE outreach funnel, with an index justified by `EXPLAIN ANALYZE` | Questions answered in the database, with a measured query plan |
+| **Batch backfill** | An incremental PySpark job that recomputes score history, partitioned by tenant and day | Rescoring the full history after a weight change without blocking the live pipeline |
+| **Parallel scanners** | A threaded DAG executor with topological ordering, cycle detection, and failure isolation | Independent sources scan concurrently; one failing source cannot stop the others |
+| **Ontology API + SDK** | Tenant-scoped `/api/v1/objects/...` endpoints with keyset pagination, and a typed TypeScript client with immutable object sets | Other teams build on the data model without touching the database |
+| **Kubernetes** | Kustomize manifests (web Deployment, watch CronJob, migrate Job), validated in CI with kubeconform | The same system deploys to a customer's cluster, not only to Fly.io |
 
 ---
 
