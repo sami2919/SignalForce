@@ -210,6 +210,47 @@ understood patterns become deterministic code. The loop proposes promotions; a h
 | Relationship | Alumni edge to a customer, investor edge, customer referral | Press, team pages, investor lists | Priority boost | n/a |
 | Seasonal | Private-dining page, holiday events push | Venue sites | Angle and timing | Journey suggestion |
 
+### 6.3a Customer detection: the Loyalist embed fingerprint
+
+**Finding (research, 2026-11-16).** Loyalist customer websites carry Loyalist embeds:
+`api.eatloyalist.com/signup/form` (guest signup/waitlist forms) and `agent.eatloyalist.com`
+(agents). A plain fetch found them on 12 customer sites: Hawthorne & Wood, Bluebird, Próximo,
+Fork, High Street, Los Félix, Krüs, Füm, Rabbit Ears, starr-restaurants.com and others. Grassfed's
+Rabbit Ears site is essentially a Loyalist waitlist form.
+
+**Mechanism.**
+- Add `eatloyalist.com` hosts to the widget-detection fingerprint list in the watch layer. Detection
+  is deterministic and runs in the same crawl as booking-widget and POS detection.
+- Detection runs on every crawled venue site. The Firecrawl fallback applies when the embed is
+  injected by JavaScript (§6.13).
+- Each detection is stored as a `Signal(type=loyalist_embed)` with the evidence snippet and
+  `observed_at`.
+- An embed that *appears* on a site we already crawl is dated to the crawl where it first showed
+  up. An embed that *disappears* is a churn signal.
+
+**Uses.**
+1. **Labeled positives at scale.** Detected venues join the public logo list as customer labels.
+   That replaces ~25 marketing-selected logos with every customer whose site carries an embed. The
+   backtest (§6.5) and the lookalike seeds for Exa (§6.13) both use this larger set.
+2. **Automatic customer flag.** A detected venue, and its group via the graph, leaves prospect
+   playbooks and enters customer playbooks (§6.10): expansion on opening signals, at-risk on
+   people or platform signals. This prevents cold-emailing an existing customer.
+3. **Dated new-customer feed for the learning loop.** New embeds on the weekly crawl are dated
+   labels. Without Magic's CRM, they let the loop update signal precision priors (§6.11): which
+   signals appeared in the months before an embed showed up.
+4. **Penetration map.** Customers per neighborhood or city against the universe size, used for
+   territory planning and to pick where peer social proof is strongest.
+
+**Limits.**
+- *Undercounts.* Customers who don't embed a Loyalist form on their site are invisible to this
+  method, so it is a lower bound. Logos, press and Magic's CRM fill the gap later.
+- *First-seen date ≠ signing date.* The first crawl that sees an embed is an upper bound on the
+  start date, and only for sites crawled before that point. Historical sites can't be dated
+  because web.archive.org is unreachable in this session.
+- *Sensitive output.* A list of Magic's customers derived from their own embeds is competitively
+  sensitive. Use it only inside the system (labels, suppression, playbooks). Never export or
+  display it outside an authenticated view.
+
 ### 6.4 Buying-window model (needs no Magic data)
 
 - Join SLA filing date to the DOHMH *first inspection* date at the same resolved venue. The first
@@ -234,7 +275,8 @@ understood patterns become deterministic code. The loop proposes promotions; a h
   signal zeroed out to see its effect.
 - No hard filters except true disqualifiers (closed venue, existing customer for the prospect
   playbook, suppressed).
-- **Backtest:** rewind time on the public Loyalist customer list. Did their filings, press or
+- **Backtest:** labels are the public customer list plus every venue with a detected Loyalist
+  embed (§6.3a). Rewind time on these. Did their filings, press or
   people signals precede them becoming customers? Report how well the score ranks these known
   positives (AUC / precision@k against unlabeled venues), not "accuracy". Unlabeled venues are not
   proven negatives.
@@ -530,7 +572,9 @@ signup credits only. Build order is priority order; if time runs out, cut from t
 2. Filing→opening window curve.
 3. Scores with traces for the universe.
 4. Recall audit + the head-to-head benchmark against plain Claude (§7a).
-5. Widget crawl of a few hundred top venues + Wayback Machine history to date past switches.
+5. Widget crawl of a few hundred top venues, including the Loyalist embed fingerprint (§6.3a),
+   to grow the customer labels and flag existing customers. Wayback Machine history to date past
+   switches only if web.archive.org becomes reachable.
 6. Backtest against public Loyalist customers.
 7. Top-10 contacts via free-tier enrichment; 3 drafts per angle through the judge.
 8. Event registry + one ranked meeting list (§6.12).
