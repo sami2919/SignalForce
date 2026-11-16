@@ -146,7 +146,7 @@ def test_draft_never_drafts_for_an_embed_customer_with_a_stale_flag(
         grounding_violations=(),
         passed=True,
     )
-    monkeypatch.setattr(cli, "judge", lambda d, ev, *, account_text: verdict)
+    monkeypatch.setattr(cli, "judge", lambda d, ev, *, account_text, pass_score: verdict)
     cli.draft_command(top=5)
     assert "g:x" not in seen and "g:a" in seen
 

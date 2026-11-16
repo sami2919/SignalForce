@@ -59,6 +59,29 @@ class PremisesRule(BaseModel):
     license_descriptions: dict[str, str]  # SLA description -> label
 
 
+class EventsConfig(BaseModel):
+    """Event ranking priors (starting assumptions, not measured) and the in-window threshold."""
+
+    model_config = ConfigDict(frozen=True)
+
+    attend_prior: dict[str, float]  # role -> P(the person attends)
+    meeting_rate_prior: dict[str, float]  # event type -> P(a qualified meeting | attends)
+    unmatched_priority: float  # priority of a person whose restaurant matches no venue
+    # A meeting target is "in window" at p_window >= this (M1).
+    in_window_p: float
+
+
+class BenchmarkConfig(BaseModel):
+    """Head-to-head size and the spend shown before it runs."""
+
+    model_config = ConfigDict(frozen=True)
+
+    runs: int
+    max_searches: int  # web searches per Claude run, at most
+    k: int  # list length scored on each side
+    web_search_usd_each: float  # list price, for the spend warning only
+
+
 class HospitalityConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -79,6 +102,12 @@ class HospitalityConfig(BaseModel):
     issued_lookback_days: int
     # Recall audit: a lead longer than this is reported as stale and kept out of the median.
     recall_lead_cap_days: int
+    events: EventsConfig
+    benchmark: BenchmarkConfig
+    # A judged draft passes at or above this LLM rubric score (and only with no violations).
+    judge_pass_score: float
+    # A Hunter email is used only at or above this confidence (0-100).
+    min_email_confidence: float
     # Google Places candidate acceptance for a venue's website.
     website_match_max_distance_m: float
     website_match_min_name_similarity: float

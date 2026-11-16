@@ -7,6 +7,7 @@ to an event's expected meetings and appear in a meeting list only as `is_custome
 
 from collections.abc import Sequence
 
+from scripts.hospitality.config import EventsConfig
 from scripts.hospitality.models import (
     CustomerLabel,
     Event,
@@ -18,25 +19,6 @@ from scripts.hospitality.models import (
 )
 from scripts.hospitality.resolve.normalize import name_similarity, strict_name_match
 
-ATTEND_PRIOR: dict[str, float] = {
-    "speaker": 0.95,
-    "panelist": 0.95,
-    "festival_chef": 0.95,
-    "award_nominee": 0.9,
-    "exhibitor_staff": 0.7,
-    "sponsor": 0.6,
-    "past_recap": 0.35,
-}
-MEETING_RATE_PRIOR: dict[str, float] = {
-    "curated_conference": 0.15,
-    "festival": 0.08,
-    "awards": 0.05,
-    "trade_show": 0.03,
-    "local_meetup": 0.20,
-    "magic_dinner": 0.50,
-}
-UNMATCHED_PRIORITY = 0.05
-IN_WINDOW_P = 0.5  # p_window at or above this counts as "in a buying window"
 CUSTOMER_REASON = "warm intro / co-host"
 
 
@@ -72,15 +54,16 @@ def _cold_priority(
     group_id: str | None,
     accounts: dict[str, ScoredAccount],
     customers: dict[str, CustomerLabel],
+    unmatched: float,
 ) -> float:
     """Priority of a cold target; 0.0 for customers and disqualified groups."""
     if group_id is None:
-        return UNMATCHED_PRIORITY
+        return unmatched
     if _is_customer(group_id, accounts, customers):
         return 0.0
     acct = accounts.get(group_id)
     if acct is None:
-        return UNMATCHED_PRIORITY  # matched venue, no score yet: same prior as unmatched
+        return unmatched  # matched venue, no score yet: same prior as unmatched
     return 0.0 if acct.disqualified_reason is not None else acct.priority
 
 
@@ -90,6 +73,8 @@ def rank_events(
     accounts: dict[str, ScoredAccount],
     venues: Sequence[Venue],
     customers: dict[str, CustomerLabel],
+    *,
+    priors: EventsConfig,
 ) -> list[EventScore]:
     """Events by expected meetings per dollar, best first.
 
@@ -102,14 +87,16 @@ def rank_events(
         by_event.setdefault(a.event_id, []).append(a)
     scores: list[EventScore] = []
     for ev in events:
-        rate = MEETING_RATE_PRIOR[ev.event_type]
+        rate = priors.meeting_rate_prior[ev.event_type]
         expected = 0.0
         matched = 0
         for a in by_event.get(ev.event_id, []):
             group_id = match_appearance(a, venues)
             matched += group_id is not None
-            prior = ATTEND_PRIOR[a.role] * rate
-            expected += prior * _cold_priority(group_id, accounts, customers)
+            prior = priors.attend_prior[a.role] * rate
+            expected += prior * _cold_priority(
+                group_id, accounts, customers, priors.unmatched_priority
+            )
         per_dollar = expected / max(ev.cost_usd, 1.0) if ev.cost_usd > 0 else 0.0
         scores.append(
             EventScore(
@@ -128,6 +115,8 @@ def meeting_list(
     accounts: dict[str, ScoredAccount],
     venues: Sequence[Venue],
     customers: dict[str, CustomerLabel],
+    *,
+    priors: EventsConfig,
 ) -> list[MeetingTarget]:
     """Who to meet at `event`: prospects by p_attend * priority, then customers (warm intro)."""
     prospects: list[MeetingTarget] = []
@@ -137,7 +126,7 @@ def meeting_list(
             continue
         group_id = match_appearance(a, venues)
         acct = accounts.get(group_id) if group_id else None
-        p_attend = ATTEND_PRIOR[a.role]
+        p_attend = priors.attend_prior[a.role]
         if _is_customer(group_id, accounts, customers):
             warm.append(
                 MeetingTarget(
@@ -160,8 +149,8 @@ def meeting_list(
                 person=a.person,
                 group_id=group_id,
                 p_attend=p_attend,
-                priority=acct.priority if acct else UNMATCHED_PRIORITY,
-                in_window=acct is not None and acct.p_window >= IN_WINDOW_P,
+                priority=acct.priority if acct else priors.unmatched_priority,
+                in_window=acct is not None and acct.p_window >= priors.in_window_p,
                 is_customer=False,
                 reason=f"{a.role} at {a.restaurant}",
             )

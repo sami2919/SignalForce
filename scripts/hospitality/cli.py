@@ -128,11 +128,6 @@ logger = logging.getLogger(__name__)
 SEED_PATH = Path(__file__).resolve().parents[2] / "examples/magic-loyalist/customers_seed.yaml"
 EVENTS_PATH = Path(__file__).resolve().parents[2] / "examples/magic-loyalist/events.yaml"
 OUT_DIR = Path(__file__).resolve().parents[2] / "out/magic"
-BENCHMARK_RUNS = 3
-BENCHMARK_MAX_SEARCHES = 20
-BENCHMARK_K = 50
-# Anthropic's published web-search list price (USD per search); re-check before relying on it.
-WEB_SEARCH_USD_EACH = 0.01
 SLA_SOURCES: tuple[LicenseSource, ...] = ("sla_pending", "sla_active", "sla_inactive")
 
 
@@ -596,7 +591,14 @@ def contacts(top: int = 25) -> dict[str, object]:
     found: list[Contact] = []
     for acct in ranked:
         found.extend(
-            find_contacts(acct, venues, firecrawl=firecrawl, hunter=hunter, budgets=budgets)
+            find_contacts(
+                acct,
+                venues,
+                firecrawl=firecrawl,
+                hunter=hunter,
+                budgets=budgets,
+                min_email_confidence=cfg.min_email_confidence,
+            )
         )
     store.save("contacts", found, key=lambda c: c.contact_id)  # type: ignore[attr-defined]
     return {
@@ -653,13 +655,14 @@ def events_rank(path: Path = EVENTS_PATH) -> dict[str, object]:
     customers = current_customers(store, SEED_PATH, venues=venues, groups=groups)
     scores = with_customer_flags(store.load("scores", ScoredAccount), customers)
     accounts = {a.group_id: a for a in scores}
-    ranked = rank_events(events, appearances, accounts, venues, customers)
+    priors = load_config().events
+    ranked = rank_events(events, appearances, accounts, venues, customers, priors=priors)
     by_id = {e.event_id: e for e in events}
     lines = ["# Event ranking and meeting lists", ""]
     total = 0
     for s in ranked:
         ev = by_id[s.event_id]
-        targets = meeting_list(ev, appearances, accounts, venues, customers)
+        targets = meeting_list(ev, appearances, accounts, venues, customers, priors=priors)
         total += len(targets)
         cost = f"${ev.cost_usd:,.0f}" if ev.cost_usd > 0 else "cost unknown"
         lines += [
@@ -701,6 +704,7 @@ def draft_command(top: int = 10) -> dict[str, object]:
     """Draft (never send) up to three angles per top cold prospect; judge and save them."""
     if not os.environ.get("ANTHROPIC_API_KEY"):  # fail fast, before touching the store
         raise SystemExit("ANTHROPIC_API_KEY is not set; the draft command needs it")
+    cfg = load_config()
     store = DocStore()
     venues = store.load("venues", Venue)
     group_of = {v.venue_id: v.group_id for v in venues}
@@ -733,7 +737,9 @@ def draft_command(top: int = 10) -> dict[str, object]:
             d = draft(acct, evidence, contact, angle)
             drafts.append(d)
             account_text = [*own_names.get(acct.group_id, []), *_contact_text(contact)]
-            judgements[d.draft_id] = judge(d, evidence, account_text=account_text)
+            judgements[d.draft_id] = judge(
+                d, evidence, account_text=account_text, pass_score=cfg.judge_pass_score
+            )
     store.save("drafts", drafts, key=lambda d: d.draft_id)  # type: ignore[attr-defined]
     ids = {id(j): k for k, j in judgements.items()}
     store.save("judgements", list(judgements.values()), key=lambda j: ids[id(j)])
@@ -1162,10 +1168,9 @@ def benchmark(cutoff_weeks: int = 8, today: date | None = None) -> BenchmarkResu
     venue_of_signal = {
         s.signal_id: s.entity_id for s in [*lic_signals, *stack] if s.entity_id in venue_ids
     }
-    runs = run_baseline(
-        Anthropic(), cutoff, runs=BENCHMARK_RUNS, max_searches=BENCHMARK_MAX_SEARCHES
-    )
-    result = compare(ranked, venue_of_signal, runs, truth, all_venues, k=BENCHMARK_K)
+    bench = cfg.benchmark
+    runs = run_baseline(Anthropic(), cutoff, runs=bench.runs, max_searches=bench.max_searches)
+    result = compare(ranked, venue_of_signal, runs, truth, all_venues, k=bench.k)
     store.clear("benchmark")
     store.save("benchmark", [result], key=lambda r: f"cutoff:{cutoff.isoformat()}")
     return result
@@ -1330,12 +1335,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     elif args.command == "benchmark":
         if not os.environ.get("ANTHROPIC_API_KEY"):  # fail fast, before any store or network use
             raise SystemExit("ANTHROPIC_API_KEY is not set; the benchmark command needs it")
-        searches = BENCHMARK_RUNS * BENCHMARK_MAX_SEARCHES
+        bench_cfg = load_config()
+        bench = bench_cfg.benchmark
+        searches = bench.runs * bench.max_searches
         print(
-            f"Maximum spend: {BENCHMARK_RUNS} runs x {BENCHMARK_MAX_SEARCHES} searches = "
-            f"{searches} web searches (~${searches * WEB_SEARCH_USD_EACH:.2f} at list price) "
-            f"plus tokens (up to 16000 output tokens per call, "
-            f"{load_config().budgets['claude_calls']} calls hard cap)."
+            f"Maximum spend: {bench.runs} runs x {bench.max_searches} searches = "
+            f"{searches} web searches (~${searches * bench.web_search_usd_each:.2f} at list "
+            f"price, re-check it) plus tokens (up to 16000 output tokens per call, "
+            f"{bench_cfg.budgets['claude_calls']} calls hard cap)."
         )
         if not args.yes:
             raise SystemExit("Re-run with --yes to spend this on the Claude API")

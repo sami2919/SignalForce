@@ -76,6 +76,7 @@ def run_find(
             firecrawl=fcm or fc(),
             hunter=hunter,
             budgets=budgets or {"firecrawl": CallBudget("fc", 5), "hunter": CallBudget("h", 5)},
+            min_email_confidence=70.0,
         )
     return out, hunter, fetch, st
 

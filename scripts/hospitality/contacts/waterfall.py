@@ -39,7 +39,6 @@ from scripts.watch.fetcher import SourceRef, fetch_all
 
 logger = logging.getLogger(__name__)
 
-MIN_EMAIL_CONFIDENCE = 70.0
 MAX_EMAIL_LOOKUPS_PER_GROUP = 2
 MAX_PAGE_CHARS = 12000
 FORBIDDEN_URL_PARTS = ("loyalist.com/for/",)
@@ -239,6 +238,7 @@ def find_contacts(
     firecrawl: FirecrawlClient,
     hunter: HunterClient,
     budgets: dict[str, CallBudget],
+    min_email_confidence: float,
 ) -> list[Contact]:
     """Named contacts for one prospect group. Customers and disqualified groups get none."""
     if account.is_customer or account.disqualified_reason is not None:
@@ -296,7 +296,7 @@ def find_contacts(
     for p in people:
         email, confidence, source = page_emails[p.name], None, "team_page"
         found, score = hunted.get(p.name, (None, None))
-        if email is None and found and score is not None and score >= MIN_EMAIL_CONFIDENCE:
+        if email is None and found and score is not None and score >= min_email_confidence:
             email, confidence, source = found, score, "team_page+hunter"
         contacts.append(
             Contact(

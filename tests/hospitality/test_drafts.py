@@ -176,7 +176,7 @@ def test_account_text_is_a_required_argument() -> None:
 def test_judge_never_passes_with_violations() -> None:
     d = make_draft((DraftSentence(text="x", evidence_ids=(), is_claim=True),))
     with patch.object(judge_mod, "structured", return_value=fake_llm_judgement(9.5)):
-        j = judge(d, [], account_text=ACCOUNT)
+        j = judge(d, [], account_text=ACCOUNT, pass_score=7.0)
     assert j.passed is False
     assert j.grounding_violations == ("sentence 0: claim without evidence",)
     assert j.factually_grounded is False
@@ -185,7 +185,7 @@ def test_judge_never_passes_with_violations() -> None:
 def test_judge_catches_unknown_id_before_llm_runs() -> None:
     d = make_draft((DraftSentence(text="x", evidence_ids=("nope",), is_claim=True),))
     with patch.object(judge_mod, "structured") as llm:
-        j = judge(d, [make_signal("press_opening")], account_text=ACCOUNT)
+        j = judge(d, [make_signal("press_opening")], account_text=ACCOUNT, pass_score=7.0)
     llm.assert_not_called()  # deterministic layer first; no LLM spend on a fabricated draft
     assert j.passed is False and j.score == 0.0
 
@@ -193,7 +193,7 @@ def test_judge_catches_unknown_id_before_llm_runs() -> None:
 def test_judge_catches_a_made_up_venue_before_llm_runs() -> None:
     d = make_draft((DraftSentence(text="Congrats on Tribeca.", evidence_ids=(), is_claim=False),))
     with patch.object(judge_mod, "structured") as llm:
-        j = judge(d, [LICENSE], account_text=ACCOUNT)
+        j = judge(d, [LICENSE], account_text=ACCOUNT, pass_score=7.0)
     llm.assert_not_called()
     assert j.passed is False and j.grounding_violations
 
@@ -202,9 +202,9 @@ def test_judge_passes_grounded_draft_at_threshold() -> None:
     sig = make_signal("press_opening")
     d = make_draft((DraftSentence(text="x", evidence_ids=(sig.signal_id,), is_claim=True),))
     with patch.object(judge_mod, "structured", return_value=fake_llm_judgement(7.0)):
-        assert judge(d, [sig], account_text=ACCOUNT).passed is True
+        assert judge(d, [sig], account_text=ACCOUNT, pass_score=7.0).passed is True
     with patch.object(judge_mod, "structured", return_value=fake_llm_judgement(6.9)):
-        assert judge(d, [sig], account_text=ACCOUNT).passed is False
+        assert judge(d, [sig], account_text=ACCOUNT, pass_score=7.0).passed is False
 
 
 def test_choose_angles_maps_signal_families() -> None:
@@ -319,7 +319,7 @@ def test_draft_command_drafts_prospects_only_saves_and_reports(
     monkeypatch.setattr(cli, "draft", fake_draft)
     judged_with: list[tuple[str, ...]] = []
 
-    def fake_judge(d, ev, *, account_text):
+    def fake_judge(d, ev, *, account_text, pass_score):
         judged_with.append(tuple(account_text))
         return Judgement(
             score=8.0,

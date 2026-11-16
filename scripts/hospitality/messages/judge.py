@@ -8,8 +8,6 @@ from scripts.hospitality.llm import structured
 from scripts.hospitality.messages.drafter import grounding_check
 from scripts.hospitality.models import Draft, Judgement, Signal
 
-PASS_SCORE = 7.0
-
 SYSTEM = (
     "You are a busy restaurant owner reading a cold email, judging it against this rubric. "
     "score is 0-10: would a thoughtful owner reply? hyper_specific: it could only have been "
@@ -32,8 +30,15 @@ class LLMJudgement(BaseModel):
     what_would_make_me_reply: str
 
 
-def judge(draft: Draft, evidence: Sequence[Signal], *, account_text: Sequence[str]) -> Judgement:
-    """`passed = not violations and score >= PASS_SCORE`; violations skip the LLM entirely.
+def judge(
+    draft: Draft,
+    evidence: Sequence[Signal],
+    *,
+    account_text: Sequence[str],
+    pass_score: float,
+) -> Judgement:
+    """`passed = not violations and score >= pass_score` (config `judge_pass_score`);
+    violations skip the LLM entirely.
 
     `account_text` (the group's and venues' names and addresses, the contact) is what the
     deterministic layer may trace a name in the text to, besides the cited evidence.
@@ -62,5 +67,5 @@ def judge(draft: Draft, evidence: Sequence[Signal], *, account_text: Sequence[st
         deletion_reason=out.deletion_reason,
         what_would_make_me_reply=out.what_would_make_me_reply,
         grounding_violations=(),
-        passed=out.score >= PASS_SCORE,
+        passed=out.score >= pass_score,
     )

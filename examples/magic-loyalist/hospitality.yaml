@@ -35,6 +35,38 @@ issued_lookback_days: 365
 # Recall audit: a signal more than this many days before the first inspection still counts as
 # caught, but is not a buying-window lead, so it is kept out of the reported median lead.
 recall_lead_cap_days: 365
+# Event ranking. Priors are starting assumptions, not measured.
+events:
+  attend_prior:   # role -> P(attends)
+    speaker: 0.95
+    panelist: 0.95
+    festival_chef: 0.95
+    award_nominee: 0.9
+    exhibitor_staff: 0.7
+    sponsor: 0.6
+    past_recap: 0.35
+  meeting_rate_prior:   # event type -> P(qualified meeting | attends)
+    curated_conference: 0.15
+    festival: 0.08
+    awards: 0.05
+    trade_show: 0.03
+    local_meetup: 0.20
+    magic_dinner: 0.50
+  unmatched_priority: 0.05
+  # "In window" = p_window at or above this. 0.30 is one full-weight license signal inside its
+  # estimated opening window (the license priors are 0.30). Live, 0.5 was reached by one group
+  # of 1,348, so every other target printed "not in window".
+  in_window_p: 0.30
+# Head-to-head vs plain Claude (each run: at most max_searches web searches).
+benchmark:
+  runs: 3
+  max_searches: 20
+  k: 50
+  web_search_usd_each: 0.01
+# A draft passes the judge at or above this rubric score, and only with no grounding violation.
+judge_pass_score: 7.0
+# Hunter emails are used only at or above this confidence (0-100).
+min_email_confidence: 70.0
 # Google Places: accept the nearest candidate within this distance and at least this name match.
 website_match_max_distance_m: 75.0
 website_match_min_name_similarity: 0.6

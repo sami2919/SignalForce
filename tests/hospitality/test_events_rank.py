@@ -3,13 +3,10 @@ from datetime import date
 import pytest
 
 from scripts.hospitality import cli
-from scripts.hospitality.events.rank import (
-    ATTEND_PRIOR,
-    MEETING_RATE_PRIOR,
-    match_appearance,
-    meeting_list,
-    rank_events,
-)
+from scripts.hospitality.config import load_config
+from scripts.hospitality.events.rank import match_appearance
+from scripts.hospitality.events.rank import meeting_list as _meeting_list
+from scripts.hospitality.events.rank import rank_events as _rank_events
 from scripts.hospitality.models import CustomerLabel, Event, EventAppearance
 from tests.hospitality.factories import make_scored, make_venue
 
@@ -43,8 +40,19 @@ VENUES = [
 ]
 
 
+PRIORS = load_config().events
+
+
+def rank_events(*a, **kw):
+    return _rank_events(*a, **{"priors": PRIORS, **kw})
+
+
+def meeting_list(*a, **kw):
+    return _meeting_list(*a, **{"priors": PRIORS, **kw})
+
+
 def test_priors_are_exact() -> None:
-    assert ATTEND_PRIOR == {
+    assert PRIORS.attend_prior == {
         "speaker": 0.95,
         "panelist": 0.95,
         "festival_chef": 0.95,
@@ -53,7 +61,7 @@ def test_priors_are_exact() -> None:
         "sponsor": 0.6,
         "past_recap": 0.35,
     }
-    assert MEETING_RATE_PRIOR == {
+    assert PRIORS.meeting_rate_prior == {
         "curated_conference": 0.15,
         "festival": 0.08,
         "awards": 0.05,
@@ -158,9 +166,11 @@ def test_seed_labelled_group_without_score_is_never_cold() -> None:
 def test_customers_argument_is_required() -> None:
     # Residual: an omitted `customers` would silently skip the seed/embed gate.
     with pytest.raises(TypeError):
-        rank_events([event()], [], {}, VENUES)  # type: ignore[call-arg]
+        _rank_events([event()], [], {}, VENUES, priors=PRIORS)  # type: ignore[call-arg]
     with pytest.raises(TypeError):
-        meeting_list(event(), [], {}, VENUES)  # type: ignore[call-arg]
+        _meeting_list(event(), [], {}, VENUES, priors=PRIORS)  # type: ignore[call-arg]
+    with pytest.raises(TypeError):  # the priors are required too (M1/M2)
+        _meeting_list(event(), [], {}, VENUES, {})  # type: ignore[call-arg]
 
 
 def test_disqualified_never_a_target() -> None:
@@ -205,3 +215,16 @@ def test_match_appearance_never_matches_a_generic_subset_name() -> None:
         is None
     )
     assert match_appearance(app("G", "ghost bird"), venues) == "g:1"
+
+
+def test_in_window_uses_the_configured_threshold() -> None:
+    """M1: live, almost no group reaches p_window 0.5; the threshold is config, not code."""
+    from scripts.hospitality.config import load_config
+
+    priors = load_config().events
+    accounts = {"g:1": make_scored("g:1", 0.2, p_window=0.30)}
+    [t] = _meeting_list(event(), [app("A", "Ghost Bird")], accounts, VENUES, {}, priors=priors)
+    assert t.in_window is (0.30 >= priors.in_window_p)
+    strict = priors.model_copy(update={"in_window_p": 0.9})
+    [t] = _meeting_list(event(), [app("A", "Ghost Bird")], accounts, VENUES, {}, priors=strict)
+    assert t.in_window is False

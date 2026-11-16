@@ -16,12 +16,7 @@ from pathlib import Path
 
 from scripts.hospitality.benchmark.compare import FAIRNESS_NOTE
 from scripts.hospitality.config import HospitalityConfig
-from scripts.hospitality.events.rank import (
-    ATTEND_PRIOR,
-    MEETING_RATE_PRIOR,
-    meeting_list,
-    rank_events,
-)
+from scripts.hospitality.events.rank import meeting_list, rank_events
 from scripts.hospitality.events.registry import load_events
 from scripts.hospitality.labels import current_customers, with_customer_flags
 from scripts.hospitality.models import (
@@ -544,6 +539,7 @@ def _events(
     accounts: dict[str, ScoredAccount],
     venues: Sequence[Venue],
     customers: dict[str, CustomerLabel],
+    cfg: HospitalityConfig,
 ) -> list[str]:
     appearances = store.load("event_appearances", EventAppearance)
     if not appearances:
@@ -553,7 +549,8 @@ def _events(
             "FIRECRAWL_API_KEY and ANTHROPIC_API_KEY).",
         )
     events = load_events(events_path)  # unverified dates are excluded
-    ranked = rank_events(events, appearances, accounts, venues, customers)
+    priors = cfg.events
+    ranked = rank_events(events, appearances, accounts, venues, customers, priors=priors)
     by_id = {e.event_id: e for e in events}
     lines = [
         (
@@ -573,8 +570,17 @@ def _events(
     lines.append("")
     if ranked:
         top = by_id[ranked[0].event_id]
-        targets = meeting_list(top, appearances, accounts, venues, customers)
-        lines += [f"### Top meeting list: {top.name}", "", "Prospects:"]
+        targets = meeting_list(top, appearances, accounts, venues, customers, priors=priors)
+        lines += [
+            f"### Top meeting list: {top.name}",
+            "",
+            (
+                f'"In window" means p_window >= {priors.in_window_p:.2f} (one full-weight opening '
+                "signal inside its estimated window); it is a threshold on a prior-based score."
+            ),
+            "",
+            "Prospects:",
+        ]
         lines += [
             f"- {t.person} ({t.reason}); priority {t.priority:.2f}; "
             f"{'in window' if t.in_window else 'not in window'}"
@@ -620,9 +626,10 @@ def _limitations(cfg: HospitalityConfig, estimates: Sequence[WindowEstimate]) ->
         ),
         "Opening-estimate bases in the store: "
         + (", ".join(f"{k} ({v})" for k, v in sorted(basis.items())) or "none"),
-        "Event attendance priors: " + ", ".join(f"{k}={v}" for k, v in ATTEND_PRIOR.items()),
+        "Event attendance priors: "
+        + ", ".join(f"{k}={v}" for k, v in cfg.events.attend_prior.items()),
         "Event meeting-rate priors: "
-        + ", ".join(f"{k}={v}" for k, v in MEETING_RATE_PRIOR.items()),
+        + ", ".join(f"{k}={v}" for k, v in cfg.events.meeting_rate_prior.items()),
         "",
     ]
     return lines
@@ -659,7 +666,7 @@ def build_report(
         _prospects(accounts, signals, names),
         _contacts(store.load("contacts", Contact), accounts),
         _drafts(store.load("drafts", Draft), store.load("judgements", Judgement), customers, names),
-        _events(store, events_path, {a.group_id: a for a in accounts}, venues, customers),
+        _events(store, events_path, {a.group_id: a for a in accounts}, venues, customers, cfg),
         _limitations(cfg, store.load("estimates", WindowEstimate)),
         [f"{i}. {q}" for i, q in enumerate(QUESTIONS, 1)] + [""],
     ]
