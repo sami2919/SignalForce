@@ -17,9 +17,10 @@ class SocrataClient(BaseAPIClient):
         where: str | None = None,
         select: str | None = None,
         group: str | None = None,
+        having: str | None = None,
         page_size: int = 50000,
     ) -> Iterator[dict]:
-        """Yield every row, paging with $limit/$offset ordered by :id for stability."""
+        """Yield every row, paging with $limit/$offset ordered by :id (or the group columns) for stability."""
         params: dict[str, str | int] = {"$limit": page_size, "$order": ":id"}
         if where:
             params["$where"] = where
@@ -27,6 +28,9 @@ class SocrataClient(BaseAPIClient):
             params["$select"] = select
         if group:
             params["$group"] = group
+            params["$order"] = group  # :id is not available on aggregated queries
+        if having:
+            params["$having"] = having
         offset = 0
         while True:
             page = self.get_list(

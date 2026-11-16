@@ -24,3 +24,23 @@ def make_license(record_id: str = "sla:1", **overrides: object) -> LicenseRecord
     }
     base.update(overrides)
     return LicenseRecord(**base)  # type: ignore[arg-type]
+
+
+def make_inspection(camis: str = "1", first: date | None = None, **overrides: object):
+    from scripts.hospitality.models import InspectionVenue
+
+    base: dict[str, object] = {
+        "camis": camis,
+        "dba": "Acme",
+        "boro": "Manhattan",
+        "address": "1 MAIN ST",
+        "zip_code": "10001",
+        "cuisine": "American",
+        "phone": "",
+        "lat": 40.7,
+        "lon": -74.0,
+        "first_inspection_date": first,
+        "first_inspection_type": None,
+    }
+    base.update(overrides)
+    return InspectionVenue(**base)  # type: ignore[arg-type]

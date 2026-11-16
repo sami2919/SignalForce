@@ -1,0 +1,9 @@
+[
+  {"camis": "50001234", "dba": "BLEECKER BITES", "boro": "Manhattan", "building": "289",
+   "street": "BLEECKER STREET", "zipcode": "10014", "cuisine_description": "American",
+   "phone": "2125550101", "latitude": "40.731", "longitude": "-74.003",
+   "first_date": "2026-01-05T00:00:00.000"},
+  {"camis": "50005678", "dba": "KINGS PIZZA", "boro": "Brooklyn", "building": "12",
+   "street": "5 AVENUE", "zipcode": "11217", "cuisine_description": "Pizza",
+   "first_date": "2025-11-20T00:00:00.000"}
+]
