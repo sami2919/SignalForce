@@ -4,7 +4,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 from datetime import date
 
-from scripts.hospitality.models import LicenseRecord, Venue
+from scripts.hospitality.models import EntityLink, LicenseRecord, Venue
 
 Curve = tuple[tuple[float, float], ...]
 
@@ -55,17 +55,51 @@ def quantile_time(curve: Curve, q: float) -> float | None:
     return None
 
 
+def linked_to_inspected(venues: Sequence[Venue], links: Sequence[EntityLink]) -> frozenset[str]:
+    """License ids with a possibly_same link to a DOHMH venue that has already been inspected."""
+    inspected = {v.camis for v in venues if v.camis and v.first_inspection_date is not None}
+    return frozenset(link.left_id for link in links if link.right_id in inspected)
+
+
+def likely_already_open(
+    venue: Venue,
+    age_days: float,
+    linked: frozenset[str],
+    max_unmatched_age_days: float | None,
+) -> bool:
+    """True when an uninspected venue is more likely a match miss than a not-yet-open site.
+
+    Either a license is possibly_same-linked to an inspected venue (same place, unmerged), or
+    the venue has no DOHMH record at all and its license is older than the cap (the live data
+    shows such rows accrue at a flat rate by age, the signature of misses, not of openings).
+    A DOHMH record awaiting first inspection (camis set) is positive evidence and is kept.
+    """
+    if any(lid in linked for lid in venue.license_ids):
+        return True
+    return (
+        venue.camis is None
+        and max_unmatched_age_days is not None
+        and age_days > max_unmatched_age_days
+    )
+
+
 def opening_durations(
-    venues: Sequence[Venue], licenses: Sequence[LicenseRecord], today: date
+    venues: Sequence[Venue],
+    licenses: Sequence[LicenseRecord],
+    today: date,
+    links: Sequence[EntityLink] = (),
+    max_unmatched_age_days: float | None = None,
 ) -> list[tuple[str, float, bool]]:
     """One (stratum, days, observed) per venue with an issued (active/inactive) license.
 
     Inspected venues use the latest license issued on or before the first inspection; a venue
     whose only licenses were issued AFTER its first inspection is a transfer/renewal, not a new
     opening, and is excluded, as is anything over 730 days (data noise). Venues with no
-    inspection yet are censored at today - issue (same 730-day cap).
+    inspection yet are censored at today - issue (same 730-day cap), unless
+    `likely_already_open` says the missing inspection is a match miss.
     """
     by_id = {lic.record_id: lic for lic in licenses}
+    linked = linked_to_inspected(venues, links)
     out: list[tuple[str, float, bool]] = []
     for venue in venues:
         issued = [
@@ -89,6 +123,8 @@ def opening_durations(
             lic = max(issued, key=lambda x: x.original_issue_date)  # type: ignore[arg-type,return-value]
             days = float((today - lic.original_issue_date).days)  # type: ignore[operator]
             observed = False
+            if likely_already_open(venue, days, linked, max_unmatched_age_days):
+                continue
         if days < 0 or days > MAX_DAYS:
             continue
         out.append((stratum_of(lic), days, observed))

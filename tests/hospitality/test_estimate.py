@@ -38,7 +38,7 @@ def test_issued_estimate_uses_issue_plus_median(cfg):
 def test_overdue_issued_uses_conditional_remaining(cfg):
     durations = [30.0] * 10 + [100.0] * 10 + [200.0] * 5 + [250.0] * 5
     curves = {"all": kaplan_meier(durations, [True] * 30)}
-    v = make_venue("v:1")
+    v = make_venue("v:1", camis="1")  # DOHMH record awaiting inspection: past the unmatched cap
     lic = make_license("a", source="sla_active", original_issue_date=TODAY - timedelta(days=120))
     est = estimate_window(v, lic, curves, cfg, today=TODAY)
     # median 100 is already past; S(120)=1/3, remaining median: S(t)<=1/6 first at t=200 -> +80d
@@ -82,3 +82,49 @@ def test_estimate_all_prefers_issued_and_skips_opened(cfg):
     out = estimate_all([waiting, opened], [issued, pend], curves, cfg, TODAY)
     assert [e.venue_id for e in out] == ["v:1"]
     assert out[0].estimated_open == date(2026, 12, 31)
+
+
+# --- Task 9b: likely-already-open venues get no "opening soon" estimate --------------------
+
+
+def _link(license_id: str, camis: str):
+    from scripts.hospitality.models import EntityLink
+
+    return EntityLink(
+        left_id=license_id, right_id=camis, kind="possibly_same", probability=0.7, method="geo"
+    )
+
+
+def test_over_age_license_with_no_dohmh_record_gets_no_estimate(cfg):
+    curves = {"all": kaplan_meier([60] * 40, [True] * 40)}
+    lic = make_license("a", source="sla_active", original_issue_date=TODAY - timedelta(days=200))
+    assert estimate_window(make_venue("v:lic:a"), lic, curves, cfg, today=TODAY) is None
+
+
+def test_over_age_dohmh_pending_venue_still_gets_estimate(cfg):
+    curves = {"all": kaplan_meier([60] * 40, [True] * 40)}
+    lic = make_license("a", source="sla_active", original_issue_date=TODAY - timedelta(days=200))
+    est = estimate_window(make_venue("v:5", camis="5"), lic, curves, cfg, today=TODAY)
+    assert est is not None
+
+
+def test_estimate_all_skips_license_linked_to_inspected_venue(cfg):
+    from scripts.hospitality.window.estimate import estimate_all
+
+    curves = {"all": kaplan_meier([60] * 40, [True] * 40)}
+    inspected = make_venue("v:9", camis="9", first_inspection_date=date(2024, 1, 1))
+    issued = make_license("a", source="sla_active", original_issue_date=date(2026, 11, 1))
+    pend = make_license("p", received_date=date(2026, 11, 1))
+    linked = make_venue("v:lic:a", license_ids=("a",))
+    linked_pending = make_venue("v:lic:p", license_ids=("p",))
+    fresh = make_venue("v:lic:c", license_ids=("c",))
+    other = make_license("c", source="sla_active", original_issue_date=date(2026, 11, 1))
+    out = estimate_all(
+        [inspected, linked, linked_pending, fresh],
+        [issued, pend, other],
+        curves,
+        cfg,
+        TODAY,
+        links=[_link("a", "9"), _link("p", "9")],
+    )
+    assert [e.venue_id for e in out] == ["v:lic:c"]

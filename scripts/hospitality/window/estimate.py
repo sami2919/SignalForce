@@ -4,8 +4,15 @@ from collections.abc import Sequence
 from datetime import date, timedelta
 
 from scripts.hospitality.config import HospitalityConfig
-from scripts.hospitality.models import LicenseRecord, Venue, WindowEstimate
-from scripts.hospitality.window.survival import Curve, quantile_time, stratum_of, survival_at
+from scripts.hospitality.models import EntityLink, LicenseRecord, Venue, WindowEstimate
+from scripts.hospitality.window.survival import (
+    Curve,
+    likely_already_open,
+    linked_to_inspected,
+    quantile_time,
+    stratum_of,
+    survival_at,
+)
 
 
 def _p_open(curve: Curve, age: float, horizon: float) -> float:
@@ -31,8 +38,14 @@ def estimate_window(
     curves: dict[str, Curve],
     cfg: HospitalityConfig,
     today: date,
+    linked: frozenset[str] = frozenset(),
 ) -> WindowEstimate | None:
-    """Estimate opening date and 90/180-day open probabilities; None if not estimable."""
+    """Estimate opening date and 90/180-day open probabilities; None if not estimable.
+
+    `linked` holds license ids possibly_same-linked to an inspected venue; such venues, and
+    issued licenses with no DOHMH record past the unmatched age cap, are likely already open
+    (the same rule that keeps them out of the curve's censored set) and get no estimate.
+    """
     if venue.first_inspection_date is not None:
         return None  # already opened
     stratum = stratum_of(license)
@@ -58,6 +71,9 @@ def estimate_window(
         return None
 
     age = float((today - issue).days)
+    cap = cfg.window_unmatched_censor_max_age_days if license.source == "sla_active" else None
+    if likely_already_open(venue, age, linked, cap):
+        return None
     median = quantile_time(curve, 0.5)
     if median is None:
         return None
@@ -80,9 +96,11 @@ def estimate_all(
     curves: dict[str, Curve],
     cfg: HospitalityConfig,
     today: date,
+    links: Sequence[EntityLink] = (),
 ) -> list[WindowEstimate]:
     """Estimate every unopened venue from its best license (issued preferred over pending)."""
     by_id = {lic.record_id: lic for lic in licenses}
+    linked = linked_to_inspected(venues, links)
     out: list[WindowEstimate] = []
     for venue in venues:
         if venue.first_inspection_date is not None:
@@ -96,7 +114,7 @@ def estimate_all(
             chosen = max(pending, key=lambda x: x.received_date)  # type: ignore[arg-type,return-value]
         else:
             continue
-        est = estimate_window(venue, chosen, curves, cfg, today)
+        est = estimate_window(venue, chosen, curves, cfg, today, linked)
         if est is not None:
             out.append(est)
     return out

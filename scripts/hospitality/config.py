@@ -32,6 +32,7 @@ class HospitalityConfig(BaseModel):
     window_post_days: int
     window_outside_half_life_days: float
     pending_to_issue_prior_days: int
+    window_unmatched_censor_max_age_days: int
     fit_weights: dict[str, float]
     relationship_boost: float
     budgets: dict[str, int]

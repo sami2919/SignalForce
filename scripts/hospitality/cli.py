@@ -10,6 +10,7 @@ from scripts.hospitality.budget import CallBudget
 from scripts.hospitality.config import load_config
 from scripts.hospitality.models import (
     CurveRecord,
+    EntityLink,
     InspectionVenue,
     LicenseRecord,
     LicenseSource,
@@ -104,12 +105,14 @@ def window(today: date | None = None) -> dict[str, object]:
     store = DocStore()
     venues = store.load("venues", Venue)
     licenses = store.load("licenses", LicenseRecord)
-    durations = opening_durations(venues, licenses, today)
+    links = store.load("links", EntityLink)
+    cap = cfg.window_unmatched_censor_max_age_days
+    durations = opening_durations(venues, licenses, today, links, max_unmatched_age_days=cap)
     curves = build_curves(durations)
     counts: dict[str, int] = {"all": len(durations)}
     for stratum, _, _ in durations:
         counts[stratum] = counts.get(stratum, 0) + 1
-    estimates = estimate_all(venues, licenses, curves, cfg, today)
+    estimates = estimate_all(venues, licenses, curves, cfg, today, links)
     for kind in ("curves", "estimates"):
         store.clear(kind)
     store.save(
@@ -125,7 +128,14 @@ def window(today: date | None = None) -> dict[str, object]:
         summary.append(
             (k, counts[k], quantile_time(c, 0.25), quantile_time(c, 0.5), quantile_time(c, 0.75))
         )
-    return {"durations": len(durations), "estimates": len(estimates), "strata": summary}
+    observed = sum(o for _, _, o in durations)
+    return {
+        "durations": len(durations),
+        "observed": observed,
+        "censored": len(durations) - observed,
+        "estimates": len(estimates),
+        "strata": summary,
+    }
 
 
 def websites(limit: int = 400) -> dict[str, int]:
@@ -174,7 +184,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"{name}: {n}")
     elif args.command == "window":
         out = window()
-        print(f"durations: {out['durations']}")
+        print(
+            f"durations: {out['durations']} ({out['observed']} observed, {out['censored']} censored)"
+        )
         print(f"estimates: {out['estimates']}")
         for k, n, q1, med, q3 in out["strata"]:  # type: ignore[attr-defined]
             print(f"{k}: n={n} median={med}d IQR={q1}-{q3}d")
