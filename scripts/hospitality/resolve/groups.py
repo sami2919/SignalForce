@@ -74,9 +74,16 @@ def _apply(venues: Sequence[Venue], groups: Sequence[Group]) -> tuple[list[Venue
 
 
 def form_groups(
-    venues: Sequence[Venue], licenses: Sequence[LicenseRecord]
+    venues: Sequence[Venue],
+    licenses: Sequence[LicenseRecord],
+    *,
+    ignore_domains: frozenset[str],
 ) -> tuple[list[Venue], list[Group]]:
-    """Group-of-one by default; merge on identical normalized legal name or shared domain."""
+    """Group-of-one by default; merge on identical normalized legal name or shared domain.
+
+    `ignore_domains` are shared hosts (social profiles, booking and site builders) whose
+    registrable domain says nothing about common ownership; they never merge groups.
+    """
     legal_by_license = {lic.record_id: lic.legal_name for lic in licenses}
     ids = [v.venue_id for v in venues]
     uf = _UnionFind(ids)
@@ -91,7 +98,7 @@ def form_groups(
                 name_keys[norm].append(v.venue_id)
                 display.setdefault(norm, raw)
         domain = registrable_domain(v.website) if v.website else None
-        if domain:
+        if domain and domain not in ignore_domains:
             domain_keys[domain].append(v.venue_id)
 
     name_linked: set[str] = set()
@@ -179,3 +186,20 @@ def merge_groups(
         )
     out.sort(key=lambda g: g.group_id)
     return _apply(venues, out)
+
+
+def regroup(
+    venues: Sequence[Venue],
+    licenses: Sequence[LicenseRecord],
+    evidence: Sequence[GroupEvidence],
+    *,
+    ignore_domains: frozenset[str],
+) -> tuple[list[Venue], list[Group]]:
+    """Groups from scratch: legal-name and domain grouping, then every stored evidence merge.
+
+    The one grouping path for `resolve`, `websites`, `press` and `culinary-agents`, so a later
+    command can never drop a merge an earlier one made.
+    """
+    reset = [v.model_copy(update={"group_id": f"g:{v.venue_id}"}) for v in venues]
+    formed, groups = form_groups(reset, licenses, ignore_domains=ignore_domains)
+    return merge_groups(formed, groups, evidence)

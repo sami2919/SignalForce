@@ -95,6 +95,27 @@ class Group(_Frozen):
     resolution: GroupResolution
 
 
+class WebsiteLookup(_Frozen):
+    """One paid website lookup for a venue (hit or miss), kept apart from the rebuilt venues.
+
+    `resolve` rebuilds venue rows from public data; it re-applies these, so a website already
+    bought is never looked up again. A miss (`website=None`) is retried only after
+    `website_miss_retry_days`: a not-yet-open venue often has no listing yet.
+    """
+
+    venue_id: str
+    website: str | None
+    looked_up_on: date
+    source: str = "google_places"
+
+
+class VenueAlias(_Frozen):
+    """A venue id that a re-resolve replaced (a licensed venue that got its DOHMH site)."""
+
+    old_venue_id: str
+    new_venue_id: str
+
+
 class GroupEvidence(_Frozen):
     venue_ids: tuple[str, ...]
     name: str

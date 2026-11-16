@@ -32,6 +32,17 @@ models: {extract: claude-opus-5-5, draft: claude-opus-5-5, judge: claude-opus-5-
 match_max_distance_m: 40.0
 match_auto_threshold: 0.90
 match_link_threshold: 0.60
+# A website on one of these shared hosts says nothing about common ownership, so it never merges
+# venues into one group by shared domain (registrable domain, lowercase).
+shared_host_domains: [instagram.com, facebook.com, tiktok.com, twitter.com, x.com, linktr.ee,
+  linkin.bio, beacons.ai, carrd.co, google.com, business.site, yelp.com, resy.com, opentable.com,
+  exploretock.com, sevenrooms.com, toasttab.com, squareup.com, square.site, clover.com,
+  wixsite.com, squarespace.com, godaddysites.com, weebly.com, wordpress.com, blogspot.com,
+  webflow.io, menufy.com, chownow.com, slicelife.com, grubhub.com, seamless.com, doordash.com,
+  ubereats.com, bit.ly]
+# A website lookup that found nothing is retried after this many days (unopened venues often have
+# no listing yet). A found website is never looked up (or billed) again.
+website_miss_retry_days: 60
 # Groups with a Michelin / James Beard accolade, by group_id or name (manual for the demo).
 accolades: []
 # Opening evidence is one fact per venue (venue about to open): only the strongest of these

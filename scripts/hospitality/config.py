@@ -65,6 +65,12 @@ class HospitalityConfig(BaseModel):
     match_max_distance_m: float
     match_auto_threshold: float
     match_link_threshold: float
+    # Registrable domains shared by unrelated businesses (social profiles, booking pages, site
+    # builders): a venue "website" on one of these never merges groups by shared domain.
+    shared_host_domains: tuple[str, ...]
+    # A website lookup that found nothing is retried only after this many days (a venue that
+    # has not opened often has no listing yet); a found website is never looked up again.
+    website_miss_retry_days: int
     # Manually flagged accolade groups (Michelin / JBF): group ids or names. Empty for the demo.
     accolades: tuple[str, ...] = ()
     # Opening evidence is one underlying fact per venue: only the strongest of these counts.

@@ -9,11 +9,12 @@ unless you intend to pay.
 """
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from datetime import date
 
 from scripts.api_client import BaseAPIClient
 from scripts.hospitality.budget import BudgetExceeded, CallBudget
-from scripts.hospitality.models import PlaceMatch, Venue
+from scripts.hospitality.models import PlaceMatch, Venue, WebsiteLookup
 from scripts.hospitality.resolve.normalize import haversine_m, name_similarity
 
 logger = logging.getLogger(__name__)
@@ -77,6 +78,29 @@ def pick_place(venue: Venue, candidates: Sequence[PlaceMatch]) -> PlaceMatch | N
     return best[1] if best else None
 
 
+def iter_website_lookups(
+    venues: Sequence[Venue], client: PlacesClient, priority_ids: Sequence[str], today: date
+) -> Iterator[WebsiteLookup]:
+    """One `WebsiteLookup` (hit or miss) per priority venue looked up, in venue order.
+
+    Stops (yielding nothing more) once the budget is spent. A generator, so a caller can keep
+    every paid lookup made before an unexpected error ends the run.
+    """
+    priority = set(priority_ids)
+    for v in venues:
+        if v.venue_id not in priority:
+            continue
+        try:
+            candidates = client.search(f"{v.name} {v.address} New York")
+        except BudgetExceeded as exc:
+            logger.warning("Stopping website lookups: %s", exc)
+            return
+        match = pick_place(v, candidates)
+        yield WebsiteLookup(
+            venue_id=v.venue_id, website=match.website if match else None, looked_up_on=today
+        )
+
+
 def attach_websites(
     venues: Sequence[Venue], client: PlacesClient, priority_ids: Sequence[str]
 ) -> list[Venue]:
@@ -84,23 +108,12 @@ def attach_websites(
 
     Stops looking up (leaving remaining venues unchanged) once the budget is spent.
     """
-    priority = set(priority_ids)
-    out: list[Venue] = []
-    exhausted = False
-    for v in venues:
-        if v.venue_id not in priority or exhausted:
-            out.append(v)
-            continue
-        try:
-            candidates = client.search(f"{v.name} {v.address} New York")
-        except BudgetExceeded as exc:
-            logger.warning("Stopping website lookups: %s", exc)
-            exhausted = True
-            out.append(v)
-            continue
-        match = pick_place(v, candidates)
-        if match and match.website:
-            out.append(v.model_copy(update={"website": match.website}))
-        else:
-            out.append(v)
-    return out
+    found = {
+        w.venue_id: w.website
+        for w in iter_website_lookups(venues, client, priority_ids, date.today())
+        if w.website
+    }
+    return [
+        v.model_copy(update={"website": found[v.venue_id]}) if v.venue_id in found else v
+        for v in venues
+    ]

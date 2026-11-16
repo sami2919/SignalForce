@@ -55,6 +55,19 @@ class DocStore:
                 )
         return len(rows)
 
+    def replace(
+        self, kind: str, items: Sequence[BaseModel], key: Callable[[BaseModel], str]
+    ) -> int:
+        """Replace every row of `kind` with `items` in one transaction (a re-keyed rewrite)."""
+        table = self._table(kind)
+        now = datetime.now(UTC).isoformat()
+        rows = {key(i): i.model_dump_json() for i in items}
+        with self._engine.begin() as conn:
+            conn.execute(delete(table))
+            for k, js in rows.items():
+                conn.execute(insert(table).values(id=k, json=js, updated_at=now))
+        return len(rows)
+
     def load(self, kind: str, model: type[T]) -> list[T]:
         table = self._table(kind)
         with self._engine.connect() as conn:

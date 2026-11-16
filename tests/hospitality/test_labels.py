@@ -224,11 +224,11 @@ def test_websites_includes_seed_customer_venues(tmp_path, monkeypatch) -> None:
     store.save("venues", venues, key=lambda v: v.venue_id)  # type: ignore[attr-defined]
     looked_up: list[list[str]] = []
 
-    def fake_attach(vs, client, priority):  # type: ignore[no-untyped-def]
+    def fake_lookups(vs, client, priority, today):  # type: ignore[no-untyped-def]
         looked_up.append(list(priority))
-        return list(vs)
+        return iter(())
 
-    monkeypatch.setattr(cli, "attach_websites", fake_attach)
+    monkeypatch.setattr(cli, "iter_website_lookups", fake_lookups)
     monkeypatch.setattr(cli, "PlacesClient", lambda key, budget: object())
     out = cli.websites()
     assert looked_up == [["v:1"]] and out["prioritized"] == 1

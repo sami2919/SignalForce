@@ -62,10 +62,23 @@ from scripts.hospitality.models import (
     Signal,
     StackObservation,
     Venue,
+    VenueAlias,
+    WebsiteLookup,
     WindowEstimate,
 )
 from scripts.hospitality.report import build_report
-from scripts.hospitality.resolve.groups import form_groups, merge_groups
+from scripts.hospitality.resolve.carry import (
+    apply_websites,
+    canonical_entity,
+    canonical_group_id,
+    carried_press_venues,
+    chain_moves,
+    merge_lookups,
+    remap_evidence,
+    remap_lookups,
+    venue_moves,
+)
+from scripts.hospitality.resolve.groups import regroup
 from scripts.hospitality.resolve.match import match_licenses
 from scripts.hospitality.resolve.venues import build_venues
 from scripts.hospitality.scoring import (
@@ -91,7 +104,7 @@ from scripts.hospitality.stack.signals import (
     loyalist_venues,
     stack_signals,
 )
-from scripts.hospitality.stack.websites import PlacesClient, attach_websites
+from scripts.hospitality.stack.websites import PlacesClient, iter_website_lookups
 from scripts.hospitality.store import DocStore
 from scripts.hospitality.window.estimate import estimate_all
 from scripts.hospitality.window.survival import (
@@ -151,19 +164,114 @@ def snapshot_pending() -> int:
     return take_snapshot(DocStore(), records, date.today())
 
 
+def _label_key(c: CustomerLabel) -> str:
+    return f"{c.source}|{c.name}|{c.website_domain}|{c.venue_id}"
+
+
+def _evidence_key(e: GroupEvidence) -> str:
+    return f"{e.evidence_ref}|{e.name}"
+
+
+def _regroup(
+    store: DocStore,
+    cfg: HospitalityConfig,
+    venues: Sequence[Venue],
+    licenses: Sequence[LicenseRecord],
+    moves: dict[str, str] | None = None,
+) -> tuple[list[Venue], list[Group]]:
+    """Regroup from scratch (names, domains, every stored evidence merge); save; re-key records.
+
+    The one grouping path for resolve, websites, press and culinary-agents. Records keyed to a
+    venue that moved (`moves`) or to a group that merged follow it (M3), so contacts, drafts,
+    observations, embed labels and group-level signals never strand on an old id.
+    """
+    aliases = chain_moves(
+        {a.old_venue_id: a.new_venue_id for a in store.load("venue_aliases", VenueAlias)},
+        moves or {},
+    )
+    evidence = remap_evidence(store.load("group_evidence", GroupEvidence), aliases)
+    grouped, groups = regroup(
+        venues, licenses, evidence, ignore_domains=frozenset(cfg.shared_host_domains)
+    )
+    group_of = {v.venue_id: v.group_id for v in grouped}
+
+    def entity(eid: str) -> str:
+        return canonical_entity(eid, group_of, aliases)
+
+    def group(gid: str) -> str:
+        return canonical_group_id(gid, group_of, aliases) or gid
+
+    store.replace("venues", grouped, key=lambda v: v.venue_id)  # type: ignore[attr-defined]
+    store.replace("groups", groups, key=lambda g: g.group_id)  # type: ignore[attr-defined]
+    store.replace("group_evidence", evidence, key=_evidence_key)  # type: ignore[arg-type]
+    store.replace(
+        "venue_aliases",
+        [VenueAlias(old_venue_id=o, new_venue_id=n) for o, n in sorted(aliases.items())],
+        key=lambda a: a.old_venue_id,  # type: ignore[attr-defined]
+    )
+    store.replace(
+        "stack_observations",
+        [
+            o.model_copy(update={"venue_id": entity(o.venue_id)})
+            for o in store.load("stack_observations", StackObservation)
+        ],
+        key=lambda o: f"{o.venue_id}|{o.observed_at.isoformat()}",  # type: ignore[attr-defined]
+    )
+    store.replace(
+        "signals",
+        [
+            s.model_copy(update={"entity_id": entity(s.entity_id)})
+            for s in store.load("signals", Signal)
+        ],
+        key=lambda s: s.signal_id,  # type: ignore[attr-defined]
+    )
+    store.replace(
+        "customer_labels",
+        [
+            c.model_copy(update={"venue_id": entity(c.venue_id)}) if c.venue_id else c
+            for c in store.load("customer_labels", CustomerLabel)
+        ],
+        key=_label_key,  # type: ignore[arg-type]
+    )
+    store.replace(
+        "contacts",
+        [
+            c.model_copy(update={"group_id": group(c.group_id)})
+            for c in store.load("contacts", Contact)
+        ],
+        key=lambda c: c.contact_id,  # type: ignore[attr-defined]
+    )
+    store.replace(
+        "drafts",
+        [d.model_copy(update={"group_id": group(d.group_id)}) for d in store.load("drafts", Draft)],
+        key=lambda d: d.draft_id,  # type: ignore[attr-defined]
+    )
+    return grouped, groups
+
+
 def resolve() -> dict[str, int]:
-    """Match licenses to inspections, build venues, form groups; save venues/groups/links."""
+    """Match licenses to inspections, build venues, form groups; save venues/groups/links.
+
+    A recompute of what public data says that keeps everything public data cannot rebuild:
+    paid website lookups, press-only venues and group evidence (merges) are re-applied, and
+    records keyed to a venue that moved or a group that merged follow it.
+    """
     cfg = load_config()
     store = DocStore()
+    today = date.today()
     licenses = store.load("licenses", LicenseRecord)
     inspections = store.load("inspections", InspectionVenue)
+    old = store.load("venues", Venue)
     match = match_licenses(licenses, inspections, cfg)
-    venues, groups = form_groups(build_venues(licenses, inspections, match), licenses)
-    for kind in ("venues", "groups", "links"):
-        store.clear(kind)  # resolve is a full recompute; drop rows from earlier runs
-    store.save("venues", venues, key=lambda v: v.venue_id)  # type: ignore[attr-defined]
-    store.save("groups", groups, key=lambda g: g.group_id)  # type: ignore[attr-defined]
-    store.save(
+    built = build_venues(licenses, inspections, match)
+    moves = venue_moves(old, built)
+    press_venues = carried_press_venues(old, (v.venue_id for v in built))
+    lookups = remap_lookups(merge_lookups(store.load("websites", WebsiteLookup), old, today), moves)
+    store.replace("websites", lookups, key=lambda w: w.venue_id)  # type: ignore[attr-defined]
+    venues, groups = _regroup(
+        store, cfg, apply_websites([*built, *press_venues], lookups), licenses, moves
+    )
+    store.replace(
         "links",
         match.links,
         key=lambda link: f"{link.left_id}|{link.right_id}",  # type: ignore[attr-defined]
@@ -173,6 +281,9 @@ def resolve() -> dict[str, int]:
         "groups": len(groups),
         "multi_venue_groups": sum(len(g.venue_ids) > 1 for g in groups),
         "possibly_same_links": len(match.links),
+        "websites_kept": sum(v.website is not None for v in venues),
+        "press_venues_kept": len(press_venues),
+        "venues_moved": len(moves),
     }
 
 
@@ -216,30 +327,56 @@ def window(today: date | None = None) -> dict[str, object]:
     }
 
 
-def websites(limit: int = 400) -> dict[str, int]:
-    """Look up websites via Google Places for venues with a window estimate; save venues."""
+def websites(limit: int = 400, today: date | None = None) -> dict[str, int]:
+    """Look up websites via Google Places for venues with a window estimate; regroup.
+
+    Every lookup (hit or miss) is saved to the `websites` kind as it is made, so a re-resolve
+    keeps it and no venue is ever billed twice for a website already found. A miss is retried
+    after `website_miss_retry_days`. Venues sharing a website domain then merge.
+    """
     key = os.environ.get("GOOGLE_PLACES_API_KEY")
     if not key:  # fail fast, before touching the store or the network
         raise SystemExit("GOOGLE_PLACES_API_KEY is not set; the websites command needs it")
     cfg = load_config()
+    today = today or date.today()
     store = DocStore()
     venues = store.load("venues", Venue)
     estimates = store.load("estimates", WindowEstimate)
+    known = {w.venue_id: w for w in store.load("websites", WebsiteLookup)}
+
+    def due(v: Venue) -> bool:
+        if v.website:
+            return False
+        w = known.get(v.venue_id)
+        return w is None or (
+            w.website is None and (today - w.looked_up_on).days >= cfg.website_miss_retry_days
+        )
+
     by_id = {v.venue_id: v for v in venues}
     # Prioritized: venues with an estimate, soonest-opening first, without a website yet.
     ranked = sorted(estimates, key=lambda e: e.estimated_open)
     # Seed customers first: they are always looked up (to label them and seed lookalikes).
     seed_groups = current_customers(store, SEED_PATH, venues=venues)
-    customer_ids = [v.venue_id for v in venues if v.group_id in seed_groups and not v.website]
+    customer_ids = [v.venue_id for v in venues if v.group_id in seed_groups]
     ordered = [*customer_ids, *(e.venue_id for e in ranked)]
-    priority = list(
-        dict.fromkeys(vid for vid in ordered if vid in by_id and not by_id[vid].website)
-    )[:limit]
+    priority = list(dict.fromkeys(vid for vid in ordered if vid in by_id and due(by_id[vid])))[
+        :limit
+    ]
     budget = CallBudget("places", min(limit, cfg.budgets["places"]))
-    updated = attach_websites(venues, PlacesClient(key, budget), priority)
-    changed = [u for u, v in zip(updated, venues, strict=True) if u != v]
-    store.save("venues", changed, key=lambda v: v.venue_id)  # type: ignore[attr-defined]
-    return {"prioritized": len(priority), "lookups": budget.used, "websites_found": len(changed)}
+    found: list[WebsiteLookup] = []
+    try:
+        for lookup in iter_website_lookups(venues, PlacesClient(key, budget), priority, today):
+            found.append(lookup)  # noqa: PERF402 (kept one by one: partial on error)
+    finally:  # paid for: keep every lookup made, even if an error ends the run
+        store.save("websites", found, key=lambda w: w.venue_id)  # type: ignore[attr-defined]
+    updated = apply_websites(venues, found)
+    _, groups = _regroup(store, cfg, updated, store.load("licenses", LicenseRecord))
+    return {
+        "prioritized": len(priority),
+        "lookups": budget.used,
+        "websites_found": sum(w.website is not None for w in found),
+        "multi_venue_groups": sum(len(g.venue_ids) > 1 for g in groups),
+    }
 
 
 def crawl(now: datetime | None = None) -> dict[str, object]:
@@ -287,12 +424,7 @@ def labels() -> dict[str, int]:
     stored = store.load("customer_labels", CustomerLabel)
     evidence = customer_evidence(SEED_PATH, venues, observations, stored)
     customers = customer_groups(evidence, venues, groups)
-    store.clear("customer_labels")
-    store.save(
-        "customer_labels",
-        evidence,
-        key=lambda c: f"{c.source}|{c.name}|{c.website_domain}|{c.venue_id}",  # type: ignore[attr-defined]
-    )
+    store.replace("customer_labels", evidence, key=_label_key)  # type: ignore[arg-type]
     lapsed = lapsed_loyalist_venues(observations)
     for venue_id in lapsed:
         logger.warning("Loyalist embed missing from the latest crawl of %s: review", venue_id)
@@ -302,6 +434,10 @@ def labels() -> dict[str, int]:
         "embed": counts["embed"],
         "embeds_lapsed": len(lapsed),
     }
+
+
+def _aliases(store: DocStore) -> dict[str, str]:
+    return {a.old_venue_id: a.new_venue_id for a in store.load("venue_aliases", VenueAlias)}
 
 
 def _gated_scores(store: DocStore) -> list[ScoredAccount]:
@@ -336,8 +472,9 @@ def _score_accounts(
     for v in venues:
         venues_by_group.setdefault(v.group_id, []).append(v)
     signals_by_group: dict[str, list[Signal]] = {}
-    for sig in signals:
-        gid = group_of.get(sig.entity_id, sig.entity_id)
+    aliases = _aliases(store)
+    for sig in signals:  # a group-level signal keyed by a since-merged group still counts (M3)
+        gid = canonical_group_id(sig.entity_id, group_of, aliases) or sig.entity_id
         signals_by_group.setdefault(gid, []).append(sig)
     obs_by_group: dict[str, list[StackObservation]] = {}
     for o in observations:
@@ -537,12 +674,17 @@ def draft_command(top: int = 10) -> dict[str, object]:
         raise SystemExit("ANTHROPIC_API_KEY is not set; the draft command needs it")
     store = DocStore()
     group_of = {v.venue_id: v.group_id for v in store.load("venues", Venue)}
+    aliases = _aliases(store)
+
+    def group(eid: str) -> str:
+        return canonical_group_id(eid, group_of, aliases) or eid
+
     signals_by_group: dict[str, list[Signal]] = {}
     for sig in [*store.load("license_signals", Signal), *store.load("signals", Signal)]:
-        signals_by_group.setdefault(group_of.get(sig.entity_id, sig.entity_id), []).append(sig)
+        signals_by_group.setdefault(group(sig.entity_id), []).append(sig)
     contacts_by_group: dict[str, list[Contact]] = {}
     for c in store.load("contacts", Contact):
-        contacts_by_group.setdefault(c.group_id, []).append(c)
+        contacts_by_group.setdefault(group(c.group_id), []).append(c)
     ranked = rank_prospects(_gated_scores(store))[:top]
     drafts: list[Draft] = []
     judgements: dict[str, Judgement] = {}
@@ -589,7 +731,14 @@ def clay_import(path: Path) -> dict[str, object]:
     """Import Clay's enriched CSV as contacts for known prospect groups; never downgrade."""
     store = DocStore()
     known = {a.group_id for a in rank_prospects(_gated_scores(store))}
-    parsed = import_clay_csv(path)
+    group_of = {v.venue_id: v.group_id for v in store.load("venues", Venue)}
+    aliases = _aliases(store)
+    parsed = [  # a row exported before a merge carries the old group id (M3)
+        c.model_copy(update={"group_id": canonical_group_id(c.group_id, group_of, aliases)})
+        if canonical_group_id(c.group_id, group_of, aliases)
+        else c
+        for c in import_clay_csv(path)
+    ]
     kept = [c for c in parsed if c.group_id in known]
     for c in parsed:
         if c.group_id not in known:
@@ -651,25 +800,9 @@ def press(days: int = 120, today: date | None = None) -> dict[str, object]:
                 evidence.extend(ev)
     except BudgetExceeded as exc:  # keep what was found; report the stop, never hide it
         stopped = str(exc)
-    new_groups = [
-        Group(group_id=v.group_id, name=v.name, venue_ids=(v.venue_id,), resolution="singleton")
-        for v in new_venues.values()
-    ]
     store.save("signals", list(signals.values()), key=lambda s: s.signal_id)  # type: ignore[attr-defined]
-    store.save(
-        "group_evidence",
-        evidence,
-        key=lambda e: f"{e.evidence_ref}|{e.name}",  # type: ignore[attr-defined]
-    )
-    all_venues = [*venues, *new_venues.values()]
-    merged_venues, merged_groups = merge_groups(
-        all_venues, [*groups, *new_groups], store.load("group_evidence", GroupEvidence)
-    )
-    old = {v.venue_id: v for v in venues}
-    changed = [v for v in merged_venues if old.get(v.venue_id) != v]
-    store.save("venues", changed, key=lambda v: v.venue_id)  # type: ignore[attr-defined]
-    store.clear("groups")  # merged group ids differ from earlier ones; rewrite in full
-    store.save("groups", merged_groups, key=lambda g: g.group_id)  # type: ignore[attr-defined]
+    store.save("group_evidence", evidence, key=_evidence_key)  # type: ignore[arg-type]
+    _regroup(store, cfg, [*venues, *new_venues.values()], store.load("licenses", LicenseRecord))
     scored = score()
     return {
         "articles": len(seen),
@@ -704,19 +837,8 @@ def culinary_agents(
     jobs, companies = fetch_nyc(cfg.culinary_agents, budget, fetch or PoliteFetcher(), today, sleep)
     signals, evidence = to_signals(jobs, companies, venues, groups, today, cfg.culinary_agents)
     store.save("signals", signals, key=lambda s: s.signal_id)  # type: ignore[attr-defined]
-    store.save(
-        "group_evidence",
-        evidence,
-        key=lambda e: f"{e.evidence_ref}|{e.name}",  # type: ignore[attr-defined]
-    )
-    merged_venues, merged_groups = merge_groups(
-        venues, groups, store.load("group_evidence", GroupEvidence)
-    )
-    old = {v.venue_id: v for v in venues}
-    changed = [v for v in merged_venues if old.get(v.venue_id) != v]
-    store.save("venues", changed, key=lambda v: v.venue_id)  # type: ignore[attr-defined]
-    store.clear("groups")  # merged group ids differ from earlier ones; rewrite in full
-    store.save("groups", merged_groups, key=lambda g: g.group_id)  # type: ignore[attr-defined]
+    store.save("group_evidence", evidence, key=_evidence_key)  # type: ignore[arg-type]
+    _regroup(store, cfg, venues, store.load("licenses", LicenseRecord))
     scored = score()
     spent = budget.used >= budget.limit
     return {
