@@ -331,11 +331,25 @@ class BenchmarkResult(_Frozen):
 class CaseReplay(_Frozen):
     group_id: str
     customer: str
-    anchor_date: date  # upper bound: the customer was live on or before this date
+    # Upper bound: live on or before this date. The venue's own seed date when it has its own
+    # entry, else the customer's; None when undated (then the case is not evaluable).
+    anchor_date: date | None
     new_venue_id: str | None
     first_signal_date: date | None
     lead_days: int | None
     signal_types: tuple[str, ...]
+    status: Literal["replayed", "not_evaluable"]
+    anchor_basis: Literal["venue", "customer"] | None = None
+    reason: str = ""  # why a case is not evaluable; empty when replayed
+
+
+class BacktestResult(_Frozen):
+    cases: tuple[CaseReplay, ...]
+    undated: int  # customers with no public date
+    fit_auc: float
+    fit_distinct: int
+    n_customers: int
+    n_others: int
 
 
 class PressPerson(_Frozen):

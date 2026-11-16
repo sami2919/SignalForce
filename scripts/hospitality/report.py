@@ -26,7 +26,6 @@ from scripts.hospitality.events.registry import load_events
 from scripts.hospitality.labels import current_customers, with_customer_flags
 from scripts.hospitality.models import (
     BenchmarkResult,
-    CaseReplay,
     Contact,
     CurveRecord,
     CustomerLabel,
@@ -262,39 +261,53 @@ def _backtests(store: DocStore) -> list[str]:
             "backtests", "They need resolved venues and scored groups (run resolve and score)."
         )
     out = cli.backtest(store)
-    cases: list[CaseReplay] = out["cases"]  # type: ignore[assignment]
+    replayed = [c for c in out.cases if c.status == "replayed"]
+    caught = [c for c in replayed if c.lead_days is not None]
     lines = [
         "Indicative only: tiny samples, not a lift claim.",
         "",
         (
-            f"Case replay (n={len(cases)} dated customers with a known new venue; "
-            f"{out['undated']} customers have no public date and were not replayed):"
+            f"Case replay: {len(out.cases)} customers with a known new venue; {len(replayed)} "
+            f"could be replayed, {len(out.cases) - len(replayed)} are not evaluable (no dated "
+            "anchor, or the venue appears only after the anchor, which would make a miss certain "
+            f"by construction). Of the replayed cases, {len(caught)} had an opening signal on or "
+            f"before the anchor. {out.undated} customers have no public date at all."
+        ),
+        "",
+        (
+            "The anchor is an upper bound (the customer was live on or before it), so a lead is "
+            "measured to that bound and may overstate the true lead."
         ),
         "",
     ]
-    if cases:
+    if out.cases:
         lines += [
-            "| Customer | Anchor (on or before) | New venue | Lead | Signals |",
+            "| Customer | Anchor (on or before) | New venue | Outcome | Signals |",
             "|---|---|---|---|---|",
         ]
-        for c in cases:
-            lead = f"{c.lead_days} days" if c.lead_days is not None else "no prior signal"
+        for c in out.cases:
+            if c.status == "not_evaluable":
+                outcome = f"not evaluable: {c.reason}"
+            elif c.lead_days is not None:
+                outcome = f"signal {c.lead_days} days before the anchor"
+            else:
+                outcome = "miss: no opening signal on or before the anchor"
+            anchor = f"{c.anchor_date} ({c.anchor_basis})" if c.anchor_date else "undated"
             lines.append(
-                f"| {_esc(c.customer)} | {c.anchor_date} | {c.new_venue_id or 'venue not found'} "
-                f"| {lead} | {', '.join(c.signal_types) or 'none'} |"
+                f"| {_esc(c.customer)} | {anchor} | {c.new_venue_id or 'venue not found'} "
+                f"| {_esc(outcome)} | {', '.join(c.signal_types) or 'none'} |"
             )
     else:
-        lines.append("No case could be replayed from the data in the store.")
-    auc_value: float = out["fit_auc"]  # type: ignore[assignment]
-    shown = "undefined" if math.isnan(auc_value) else f"{auc_value:.3f}"
+        lines.append("No customer with a known new venue is in the store.")
+    shown = "undefined" if math.isnan(out.fit_auc) else f"{out.fit_auc:.3f}"
     lines += [
         "",
         (
-            f"Fit AUC: {shown} (customers n={out['n_customers']} vs other scored groups "
-            f"n={out['n_others']}). Static fit only, no timing; indicative only."
+            f"Fit AUC: {shown} (customers n={out.n_customers} vs other scored groups "
+            f"n={out.n_others}). Static fit only, no timing; indicative only."
         ),
     ]
-    if out["fit_distinct"] <= 1:  # type: ignore[operator]
+    if out.fit_distinct <= 1:
         lines.append("Fit is degenerate (every scored group has the same fit), so AUC is a tie.")
     lines.append("")
     return lines

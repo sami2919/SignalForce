@@ -154,7 +154,8 @@ def _segments(name: str) -> list[str]:
     return [name, *(p for p in parts if p and len(parts) > 1)]
 
 
-def _matches_pattern(pattern: str, name: str) -> bool:
+def matches_seed_name(pattern: str, name: str) -> bool:
+    """Strict seed-name match on `name` or any "/" part; a trailing "*" is a brand prefix."""
     if pattern.endswith("*"):
         return any(name_prefix_match(pattern[:-1], seg) for seg in _segments(name))
     return any(strict_name_match(pattern, seg) for seg in _segments(name))
@@ -162,7 +163,7 @@ def _matches_pattern(pattern: str, name: str) -> bool:
 
 def _name_matches(label: CustomerLabel, name: str) -> bool:
     # Strict on purpose: a lenient match labels a namesake as a customer and drops a prospect.
-    return any(_matches_pattern(p, name) for p in (label.name, *label.venue_names))
+    return any(matches_seed_name(p, name) for p in (label.name, *label.venue_names))
 
 
 def _label_domains(label: CustomerLabel) -> frozenset[str]:
@@ -181,11 +182,11 @@ def _venue_matches(label: CustomerLabel, venue: Venue) -> bool:
     domains = _label_domains(label)
     if venue_domain and venue_domain in domains:
         return True
-    if any(_matches_pattern(p, venue.name) for p in label.venue_names):
+    if any(matches_seed_name(p, venue.name) for p in label.venue_names):
         return True
     if domains and venue_domain:
         return False  # a contradicting domain beats a namesake of the label's own name
-    return _matches_pattern(label.name, venue.name)
+    return matches_seed_name(label.name, venue.name)
 
 
 def customer_groups(

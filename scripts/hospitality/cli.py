@@ -36,10 +36,11 @@ from scripts.hospitality.labels import (
     current_customers,
     customer_evidence,
     customer_groups,
+    load_seed_labels,
     with_customer_flags,
 )
 from scripts.hospitality.llm import LLMRefusal
-from scripts.hospitality.measure.backtest import case_replay, find_venue, fit_auc
+from scripts.hospitality.measure.backtest import case_replay, fit_auc
 from scripts.hospitality.measure.recall import (
     first_inspections_in,
     ground_truth_openings,
@@ -48,6 +49,7 @@ from scripts.hospitality.measure.recall import (
 from scripts.hospitality.messages.drafter import choose_angles, draft
 from scripts.hospitality.messages.judge import judge
 from scripts.hospitality.models import (
+    BacktestResult,
     BenchmarkResult,
     CaseReplay,
     Contact,
@@ -985,70 +987,82 @@ CASE_HINTS: dict[str, str] = {
 }
 
 
-def backtest(store: DocStore | None = None) -> dict[str, object]:
-    """Case replay on dated customers with a known new venue, plus fit AUC. Indicative only.
+def backtest(store: DocStore | None = None) -> BacktestResult:
+    """Case replay on customers with a known new venue, plus fit AUC. Indicative only.
 
-    Each case is replayed as of its anchor date (the customer was live on or before it), with
-    the venue's first inspection cleared and `historical=True`, so only signals that could have
-    existed then count. Customers with no date are counted but not replayed.
+    Each case is anchored on the venue's own seed date when it has one, else on the customer's
+    date for a venue that already existed by then (`case_anchor`); other cases are reported as
+    not evaluable, never as misses. The replay is as of the anchor: an inspection after the
+    anchor is forgotten (one before it is kept, so a later renewal is no opening signal), and
+    the live lookback and stale caps apply (`historical=True`).
     """
+    cfg = load_config()
     store = store or DocStore()
     venues = store.load("venues", Venue)
     groups = store.load("groups", Group)
     licenses = store.load("licenses", LicenseRecord)
     customers = current_customers(store, SEED_PATH, venues=venues, groups=groups)
-    hints = {gid: CASE_HINTS[c.name] for gid, c in customers.items() if c.name in CASE_HINTS}
     pending_seen = first_seen_pending(store)
     stored = store.load("signals", Signal)
-    replayed: list[Signal] = []
-    for gid, name in hints.items():
-        anchor = customers[gid].first_public_date
-        venue = find_venue(name, gid, venues)
-        if anchor is None or venue is None:
-            continue
-        pre = venue.model_copy(update={"first_inspection_date": None})
-        replayed.extend(license_signals([pre], licenses, pending_seen, anchor, historical=True))
-        replayed.extend(s for s in stored if s.entity_id == venue.venue_id)
-    group_of = {v.venue_id: v.group_id for v in venues}
-    # A label can match several namesake groups; keep one case per (customer, venue), preferring
-    # the group that actually owns the venue.
-    best: dict[tuple[str, str | None], CaseReplay] = {}
-    for case in case_replay(customers, venues, replayed, hints):
-        key = (case.customer, case.new_venue_id)
-        owns = group_of.get(case.new_venue_id or "") == case.group_id
-        if key not in best or (
-            owns and group_of.get(case.new_venue_id or "") != best[key].group_id
-        ):
-            best[key] = case
-    cases = list(best.values())
-    accounts = with_customer_flags(store.load("scores", ScoredAccount), customers)
-    return {
-        "cases": cases,
-        "undated": sum(1 for c in customers.values() if c.first_public_date is None),
-        "fit_auc": fit_auc(accounts),
-        "fit_distinct": len({a.fit for a in accounts}),
-        "n_customers": sum(a.is_customer for a in accounts),
-        "n_others": sum(not a.is_customer for a in accounts),
-    }
 
-
-def _print_backtest(out: dict[str, object]) -> None:
-    cases: list[CaseReplay] = out["cases"]  # type: ignore[assignment]
-    print("INDICATIVE ONLY: tiny samples, not a lift claim.")
-    print(f"Case replay (n={len(cases)} dated customers with a known new venue):")
-    for c in cases:
-        venue = c.new_venue_id or "venue not found"
-        lead = f"{c.lead_days}d" if c.lead_days is not None else "no prior signal"
-        print(
-            f"  {c.customer[:28]:<28} anchor<={c.anchor_date} {venue}: lead={lead} "
-            f"[{', '.join(c.signal_types)}]"
+    def signals_for(venue: Venue, anchor: date) -> list[Signal]:
+        inspected = venue.first_inspection_date
+        pre = venue.model_copy(
+            update={
+                "first_inspection_date": inspected if inspected and inspected <= anchor else None
+            }
         )
-    print(f"Customers with no public date, not replayed: {out['undated']}")
-    n_c, n_o = out["n_customers"], out["n_others"]
-    auc_value: float = out["fit_auc"]  # type: ignore[assignment]
-    shown = "undefined" if math.isnan(auc_value) else f"{auc_value:.3f}"
-    print(f"Fit AUC: {shown} (customers n={n_c} vs others n={n_o}); static fit only, no timing.")
-    if out["fit_distinct"] <= 1:  # type: ignore[operator]
+        return [
+            *_replay_signals([pre], licenses, pending_seen, anchor, cfg),
+            *(s for s in stored if s.entity_id == venue.venue_id),
+        ]
+
+    cases = case_replay(
+        customers,
+        venues,
+        signals_for,
+        CASE_HINTS,
+        seeds=load_seed_labels(SEED_PATH),
+        licenses=licenses,
+    )
+    accounts = with_customer_flags(store.load("scores", ScoredAccount), customers)
+    return BacktestResult(
+        cases=tuple(cases),
+        undated=sum(1 for c in customers.values() if c.first_public_date is None),
+        fit_auc=fit_auc(accounts),
+        fit_distinct=len({a.fit for a in accounts}),
+        n_customers=sum(a.is_customer for a in accounts),
+        n_others=sum(not a.is_customer for a in accounts),
+    )
+
+
+def _case_line(c: CaseReplay) -> str:
+    venue = c.new_venue_id or "venue not found"
+    if c.status == "not_evaluable":
+        return f"  {c.customer[:28]:<28} {venue}: not evaluable ({c.reason})"
+    lead = f"{c.lead_days}d" if c.lead_days is not None else "no prior signal (miss)"
+    return (
+        f"  {c.customer[:28]:<28} anchor<={c.anchor_date} ({c.anchor_basis}) {venue}: "
+        f"lead={lead} [{', '.join(c.signal_types)}]"
+    )
+
+
+def _print_backtest(out: BacktestResult) -> None:
+    replayed = sum(c.status == "replayed" for c in out.cases)
+    print("INDICATIVE ONLY: tiny samples, not a lift claim.")
+    print(
+        f"Case replay (n={len(out.cases)} customers with a known new venue; {replayed} replayed, "
+        f"{len(out.cases) - replayed} not evaluable):"
+    )
+    for c in out.cases:
+        print(_case_line(c))
+    print(f"Customers with no public date: {out.undated}")
+    shown = "undefined" if math.isnan(out.fit_auc) else f"{out.fit_auc:.3f}"
+    print(
+        f"Fit AUC: {shown} (customers n={out.n_customers} vs others n={out.n_others}); "
+        "static fit only, no timing."
+    )
+    if out.fit_distinct <= 1:
         print("Fit is degenerate: every scored group has the same fit, so AUC is 0.5 by tie.")
 
 
