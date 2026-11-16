@@ -23,9 +23,9 @@ from scripts.hospitality.models import (
     Venue,
 )
 from scripts.hospitality.resolve.normalize import (
-    name_similarity,
     normalize_address,
     normalize_name,
+    strict_name_match,
 )
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,6 @@ PRESS_QUERIES: tuple[str, ...] = (
     "new general manager New York restaurant group",
 )
 MAX_ARTICLE_CHARS = 12000
-NAME_MATCH_MIN = 0.9
 _GM = re.compile(r"\b(general manager|gm)\b")
 
 _SYSTEM = (
@@ -86,12 +85,9 @@ def extract_press(text: str, url: str) -> PressFacts:
 
 
 def _same_name(a: str, b: str) -> bool:
-    na, nb = normalize_name(a), normalize_name(b)
-    if not na or not nb:
-        return False
-    if na == nb:
-        return True
-    return abs(len(na.split()) - len(nb.split())) <= 1 and name_similarity(a, b) >= NAME_MATCH_MIN
+    """Near-exact (the customer gate's strict rule): a match here merges groups, so a token
+    subset ("FOOD GROUP" for "Major Food Group") must never pass."""
+    return strict_name_match(a, b)
 
 
 def _address_conflict(press_addr: str, venue_addr: str) -> bool:

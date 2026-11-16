@@ -244,3 +244,29 @@ def test_cli_press_stops_cleanly_when_exa_budget_is_spent(
     monkeypatch.setattr(cli, "score", lambda: {"scored_groups": 0})
     out = cli.press(30)
     assert "exhausted" in out["stopped"] and out["articles"] == 0
+
+
+# C1 residual: press group / venue names merge groups, so a token subset must never match.
+@pytest.mark.parametrize(
+    ("a", "b"),
+    [
+        ("Major Food Group", "FOOD GROUP"),
+        ("Hotel Chelsea", "GEM HOTEL CHELSEA"),
+        ("Union Square Hospitality Group", "AT Hospitality Group LLC"),
+        ("Le Bernardin", "LE LE"),
+    ],
+)
+def test_press_names_never_match_by_token_subset(a: str, b: str) -> None:
+    from scripts.hospitality.discover.press import _same_name
+
+    assert not _same_name(a, b)
+
+
+@pytest.mark.parametrize(
+    ("a", "b"),
+    [("Major Food Group", "MAJOR FOOD GROUP LLC"), ("Rezdôra", "REZDORA"), ("Carbone", "CARBONE")],
+)
+def test_press_names_still_match_near_exact(a: str, b: str) -> None:
+    from scripts.hospitality.discover.press import _same_name
+
+    assert _same_name(a, b)

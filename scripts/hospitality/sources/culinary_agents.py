@@ -40,10 +40,10 @@ from scripts.hospitality.models import (
     Venue,
 )
 from scripts.hospitality.resolve.normalize import (
-    name_similarity,
     normalize_address,
     normalize_name,
     registrable_domain,
+    strict_name_match,
 )
 from scripts.net.guard import get_capped, guarded_client
 
@@ -53,7 +53,6 @@ BASE = "https://culinaryagents.com"
 SOURCE = "culinary_agents"
 USER_AGENT = "SignalForce/0.2 (+https://signalforce.fly.dev)"  # same identity as the watch fetcher
 MAX_BYTES = 2_000_000
-NAME_MATCH_MIN = 0.9
 _HOSTS = frozenset({"culinaryagents.com", "www.culinaryagents.com"})
 _PLACE_SUFFIX = frozenset({"nyc", "ny", "brooklyn", "manhattan", "queens", "bronx"})
 _GENERIC_GROUP = frozenset({"", "group", "restaurant group", "hospitality group"})
@@ -440,12 +439,10 @@ def _key(name: str) -> str:
 
 
 def _same_name(a: str, b: str) -> bool:
+    """Near-exact after dropping place suffixes; strict (a match merges groups), so a token
+    subset never passes."""
     ka, kb = _key(a), _key(b)
-    if not ka or not kb:
-        return False
-    if ka == kb:
-        return True
-    return abs(len(ka.split()) - len(kb.split())) <= 1 and name_similarity(ka, kb) >= NAME_MATCH_MIN
+    return bool(ka and kb) and (ka == kb or strict_name_match(ka, kb))
 
 
 def _street_conflict(location: str, venue_address: str) -> bool:

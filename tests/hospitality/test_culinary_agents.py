@@ -580,3 +580,14 @@ def test_cli_reports_budget_stop(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cli, "score", lambda: {"scored_groups": 0})
     out = cli.culinary_agents(fetch=_pages([]), today=TODAY, sleep=lambda s: None)
     assert out["pages"] == 1 and "budget" in out["stopped"]
+
+
+@pytest.mark.parametrize(
+    ("a", "b"),
+    [("Major Food Group", "FOOD GROUP"), ("Hotel Chelsea", "GEM HOTEL CHELSEA")],
+)
+def test_job_board_names_never_match_by_token_subset(a: str, b: str) -> None:
+    """C1 residual: a job-board company name merges groups, so a subset must never match."""
+    from scripts.hospitality.sources.culinary_agents import _same_name
+
+    assert not _same_name(a, b)
