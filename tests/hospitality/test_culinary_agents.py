@@ -47,17 +47,17 @@ def companies():
 def test_parse_job_search_fields() -> None:
     by = {(j.company, j.title): j for j in jobs()}
     assert len(by) == 7
-    sous = by[("Graciela", "Sous Chef")]
+    sous = by[("Brasada", "Sous Chef")]
     assert sous.location == "New York, New York 10014"
     assert sous.posted == TODAY and sous.group is None
-    assert sous.url == "https://culinaryagents.com/jobs/722569-Sous-Chef"  # no tracking query
-    assert sous.company_url == "https://culinaryagents.com/entities/1061192"
-    grill = by[("La Tête d’Or", "Grill Cook")]
-    assert grill.group == "The Dinex Group, the Restaurant Group of Chef Daniel Boulud"
-    assert grill.location == "One Madison Avenue, New York, NY 10010"
+    assert sous.url == "https://culinaryagents.com/jobs/9100001-Sous-Chef"  # no tracking query
+    assert sous.company_url == "https://culinaryagents.com/entities/9000001"
+    grill = by[("La Pâte d’Ambre", "Grill Cook")]
+    assert grill.group == "The Harbor Table Group, the Restaurant Group of Chef Ada Moreau"
+    assert grill.location == "One Example Plaza, New York, NY 10010"
     assert grill.posted is None  # sponsored cards carry no posting date
     assert "ad_id" not in grill.url
-    assert by[("Dragonne", "General Manager")].posted == date(2026, 11, 14)
+    assert by[("Verdigris", "General Manager")].posted == date(2026, 11, 14)
 
 
 def test_parse_job_search_skips_unparseable_card_and_logs(caplog) -> None:
@@ -80,23 +80,23 @@ def test_parse_job_search_on_garbage_returns_empty() -> None:
 def test_parse_company_search() -> None:
     by = {c.name: c for c in companies()}
     assert len(by) == 5
-    levanto = by["LEVANTO NYC"]
-    assert levanto.opening_soon and levanto.hiring
-    assert levanto.locations == ("149 Grand Street, New York, NY",)
-    assert levanto.url == "https://culinaryagents.com/entities/1211493-LEVANTO-NYC"
-    assert levanto.group is None and levanto.website is None
-    assert by["Neighbors Famous"].group == "Hani's Bakery + Cafe & Neighbors Famous Ice Cream"
-    assert by["Neighbors Famous"].description.startswith("Neighbors Famous Ice Cream is")
-    assert by["Bar Cosme"].group == "Casamata"
+    marinella = by["MARINELLA NYC"]
+    assert marinella.opening_soon and marinella.hiring
+    assert marinella.locations == ("149 Sample Street, New York, NY",)
+    assert marinella.url == "https://culinaryagents.com/entities/9200001-MARINELLA-NYC"
+    assert marinella.group is None and marinella.website is None
+    assert by["Corner Famous"].group == "Mira's Bakery + Cafe & Corner Famous Ice Cream"
+    assert by["Corner Famous"].description.startswith("Corner Famous Ice Cream is")
+    assert by["Bar Solano"].group == "Casaverde"
 
 
 def test_parse_company_page() -> None:
-    url = "https://culinaryagents.com/entities/1061192-Graciela"
+    url = "https://culinaryagents.com/entities/9000001-Brasada"
     c = parse_company(read("company_page.html"), url)
-    assert c is not None and c.name == "Graciela" and c.url == url
-    assert c.website == "https://www.gracielanyc.com/"
+    assert c is not None and c.name == "Brasada" and c.url == url
+    assert c.website == "https://www.brasada.example/"
     assert c.locations == ("New York, New York 10014",)
-    assert c.description.startswith("Graciela is an Argentine tavern")
+    assert c.description.startswith("Brasada is a live-fire tavern")
     assert "click(" not in c.description  # inline script text is not description
     assert parse_company("<html></html>", url) is None
 
@@ -137,7 +137,7 @@ def _job(company: str, title: str, **kw) -> CAJob:
         "company": company,
         "company_url": "https://culinaryagents.com/entities/9",
         "title": title,
-        "location": "13 Barrow Street, New York, NY",
+        "location": "13 Example Street, New York, NY",
         "group": None,
         "posted": date(2026, 11, 14),
         "url": f"https://culinaryagents.com/jobs/1-{title.replace(' ', '-')}",
@@ -167,81 +167,81 @@ def run(js, cs, venues, groups=(), cfg=CFG):
     return to_signals(js, cs, venues, list(groups), TODAY, cfg)
 
 
-DRAGONNE = make_venue("v:dragonne", name="Dragonne", address="13 BARROW ST")
+VERDIGRIS = make_venue("v:verdigris", name="Verdigris", address="13 EXAMPLE ST")
 
 
 def test_gm_posting_emits_new_gm_on_matched_venue() -> None:
-    sigs, _ = run([_job("Dragonne", "General Manager")], [], [DRAGONNE])
+    sigs, _ = run([_job("Verdigris", "General Manager")], [], [VERDIGRIS])
     assert len(sigs) == 1
     s = sigs[0]
-    assert s.signal_type == "new_gm" and s.entity_id == "v:dragonne"
+    assert s.signal_type == "new_gm" and s.entity_id == "v:verdigris"
     assert s.source == "culinary_agents"
     assert s.evidence_ref == "https://culinaryagents.com/jobs/1-General-Manager"
-    assert "General Manager" in s.detail and "Dragonne" in s.detail
+    assert "General Manager" in s.detail and "Verdigris" in s.detail
     assert s.occurred_at == datetime(2026, 11, 14, tzinfo=UTC)
 
 
 def test_leadership_posting_emits_role_hire() -> None:
-    sigs, _ = run([_job("Dragonne", "Events Manager")], [], [DRAGONNE])
+    sigs, _ = run([_job("Verdigris", "Events Manager")], [], [VERDIGRIS])
     assert [s.signal_type for s in sigs] == ["role_hire"]
 
 
 def test_line_level_and_assistant_roles_emit_nothing() -> None:
     js = [
-        _job("Dragonne", t)
+        _job("Verdigris", t)
         for t in ("Line Cook", "Server", "Dishwasher", "Assistant General Manager")
     ]
-    sigs, _ = run(js, [], [DRAGONNE])
+    sigs, _ = run(js, [], [VERDIGRIS])
     assert sigs == []
 
 
 def test_opening_soon_company_emits_opening_soon_with_company_url() -> None:
-    co = _co("Dragonne", opening_soon=True, locations=("13 Barrow Street, New York, NY",))
-    sigs, _ = run([], [co], [DRAGONNE])
+    co = _co("Verdigris", opening_soon=True, locations=("13 Example Street, New York, NY",))
+    sigs, _ = run([], [co], [VERDIGRIS])
     assert [s.signal_type for s in sigs] == ["opening_soon"]
-    assert sigs[0].evidence_ref == co.url and sigs[0].entity_id == "v:dragonne"
+    assert sigs[0].evidence_ref == co.url and sigs[0].entity_id == "v:verdigris"
     assert "opening soon" in sigs[0].detail.lower()
 
 
 def test_company_not_opening_soon_emits_no_opening_signal() -> None:
-    sigs, _ = run([], [_co("Dragonne")], [DRAGONNE])
+    sigs, _ = run([], [_co("Verdigris")], [VERDIGRIS])
     assert sigs == []
 
 
 def test_trailing_nyc_and_case_do_not_block_a_match() -> None:
-    v = make_venue("v:levanto", name="Levanto", address="149 GRAND ST")
-    co = _co("LEVANTO NYC", opening_soon=True, locations=("149 Grand Street, New York, NY",))
+    v = make_venue("v:marinella", name="Marinella", address="149 SAMPLE ST")
+    co = _co("MARINELLA NYC", opening_soon=True, locations=("149 Sample Street, New York, NY",))
     sigs, _ = run([], [co], [v])
-    assert [s.entity_id for s in sigs] == ["v:levanto"]
+    assert [s.entity_id for s in sigs] == ["v:marinella"]
 
 
 def test_ambiguous_company_gets_no_signal_and_is_logged(caplog) -> None:
-    a = make_venue("v:a", name="Dragonne", address="13 BARROW ST")
-    b = make_venue("v:b", name="Dragonne", address="13 BARROW ST")
-    co = _co("Dragonne", opening_soon=True)
+    a = make_venue("v:a", name="Verdigris", address="13 EXAMPLE ST")
+    b = make_venue("v:b", name="Verdigris", address="13 EXAMPLE ST")
+    co = _co("Verdigris", opening_soon=True)
     with caplog.at_level(logging.INFO):
-        sigs, ev = run([_job("Dragonne", "General Manager")], [co], [a, b])
+        sigs, ev = run([_job("Verdigris", "General Manager")], [co], [a, b])
     assert sigs == [] and ev == []
     assert "unmatched" in caplog.text.lower()
 
 
 def test_unmatched_company_gets_no_signal_and_is_logged(caplog) -> None:
     with caplog.at_level(logging.INFO):
-        sigs, _ = run([_job("Nowhere Bistro", "General Manager")], [], [DRAGONNE])
+        sigs, _ = run([_job("Nowhere Bistro", "General Manager")], [], [VERDIGRIS])
     assert sigs == []
     assert "Nowhere Bistro" in caplog.text
 
 
 def test_same_name_at_a_different_street_number_does_not_match() -> None:
-    far = _co("Dragonne", opening_soon=True, locations=("500 Broadway, New York, NY",))
-    sigs, _ = run([], [far], [DRAGONNE])
+    far = _co("Verdigris", opening_soon=True, locations=("500 Broadway, New York, NY",))
+    sigs, _ = run([], [far], [VERDIGRIS])
     assert sigs == []
 
 
 def test_website_domain_disambiguates_two_same_name_venues() -> None:
-    a = make_venue("v:a", name="Dragonne", address="1 A ST", website="https://dragonne.com")
-    b = make_venue("v:b", name="Dragonne", address="2 B ST", website="https://other.com")
-    co = _co("Dragonne", opening_soon=True, website="https://www.dragonne.com/menu")
+    a = make_venue("v:a", name="Verdigris", address="1 A ST", website="https://verdigris.com")
+    b = make_venue("v:b", name="Verdigris", address="2 B ST", website="https://other.com")
+    co = _co("Verdigris", opening_soon=True, website="https://www.verdigris.com/menu")
     sigs, _ = run([], [co], [a, b])
     assert [s.entity_id for s in sigs] == ["v:a"]
 
@@ -309,15 +309,15 @@ def test_job_card_group_line_feeds_group_evidence() -> None:
 def _score(group_venues, sigs, *, is_customer=False):
     cfg = load_config()
     g = Group(
-        group_id="g:v:dragonne",
-        name="Dragonne",
+        group_id="g:v:verdigris",
+        name="Verdigris",
         venue_ids=tuple(v.venue_id for v in group_venues),
         resolution="singleton",
     )
     return score_group(
         g,
         sigs,
-        {"v:dragonne": make_estimate("v:dragonne", estimated_open=date(2027, 1, 1))},
+        {"v:verdigris": make_estimate("v:verdigris", estimated_open=date(2027, 1, 1))},
         group_venues,
         [],
         cfg,
@@ -328,29 +328,29 @@ def _score(group_venues, sigs, *, is_customer=False):
 
 
 def test_opening_soon_folds_with_license_signal_no_double_count() -> None:
-    lic = make_signal("license_pending", "v:dragonne")
-    co = _co("Dragonne", opening_soon=True)
-    soon, _ = run([], [co], [DRAGONNE])
-    both = _score([DRAGONNE], [lic, *soon])
-    only_lic = _score([DRAGONNE], [lic])
+    lic = make_signal("license_pending", "v:verdigris")
+    co = _co("Verdigris", opening_soon=True)
+    soon, _ = run([], [co], [VERDIGRIS])
+    both = _score([VERDIGRIS], [lic, *soon])
+    only_lic = _score([VERDIGRIS], [lic])
     assert both.p_window == pytest.approx(only_lic.p_window)
     by_type = {c.signal_type: c for c in both.contributions}
     assert by_type["license_pending"].contribution > 0
     assert by_type["opening_soon"].contribution == 0.0
     assert "folded" in by_type["opening_soon"].note
-    alone = _score([DRAGONNE], list(soon))
+    alone = _score([VERDIGRIS], list(soon))
     assert alone.p_window == pytest.approx(0.30)  # counts when it is the only opening evidence
 
 
 def test_customer_group_never_becomes_a_cold_prospect_from_these_signals() -> None:
     sigs, _ = run(
-        [_job("Dragonne", "General Manager")], [_co("Dragonne", opening_soon=True)], [DRAGONNE]
+        [_job("Verdigris", "General Manager")], [_co("Verdigris", opening_soon=True)], [VERDIGRIS]
     )
-    acct = _score([DRAGONNE], sigs, is_customer=True)
+    acct = _score([VERDIGRIS], sigs, is_customer=True)
     assert acct.p_window > 0 and acct.is_customer
     assert rank_prospects([acct]) == []
-    cold = _score([DRAGONNE], sigs)
-    assert [a.group_id for a in rank_prospects([cold])] == ["g:v:dragonne"]
+    cold = _score([VERDIGRIS], sigs)
+    assert [a.group_id for a in rank_prospects([cold])] == ["g:v:verdigris"]
 
 
 def test_new_signal_type_and_config_are_backward_compatible() -> None:
@@ -410,8 +410,11 @@ def test_fetch_nyc_collects_jobs_and_companies_and_spends_before_each_fetch() ->
     assert {j.title for j in js} >= {"General Manager", "Sous Chef"}
     assert any(j.opening_soon for j in js)
     names = {c.name for c in cs}
-    assert {"LEVANTO NYC", "Dragonne"} <= names  # opening-soon jobs imply an opening-soon company
-    assert next(c for c in cs if c.name == "Dragonne").opening_soon
+    assert {
+        "MARINELLA NYC",
+        "Verdigris",
+    } <= names  # opening-soon jobs imply an opening-soon company
+    assert next(c for c in cs if c.name == "Verdigris").opening_soon
 
 
 def test_fetch_nyc_budget_hard_stops_before_the_call_over_the_limit() -> None:
@@ -533,11 +536,11 @@ def test_cli_end_to_end_saves_signals_evidence_merges_and_rescores(monkeypatch, 
     from scripts.hospitality.store import DocStore
 
     store = DocStore(f"sqlite:///{tmp_path}/m.db")
-    dragonne = make_venue("v:dragonne", name="Dragonne", address="13 BARROW ST")
-    levanto = make_venue("v:levanto", name="Levanto", address="149 GRAND ST")
-    bar = make_venue("v:cosme", name="Bar Cosme", address="372 LAFAYETTE ST")
-    casa = make_venue("v:casa", name="Casamata Hospitality Hub", address="1 X ST")
-    store.save("venues", [dragonne, levanto, bar, casa], key=lambda v: v.venue_id)
+    verdigris = make_venue("v:verdigris", name="Verdigris", address="13 EXAMPLE ST")
+    marinella = make_venue("v:marinella", name="Marinella", address="149 SAMPLE ST")
+    bar = make_venue("v:solano", name="Bar Solano", address="372 MODEL ST")
+    casa = make_venue("v:casa", name="Casaverde Hospitality Hub", address="1 X ST")
+    store.save("venues", [verdigris, marinella, bar, casa], key=lambda v: v.venue_id)
     store.save(
         "groups",
         [
@@ -547,7 +550,7 @@ def test_cli_end_to_end_saves_signals_evidence_merges_and_rescores(monkeypatch, 
                 venue_ids=(v.venue_id,),
                 resolution="singleton",
             )
-            for v in (dragonne, levanto, bar, casa)
+            for v in (verdigris, marinella, bar, casa)
         ],
         key=lambda g: g.group_id,
     )
@@ -557,9 +560,9 @@ def test_cli_end_to_end_saves_signals_evidence_merges_and_rescores(monkeypatch, 
     out = cli.culinary_agents(fetch=_pages([]), today=TODAY, sleep=lambda s: None)
     sigs = store.load("signals", Signal)
     kinds = {(s.entity_id, s.signal_type) for s in sigs}
-    assert ("v:dragonne", "new_gm") in kinds
-    assert ("v:dragonne", "opening_soon") in kinds
-    assert ("v:levanto", "opening_soon") in kinds
+    assert ("v:verdigris", "new_gm") in kinds
+    assert ("v:verdigris", "opening_soon") in kinds
+    assert ("v:marinella", "opening_soon") in kinds
     assert all(s.source == "culinary_agents" for s in sigs)
     assert out["pages"] == 3 and out["signals"] == len(sigs) and out["stopped"] == ""
     assert out["scored_groups"] == 4
@@ -612,3 +615,12 @@ def test_polite_fetcher_fails_closed_when_robots_cannot_be_read(robots: str) -> 
     )
     assert f("https://culinaryagents.com/search/jobs?x=1") is None
     assert seen == ["/robots.txt"]  # no page request goes out
+
+
+def test_fixtures_are_synthetic_not_captured_pages() -> None:
+    """M14: the source's agreement appears to restrict automated collection and this repo is
+    open source, so the fixtures mirror the page structure with invented businesses and text."""
+    for page in FIX.glob("*.html"):
+        html = page.read_text()
+        assert "amazonaws.com" not in html, page.name  # no hot-linked source assets
+        assert "SYNTHETIC FIXTURE" in html, page.name
