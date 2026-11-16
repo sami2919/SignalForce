@@ -1,11 +1,14 @@
 """Command-line entry point: python -m scripts.hospitality.cli <command>."""
 
 import argparse
+import asyncio
 import os
 import sys
+from collections import Counter
 from collections.abc import Sequence
-from datetime import date
+from datetime import UTC, date, datetime
 
+from scripts.firecrawl_client import FirecrawlClient
 from scripts.hospitality.budget import CallBudget
 from scripts.hospitality.config import load_config
 from scripts.hospitality.models import (
@@ -14,6 +17,7 @@ from scripts.hospitality.models import (
     InspectionVenue,
     LicenseRecord,
     LicenseSource,
+    StackObservation,
     Venue,
     WindowEstimate,
 )
@@ -28,6 +32,12 @@ from scripts.hospitality.sources.dohmh import (
 from scripts.hospitality.sources.sla import fetch_licenses
 from scripts.hospitality.sources.snapshot import take_snapshot
 from scripts.hospitality.sources.socrata import SocrataClient
+from scripts.hospitality.stack.crawl import crawl_stacks
+from scripts.hospitality.stack.signals import (
+    disqualified_venues,
+    loyalist_venues,
+    stack_signals,
+)
 from scripts.hospitality.stack.websites import PlacesClient, attach_websites
 from scripts.hospitality.store import DocStore
 from scripts.hospitality.window.estimate import estimate_all
@@ -160,6 +170,38 @@ def websites(limit: int = 400) -> dict[str, int]:
     return {"prioritized": len(priority), "lookups": budget.used, "websites_found": len(changed)}
 
 
+def crawl(now: datetime | None = None) -> dict[str, object]:
+    """Crawl venue websites, store stack observations (appending) and stack signals."""
+    key = os.environ.get("FIRECRAWL_API_KEY")
+    if not key:  # fail fast, before touching the store or the network
+        raise SystemExit("FIRECRAWL_API_KEY is not set; the crawl command needs it")
+    cfg = load_config()
+    now = now or datetime.now(UTC)
+    store = DocStore()
+    venues = store.load("venues", Venue)
+    previous = store.load("stack_observations", StackObservation)
+    budget = CallBudget("firecrawl", cfg.budgets["firecrawl"])
+    observations = asyncio.run(
+        crawl_stacks(venues, now, firecrawl=FirecrawlClient(key), firecrawl_budget=budget)
+    )
+    signals = stack_signals(observations, venues, previous, now)
+    # History accumulates: each crawl time is its own row; a rerun at the same time overwrites.
+    store.save(
+        "stack_observations",
+        observations,
+        key=lambda o: f"{o.venue_id}|{o.observed_at.isoformat()}",  # type: ignore[attr-defined]
+    )
+    store.save("signals", signals, key=lambda s: s.signal_id)  # type: ignore[attr-defined]
+    return {
+        "observations": len(observations),
+        "platforms": dict(Counter(p for o in observations for p in o.platforms)),
+        "loyalist_embeds": len(loyalist_venues(observations)),
+        "disqualified": len(disqualified_venues(observations)),
+        "signals": len(signals),
+        "firecrawl_calls": budget.used,
+    }
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="scripts.hospitality.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -170,6 +212,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     sub.add_parser("window", help="Fit opening-timing curves; estimate venue opening windows")
     p_web = sub.add_parser("websites", help="Find websites for prioritized venues (Google Places)")
     p_web.add_argument("--limit", type=int, default=400, help="Max venues to look up")
+    sub.add_parser("crawl", help="Crawl venue websites; detect stacks and emit stack signals")
     args = parser.parse_args(argv)
     if args.command == "ingest-sla":
         for source, n in ingest_sla().items():
@@ -193,6 +236,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     elif args.command == "websites":
         for name, n in websites(args.limit).items():
             print(f"{name}: {n}")
+    elif args.command == "crawl":
+        out = crawl()
+        for name, value in out.items():
+            print(f"{name}: {value}")
     return 0
 
 
