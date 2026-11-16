@@ -18,6 +18,7 @@ from scripts.hospitality.benchmark.compare import compare
 from scripts.hospitality.budget import BudgetExceeded, CallBudget
 from scripts.hospitality.config import HospitalityConfig, load_config
 from scripts.hospitality.discover.exa import ExaClient
+from scripts.hospitality.discover.lookalikes import lookalike_signals, seed_url
 from scripts.hospitality.discover.press import PRESS_QUERIES, extract_press, press_to_records
 from scripts.hospitality.labels import (
     customer_groups,
@@ -450,6 +451,28 @@ def press(days: int = 120, today: date | None = None) -> dict[str, object]:
     }
 
 
+def lookalikes(now: datetime | None = None) -> dict[str, object]:
+    """Find venues similar to customer sites via Exa, save `lookalike` signals, rescore."""
+    if not os.environ.get("EXA_API_KEY"):  # fail fast, before touching the store or the network
+        raise SystemExit("EXA_API_KEY is not set; the lookalikes command needs it")
+    cfg = load_config()
+    now = now or datetime.now(UTC)
+    store = DocStore()
+    venues = store.load("venues", Venue)
+    seeds = store.load("customer_labels", CustomerLabel) or load_seed_labels(SEED_PATH)
+    exa_budget = CallBudget("exa", cfg.budgets["exa"])
+    exa = ExaClient.from_env(exa_budget)
+    signals = lookalike_signals(exa, seeds, venues, now)
+    store.save("signals", signals, key=lambda s: s.signal_id)  # type: ignore[attr-defined]
+    scored = score()
+    return {
+        "seeds": sum(seed_url(s) is not None for s in seeds),
+        "signals": len(signals),
+        "exa_calls": exa_budget.used,
+        "scored_groups": scored["scored_groups"],
+    }
+
+
 def recall(weeks: int = 12, today: date | None = None) -> dict[str, object]:
     """Replay license signals for venues first inspected in the last `weeks`; report recall.
 
@@ -675,6 +698,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     p_press.add_argument(
         "--days", type=int, default=120, help="Search articles from the last N days"
     )
+    sub.add_parser("lookalikes", help="Exa lookalikes of customer sites, matched to known venues")
     sub.add_parser("backtest", help="Case replay on known customers + fit AUC (indicative)")
     sub.add_parser("run-p0", help="Run the whole P0 chain, ingest through backtest")
     p_bench = sub.add_parser(
@@ -732,6 +756,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"sample misses: {out['misses_sample']}")
     elif args.command == "press":
         for name, value in press(args.days).items():
+            print(f"{name}: {value}")
+    elif args.command == "lookalikes":
+        for name, value in lookalikes().items():
             print(f"{name}: {value}")
     elif args.command == "backtest":
         _print_backtest(backtest())
