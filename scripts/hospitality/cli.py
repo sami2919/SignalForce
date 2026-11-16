@@ -686,16 +686,26 @@ def events_rank(path: Path = EVENTS_PATH) -> dict[str, object]:
 DRAFT_ANGLES_PER_GROUP = 3
 
 
+def _contact_text(contact: Contact | None) -> tuple[str, ...]:
+    return (contact.name, contact.role) if contact else ()
+
+
 def draft_command(top: int = 10) -> dict[str, object]:
     """Draft (never send) up to three angles per top cold prospect; judge and save them."""
     if not os.environ.get("ANTHROPIC_API_KEY"):  # fail fast, before touching the store
         raise SystemExit("ANTHROPIC_API_KEY is not set; the draft command needs it")
     store = DocStore()
-    group_of = {v.venue_id: v.group_id for v in store.load("venues", Venue)}
+    venues = store.load("venues", Venue)
+    group_of = {v.venue_id: v.group_id for v in venues}
     aliases = _aliases(store)
 
     def group(eid: str) -> str:
         return canonical_group_id(eid, group_of, aliases) or eid
+
+    # What the grounding check may trace a name in a draft to, besides the cited evidence.
+    own_names: dict[str, list[str]] = {g.group_id: [g.name] for g in store.load("groups", Group)}
+    for v in venues:
+        own_names.setdefault(v.group_id, []).extend((v.name, v.address))
 
     signals_by_group: dict[str, list[Signal]] = {}
     for sig in [*store.load("license_signals", Signal), *store.load("signals", Signal)]:
@@ -715,7 +725,8 @@ def draft_command(top: int = 10) -> dict[str, object]:
         for angle in choose_angles(evidence)[:DRAFT_ANGLES_PER_GROUP]:
             d = draft(acct, evidence, contact, angle)
             drafts.append(d)
-            judgements[d.draft_id] = judge(d, evidence)
+            account_text = [*own_names.get(acct.group_id, []), *_contact_text(contact)]
+            judgements[d.draft_id] = judge(d, evidence, account_text=account_text)
     store.save("drafts", drafts, key=lambda d: d.draft_id)  # type: ignore[attr-defined]
     ids = {id(j): k for k, j in judgements.items()}
     store.save("judgements", list(judgements.values()), key=lambda j: ids[id(j)])

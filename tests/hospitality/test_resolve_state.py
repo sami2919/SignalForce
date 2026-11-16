@@ -485,6 +485,6 @@ def test_pipeline_sequence_keeps_customers_out_and_state_intact(
         grounding_violations=(),
         passed=True,
     )
-    monkeypatch.setattr(cli, "judge", lambda d, evidence: verdict)
+    monkeypatch.setattr(cli, "judge", lambda d, evidence, *, account_text: verdict)
     cli.draft_command(top=10)
     assert bravo_group not in drafted and drafted

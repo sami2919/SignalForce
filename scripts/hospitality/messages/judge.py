@@ -32,9 +32,13 @@ class LLMJudgement(BaseModel):
     what_would_make_me_reply: str
 
 
-def judge(draft: Draft, evidence: Sequence[Signal]) -> Judgement:
-    """`passed = not violations and score >= 7.0`; violations skip the LLM entirely."""
-    violations = grounding_check(draft, {s.signal_id for s in evidence})
+def judge(draft: Draft, evidence: Sequence[Signal], *, account_text: Sequence[str]) -> Judgement:
+    """`passed = not violations and score >= PASS_SCORE`; violations skip the LLM entirely.
+
+    `account_text` (the group's and venues' names and addresses, the contact) is what the
+    deterministic layer may trace a name in the text to, besides the cited evidence.
+    """
+    violations = grounding_check(draft, evidence, account_text=account_text)
     if violations:
         return Judgement(
             score=0.0,
