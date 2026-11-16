@@ -90,6 +90,13 @@ class Group(_Frozen):
     resolution: GroupResolution
 
 
+class GroupEvidence(_Frozen):
+    venue_ids: tuple[str, ...]
+    name: str
+    resolution: GroupResolution
+    evidence_ref: str
+
+
 class EntityLink(_Frozen):
     left_id: str
     right_id: str

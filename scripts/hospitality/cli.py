@@ -7,7 +7,14 @@ from collections.abc import Sequence
 from datetime import date
 
 from scripts.hospitality.config import load_config
-from scripts.hospitality.models import LicenseSource
+from scripts.hospitality.models import (
+    InspectionVenue,
+    LicenseRecord,
+    LicenseSource,
+)
+from scripts.hospitality.resolve.groups import form_groups
+from scripts.hospitality.resolve.match import match_licenses
+from scripts.hospitality.resolve.venues import build_venues
 from scripts.hospitality.sources.dohmh import (
     fetch_first_inspections,
     fetch_never_inspected,
@@ -58,12 +65,38 @@ def snapshot_pending() -> int:
     return take_snapshot(DocStore(), records, date.today())
 
 
+def resolve() -> dict[str, int]:
+    """Match licenses to inspections, build venues, form groups; save venues/groups/links."""
+    cfg = load_config()
+    store = DocStore()
+    licenses = store.load("licenses", LicenseRecord)
+    inspections = store.load("inspections", InspectionVenue)
+    match = match_licenses(licenses, inspections, cfg)
+    venues, groups = form_groups(build_venues(licenses, inspections, match), licenses)
+    for kind in ("venues", "groups", "links"):
+        store.clear(kind)  # resolve is a full recompute; drop rows from earlier runs
+    store.save("venues", venues, key=lambda v: v.venue_id)  # type: ignore[attr-defined]
+    store.save("groups", groups, key=lambda g: g.group_id)  # type: ignore[attr-defined]
+    store.save(
+        "links",
+        match.links,
+        key=lambda link: f"{link.left_id}|{link.right_id}",  # type: ignore[attr-defined]
+    )
+    return {
+        "venues": len(venues),
+        "groups": len(groups),
+        "multi_venue_groups": sum(len(g.venue_ids) > 1 for g in groups),
+        "possibly_same_links": len(match.links),
+    }
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="scripts.hospitality.cli")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("ingest-sla", help="Ingest NY SLA licenses for NYC via Socrata")
     sub.add_parser("ingest-dohmh", help="Ingest DOHMH first-inspection venues via Socrata")
     sub.add_parser("snapshot-pending", help="Record today's SLA pending applications")
+    sub.add_parser("resolve", help="Match licenses to inspections; build venues and groups")
     args = parser.parse_args(argv)
     if args.command == "ingest-sla":
         for source, n in ingest_sla().items():
@@ -73,6 +106,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"{name}: {n}")
     elif args.command == "snapshot-pending":
         print(f"sla_pending snapshot rows: {snapshot_pending()}")
+    elif args.command == "resolve":
+        for name, n in resolve().items():
+            print(f"{name}: {n}")
     return 0
 
 

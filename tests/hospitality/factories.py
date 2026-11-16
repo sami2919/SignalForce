@@ -44,3 +44,25 @@ def make_inspection(camis: str = "1", first: date | None = None, **overrides: ob
     }
     base.update(overrides)
     return InspectionVenue(**base)  # type: ignore[arg-type]
+
+
+def make_venue(venue_id: str = "v:1", **overrides: object):
+    from scripts.hospitality.models import Venue
+
+    base: dict[str, object] = {
+        "venue_id": venue_id,
+        "name": "Acme",
+        "address": "1 Main St",
+        "zip_code": "10001",
+        "lat": 40.7,
+        "lon": -74.0,
+        "camis": None,
+        "license_ids": (),
+        "license_class": None,
+        "license_description": None,
+        "first_inspection_date": None,
+        "website": None,
+        "group_id": f"g:{venue_id}",
+    }
+    base.update(overrides)
+    return Venue(**base)  # type: ignore[arg-type]
