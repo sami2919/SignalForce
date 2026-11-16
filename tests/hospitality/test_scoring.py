@@ -335,3 +335,16 @@ def test_operator_names_include_licensee_legal_and_dba(cfg) -> None:
     names = operator_names(group, [venue], {"sla:1": lic})
     assert "OTG JFK T5 Venture II, LLC" in names
     assert contract_operator_reason(names, cfg) == "contract_foodservice"
+
+
+def test_old_job_post_decays_on_when_it_was_posted_not_when_we_saw_it(cfg) -> None:
+    """M7: a 300-day-old job post re-observed today must not look fresh."""
+    now = datetime(2026, 11, 16, tzinfo=UTC)
+    prior = cfg.priors["role_hire"]
+    posted = make_signal(
+        "role_hire", observed_at=now, occurred_at=datetime(2026, 1, 20, tzinfo=UTC)
+    )
+    w = window_weight(posted, prior, None, now, cfg)
+    assert w == pytest.approx(0.5 ** (300 / prior.half_life_days))
+    fresh = make_signal("role_hire", observed_at=now)
+    assert window_weight(fresh, prior, None, now, cfg) == 1.0

@@ -54,6 +54,12 @@ def _aware(dt: datetime) -> datetime:
     return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
 
+def signal_time(signal: Signal) -> datetime:
+    """When the signal's fact happened: `occurred_at` (a job post's posting date) when known,
+    else when we observed it. Re-observing an old fact must not make it fresh (M7)."""
+    return signal.occurred_at or signal.observed_at
+
+
 def window_weight(
     signal: Signal,
     prior: SignalPrior,
@@ -61,7 +67,8 @@ def window_weight(
     now: datetime,
     cfg: HospitalityConfig,
 ) -> float:
-    """Weight in [0, 1]: 1 inside the opening window, decaying outside it or with signal age."""
+    """Weight in [0, 1]: 1 inside the opening window, decaying outside it or with signal age
+    (age from `signal_time`)."""
     if prior.family == "opening" and estimate is not None:
         rel = (now.date() - estimate.estimated_open).days  # negative = before opening
         if -cfg.window_pre_days <= rel <= cfg.window_post_days:
@@ -70,7 +77,7 @@ def window_weight(
         return 0.5 ** (outside / cfg.window_outside_half_life_days)
     if prior.half_life_days is None:
         return 1.0  # state signal, valid while last observed
-    age_days = max(0.0, (_aware(now) - _aware(signal.observed_at)).total_seconds())
+    age_days = max(0.0, (_aware(now) - _aware(signal_time(signal))).total_seconds())
     return 0.5 ** (age_days / _SECONDS_PER_DAY / prior.half_life_days)
 
 
@@ -221,7 +228,7 @@ def _tie_facts(
     for sig, prior, _weight, raw in rows:
         if sig.signal_id not in counted or raw <= 0 or prior.family == "relationship":
             continue
-        seen = _aware(sig.observed_at).date()
+        seen = _aware(signal_time(sig)).date()
         latest = seen if latest is None or seen > latest else latest
         if prior.family != "opening":
             continue
