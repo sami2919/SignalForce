@@ -409,7 +409,58 @@ event_score = event_value / (ticket + travel + sponsorship cost)
 **Demo scope addition.** NYC-relevant event registry for the next 12 months. Ranked events
 with their scores. A likely-attendee meeting list for the top event, matched to the graph.
 
-### 6.13 Tools summary
+### 6.13 Firecrawl, Exa and Clay: where each fits
+
+Rule: cheap deterministic code first; these tools only where code can't reach. Every result
+they return is a *candidate*. It is resolved into the graph and scored like any other signal,
+never trusted as-is.
+
+**Firecrawl: fetch and extract (reuses `scripts/firecrawl_client.py` and the existing Firecrawl
+scanners).**
+- *Widget detection fallback:* the existing fetcher runs first. If it finds no booking widget,
+  a Firecrawl rendered scrape runs, because Resy, SevenRooms and Tock widgets are often injected
+  by JavaScript. Credits are only spent on pages that need rendering.
+- *Page discovery:* the map endpoint locates team, private-dining, press and locations pages.
+- *Schema extraction:* team pages → {owner, chef, GM, roles}; locations pages → {venues,
+  addresses}; festival, speaker and award pages → {person, restaurant, group, role}. This is the
+  "single LLM call, fixed schema" tier from §6.1.
+- *Not used for:* change detection. The SignalForce watch layer owns history and diffs.
+- Respect robots.txt (the existing resolver rule applies).
+
+**Exa: discovery and lookalikes.**
+- *Lookalikes from customers:* `findSimilar` seeded with each public Loyalist customer's site and
+  press coverage (e.g. the Resy write-up of Oriana) returns similar groups and articles. They
+  become candidate accounts tagged `source=lookalike(seed)`. This applies working backwards from
+  customers directly.
+- *Press signals:* date-filtered searches for openings, second locations and chef/GM moves,
+  covering what RSS misses.
+- *Event discovery:* festival lineups, award lists, speaker pages (§6.12).
+- *Websets:* optional, for spot-checking universe coverage. It is a separate paid plan, so it
+  isn't in the demo path.
+
+**Clay (Claygent + enrichment waterfall): long tail, contacts, and integration with Magic's
+stack.**
+- *Where:* only on residue and the top N. Entity questions rules and Splink couldn't settle
+  ("who owns this LLC", "who is the GM"), and contacts the cheap waterfall step (team page →
+  pattern lookup) couldn't find. Clay bills every step, so it never runs universe-wide.
+- *How:* SignalForce pushes scored accounts with evidence into a Clay table (webhook/API).
+  Claygent and Clay's email waterfall fill the contact fields, and the results sync back to
+  SignalForce.
+- *Why Clay and not only our own agent:* Magic's growth team likely works in Clay (the GTM job
+  was posted in Clay's community), and Clay's data providers add contact coverage. Our own
+  Claude agent stays for entity questions, where it is cheaper per run and versioned in the repo.
+
+**Demo budget on free credits (limits to be confirmed at key setup).**
+
+| Step | Tool | Volume |
+|---|---|---|
+| Lookalikes of ~20 Loyalist customers | Exa findSimilar | ~20 calls |
+| Opening / chef-move press, last 90 days | Exa search | ~50 searches |
+| Widget check where the cheap fetcher found nothing | Firecrawl scrape | ~100–200 pages |
+| Team / event pages → fields | Firecrawl extract | ~50 pages |
+| Ownership + contacts for the top 25 | Claygent + waterfall | 25 rows |
+
+### 6.14 Tools summary
 
 | Need | Tool | Alternative and why not |
 |---|---|---|
