@@ -1,0 +1,52 @@
+[
+  {
+    "licensepermitid": "0240-23-140479",
+    "premisescounty": "Kings",
+    "type": "1",
+    "class": "0240",
+    "description": "Restaurant",
+    "legalname": "EL KETZALT CORP",
+    "dba": "HAAB",
+    "actualaddressofpremises": "202 LEONARD STREET A",
+    "city": "BROOKLYN",
+    "statename": "New York",
+    "zipcode": "11206",
+    "originalissuedate": "2025-08-19T00:00:00.000",
+    "lastissuedate": "2025-08-19T00:00:00.000",
+    "effectivedate": "2025-09-01T00:00:00.000",
+    "expirationdate": "2027-08-31T00:00:00.000",
+    "legacyserialnumber": "1243378",
+    "georeference": {
+      "type": "Point",
+      "coordinates": [
+        -73.94719,
+        40.71097
+      ]
+    }
+  },
+  {
+    "licensepermitid": "0340-22-104285",
+    "premisescounty": "Kings",
+    "type": "1",
+    "class": "0340",
+    "description": "Restaurant",
+    "legalname": "173 IRVING LLC",
+    "dba": "LUCHA LUCHA",
+    "actualaddressofpremises": "173 IRVING AVE",
+    "city": "BROOKLYN",
+    "statename": "New York",
+    "zipcode": "11237",
+    "originalissuedate": "2026-11-12T00:00:00.000",
+    "lastissuedate": "2026-11-12T00:00:00.000",
+    "effectivedate": "2027-01-01T00:00:00.000",
+    "expirationdate": "2028-12-31T00:00:00.000",
+    "legacyserialnumber": "1298284",
+    "georeference": {
+      "type": "Point",
+      "coordinates": [
+        -73.91989,
+        40.70214
+      ]
+    }
+  }
+]

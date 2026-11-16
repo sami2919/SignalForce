@@ -97,6 +97,10 @@ class BaseAPIClient:
         """Perform a GET request and return the parsed JSON response."""
         return self._request("GET", endpoint, params=params)
 
+    def get_list(self, endpoint: str, params: dict | None = None) -> list[dict]:
+        """GET an endpoint that returns a JSON array (e.g. Socrata) and return it."""
+        return self._request("GET", endpoint, params=params)  # type: ignore[return-value]
+
     def post(self, endpoint: str, json_data: dict | None = None) -> dict:
         """Perform a POST request and return the parsed JSON response."""
         return self._request("POST", endpoint, json_data=json_data)

@@ -1,0 +1,45 @@
+[
+  {
+    "application_id": "NA-0340-26-124979",
+    "premises_county": "New York",
+    "type": "1",
+    "class": "340",
+    "description": "Restaurant",
+    "legalname": "36 Yum Inc",
+    "dba": "Growl Growl Hot Pot & Cocktails",
+    "actual_address_of_premises": "11 W 36th St",
+    "city": "New York",
+    "state_name": "New York",
+    "zip_code": "10018",
+    "received_date": "2026-08-26T10:24:00.000",
+    "status": "IntakeComplete",
+    "georeference": {
+      "type": "Point",
+      "coordinates": [
+        -73.98453,
+        40.75011
+      ]
+    }
+  },
+  {
+    "application_id": "NA-0340-26-126945",
+    "premises_county": "New York",
+    "type": "1",
+    "class": "340",
+    "description": "Restaurant",
+    "legalname": "CP3D Ranch LLC",
+    "actual_address_of_premises": "2 W 45th St",
+    "city": "New York",
+    "state_name": "New York",
+    "zip_code": "10036",
+    "received_date": "2026-09-11T14:16:00.000",
+    "status": "IntakeComplete",
+    "georeference": {
+      "type": "Point",
+      "coordinates": [
+        -73.98007,
+        40.75566
+      ]
+    }
+  }
+]

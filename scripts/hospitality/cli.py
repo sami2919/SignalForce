@@ -1,0 +1,42 @@
+"""Command-line entry point: python -m scripts.hospitality.cli <command>."""
+
+import argparse
+import os
+import sys
+from collections.abc import Sequence
+
+from scripts.hospitality.config import load_config
+from scripts.hospitality.models import LicenseSource
+from scripts.hospitality.sources.sla import fetch_licenses
+from scripts.hospitality.sources.socrata import SocrataClient
+from scripts.hospitality.store import DocStore
+
+SLA_SOURCES: tuple[LicenseSource, ...] = ("sla_pending", "sla_active", "sla_inactive")
+
+
+def ingest_sla() -> dict[str, int]:
+    """Fetch all three SLA datasets for NYC and save them to the `licenses` kind."""
+    cfg = load_config()
+    client = SocrataClient("data.ny.gov", app_token=os.environ.get("SOCRATA_APP_TOKEN") or None)
+    store = DocStore()
+    counts: dict[str, int] = {}
+    for source in SLA_SOURCES:
+        records = fetch_licenses(client, cfg, source)
+        store.save("licenses", records, key=lambda r: r.record_id)  # type: ignore[attr-defined]
+        counts[source] = len(records)
+    return counts
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="scripts.hospitality.cli")
+    sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("ingest-sla", help="Ingest NY SLA licenses for NYC via Socrata")
+    args = parser.parse_args(argv)
+    if args.command == "ingest-sla":
+        for source, n in ingest_sla().items():
+            print(f"{source}: {n}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
