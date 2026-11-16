@@ -39,6 +39,17 @@ def _label(platforms: frozenset[str]) -> str:
     return "+".join(sorted(platforms)) or "none"
 
 
+def _is_switch(prev: StackObservation, obs: StackObservation) -> bool:
+    """A real platform change, not detection variance (M4).
+
+    Both crawls must have seen some reservation platform, through the same fetch path: an empty
+    set or a fetcher-vs-Firecrawl difference (a JS widget seen only when Firecrawl ran) says
+    what the crawl could see, not what the venue changed.
+    """
+    before, now = _reservation(prev), _reservation(obs)
+    return bool(before) and bool(now) and before != now and prev.fetched_via == obs.fetched_via
+
+
 def stack_signals(
     observations: Sequence[StackObservation],
     venues: Sequence[Venue],
@@ -74,7 +85,7 @@ def stack_signals(
         if EVENTS & have:
             signals.append(_signal("private_events", venue_id, now, obs.url, _label(EVENTS & have)))
         prev = before.get(venue_id)
-        if prev is not None and _reservation(prev) != _reservation(obs):
+        if prev is not None and _is_switch(prev, obs):
             detail = f"{_label(_reservation(prev))}→{_label(_reservation(obs))}"
             signals.append(_signal("platform_switch", venue_id, now, obs.url, detail))
     return signals

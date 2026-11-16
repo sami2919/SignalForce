@@ -83,3 +83,28 @@ def test_disqualified_and_loyalist() -> None:
     ]
     assert disqualified_venues(obs) == {"v:1": "qsr_loyalty:punchh"}
     assert loyalist_venues(obs) == {"v:2": "ev-loyalist"}
+
+
+def _switches(current: StackObservation, previous: list[StackObservation]) -> list[str]:
+    sigs = stack_signals([current], [make_venue("v:1")], previous, NOW)
+    return [s.detail for s in sigs if s.signal_type == "platform_switch"]
+
+
+def test_detection_variance_is_not_a_platform_switch() -> None:
+    """M4: none -> resy because Firecrawl ran this time (JS widget seen) is not a switch."""
+    before = make_obs("v:1", (), at=NOW - timedelta(days=7))  # fetcher only: budget spent
+    now = make_obs("v:1", ("resy",)).model_copy(update={"fetched_via": "firecrawl"})
+    assert _switches(now, [before]) == []
+    # A widget that disappears from view the same way is not a switch either.
+    seen = make_obs("v:1", ("resy",), at=NOW - timedelta(days=7)).model_copy(
+        update={"fetched_via": "firecrawl"}
+    )
+    assert _switches(make_obs("v:1", ()), [seen]) == []
+
+
+def test_switch_needs_both_reservation_sets_and_the_same_fetch_path() -> None:
+    before = make_obs("v:1", ("opentable",), at=NOW - timedelta(days=7))
+    via_firecrawl = make_obs("v:1", ("resy",)).model_copy(update={"fetched_via": "firecrawl"})
+    assert _switches(via_firecrawl, [before]) == []  # different fetch path
+    assert _switches(make_obs("v:1", ("resy",)), [before]) == ["opentable→resy"]
+    assert _switches(make_obs("v:1", ()), [before]) == []  # empty now: unseen, not removed
