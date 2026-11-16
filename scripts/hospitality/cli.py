@@ -6,6 +6,7 @@ import sys
 from collections.abc import Sequence
 from datetime import date
 
+from scripts.hospitality.budget import CallBudget
 from scripts.hospitality.config import load_config
 from scripts.hospitality.models import (
     CurveRecord,
@@ -13,6 +14,7 @@ from scripts.hospitality.models import (
     LicenseRecord,
     LicenseSource,
     Venue,
+    WindowEstimate,
 )
 from scripts.hospitality.resolve.groups import form_groups
 from scripts.hospitality.resolve.match import match_licenses
@@ -25,6 +27,7 @@ from scripts.hospitality.sources.dohmh import (
 from scripts.hospitality.sources.sla import fetch_licenses
 from scripts.hospitality.sources.snapshot import take_snapshot
 from scripts.hospitality.sources.socrata import SocrataClient
+from scripts.hospitality.stack.websites import PlacesClient, attach_websites
 from scripts.hospitality.store import DocStore
 from scripts.hospitality.window.estimate import estimate_all
 from scripts.hospitality.window.survival import build_curves, opening_durations, quantile_time
@@ -125,6 +128,28 @@ def window(today: date | None = None) -> dict[str, object]:
     return {"durations": len(durations), "estimates": len(estimates), "strata": summary}
 
 
+def websites(limit: int = 400) -> dict[str, int]:
+    """Look up websites via Google Places for venues with a window estimate; save venues."""
+    key = os.environ.get("GOOGLE_PLACES_API_KEY")
+    if not key:  # fail fast, before touching the store or the network
+        raise SystemExit("GOOGLE_PLACES_API_KEY is not set; the websites command needs it")
+    cfg = load_config()
+    store = DocStore()
+    venues = store.load("venues", Venue)
+    estimates = store.load("estimates", WindowEstimate)
+    by_id = {v.venue_id: v for v in venues}
+    # Prioritized: venues with an estimate, soonest-opening first, without a website yet.
+    ranked = sorted(estimates, key=lambda e: e.estimated_open)
+    priority = [
+        e.venue_id for e in ranked if e.venue_id in by_id and not by_id[e.venue_id].website
+    ][:limit]
+    budget = CallBudget("places", min(limit, cfg.budgets["places"]))
+    updated = attach_websites(venues, PlacesClient(key, budget), priority)
+    changed = [u for u, v in zip(updated, venues, strict=True) if u != v]
+    store.save("venues", changed, key=lambda v: v.venue_id)  # type: ignore[attr-defined]
+    return {"prioritized": len(priority), "lookups": budget.used, "websites_found": len(changed)}
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="scripts.hospitality.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -133,6 +158,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     sub.add_parser("snapshot-pending", help="Record today's SLA pending applications")
     sub.add_parser("resolve", help="Match licenses to inspections; build venues and groups")
     sub.add_parser("window", help="Fit opening-timing curves; estimate venue opening windows")
+    p_web = sub.add_parser("websites", help="Find websites for prioritized venues (Google Places)")
+    p_web.add_argument("--limit", type=int, default=400, help="Max venues to look up")
     args = parser.parse_args(argv)
     if args.command == "ingest-sla":
         for source, n in ingest_sla().items():
@@ -151,6 +178,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"estimates: {out['estimates']}")
         for k, n, q1, med, q3 in out["strata"]:  # type: ignore[attr-defined]
             print(f"{k}: n={n} median={med}d IQR={q1}-{q3}d")
+    elif args.command == "websites":
+        for name, n in websites(args.limit).items():
+            print(f"{name}: {n}")
     return 0
 
 

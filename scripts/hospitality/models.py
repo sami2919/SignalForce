@@ -125,6 +125,15 @@ class StackObservation(_Frozen):
     fetched_via: Literal["fetcher", "firecrawl"]
 
 
+class PlaceMatch(_Frozen):
+    place_id: str
+    display_name: str
+    address: str
+    website: str | None
+    lat: float
+    lon: float
+
+
 class WindowEstimate(_Frozen):
     venue_id: str
     estimated_open: date
