@@ -589,18 +589,20 @@ def contacts(top: int = 25) -> dict[str, object]:
     firecrawl = FirecrawlClient(os.environ["FIRECRAWL_API_KEY"])
     hunter = HunterClient(os.environ["HUNTER_API_KEY"], budgets["hunter"])
     found: list[Contact] = []
-    for acct in ranked:
-        found.extend(
-            find_contacts(
-                acct,
-                venues,
-                firecrawl=firecrawl,
-                hunter=hunter,
-                budgets=budgets,
-                min_email_confidence=cfg.min_email_confidence,
+    try:
+        for acct in ranked:
+            found.extend(
+                find_contacts(
+                    acct,
+                    venues,
+                    firecrawl=firecrawl,
+                    hunter=hunter,
+                    budgets=budgets,
+                    min_email_confidence=cfg.min_email_confidence,
+                )
             )
-        )
-    store.save("contacts", found, key=lambda c: c.contact_id)  # type: ignore[attr-defined]
+    finally:  # an unexpected error (Hunter 401, Firecrawl APIError) keeps what was paid for
+        store.save("contacts", found, key=lambda c: c.contact_id)  # type: ignore[attr-defined]
     return {
         "groups": len(ranked),
         "groups_with_contacts": len({c.group_id for c in found}),
@@ -623,18 +625,19 @@ def events_extract(path: Path = EVENTS_PATH) -> dict[str, object]:
     firecrawl = FirecrawlClient(os.environ["FIRECRAWL_API_KEY"])
     found: list[EventAppearance] = []
     stopped = ""
+    store = DocStore()
     try:
         for event in events:
             found.extend(extract_appearances(event, firecrawl, budget))
     except BudgetExceeded as exc:
         stopped = str(exc)
         logger.warning("events-extract stopped: %s", exc)
-    store = DocStore()
-    store.save(
-        "event_appearances",
-        found,
-        key=lambda a: f"{a.event_id}|{a.person}|{a.restaurant}|{a.role}|{a.source_url}",  # type: ignore[attr-defined]
-    )
+    finally:  # an unexpected error (APIError, LLMRefusal) keeps the events already extracted
+        store.save(
+            "event_appearances",
+            found,
+            key=lambda a: f"{a.event_id}|{a.person}|{a.restaurant}|{a.role}|{a.source_url}",  # type: ignore[attr-defined]
+        )
     out: dict[str, object] = {
         "events": len(events),
         "appearances": len(found),
@@ -727,22 +730,24 @@ def draft_command(top: int = 10) -> dict[str, object]:
     ranked = rank_prospects(_gated_scores(store))[:top]
     drafts: list[Draft] = []
     judgements: dict[str, Judgement] = {}
-    for acct in ranked:
-        evidence = signals_by_group.get(acct.group_id, [])
-        people = sorted(
-            contacts_by_group.get(acct.group_id, []), key=lambda c: role_priority(c.role)
-        )
-        contact = people[0] if people else None
-        for angle in choose_angles(evidence)[:DRAFT_ANGLES_PER_GROUP]:
-            d = draft(acct, evidence, contact, angle)
-            drafts.append(d)
-            account_text = [*own_names.get(acct.group_id, []), *_contact_text(contact)]
-            judgements[d.draft_id] = judge(
-                d, evidence, account_text=account_text, pass_score=cfg.judge_pass_score
+    try:
+        for acct in ranked:
+            evidence = signals_by_group.get(acct.group_id, [])
+            people = sorted(
+                contacts_by_group.get(acct.group_id, []), key=lambda c: role_priority(c.role)
             )
-    store.save("drafts", drafts, key=lambda d: d.draft_id)  # type: ignore[attr-defined]
-    ids = {id(j): k for k, j in judgements.items()}
-    store.save("judgements", list(judgements.values()), key=lambda j: ids[id(j)])
+            contact = people[0] if people else None
+            for angle in choose_angles(evidence)[:DRAFT_ANGLES_PER_GROUP]:
+                d = draft(acct, evidence, contact, angle)
+                account_text = [*own_names.get(acct.group_id, []), *_contact_text(contact)]
+                judgements[d.draft_id] = judge(
+                    d, evidence, account_text=account_text, pass_score=cfg.judge_pass_score
+                )
+                drafts.append(d)  # only once judged: a stored draft always has its judgement
+    finally:  # an unexpected error (LLMRefusal, APIError) keeps the drafts already judged
+        store.save("drafts", drafts, key=lambda d: d.draft_id)  # type: ignore[attr-defined]
+        ids = {id(j): k for k, j in judgements.items()}
+        store.save("judgements", list(judgements.values()), key=lambda j: ids[id(j)])
     passed = sum(j.passed for j in judgements.values())
     grounded = sum(not j.grounding_violations for j in judgements.values())
     return {
@@ -842,9 +847,10 @@ def press(days: int = 120, today: date | None = None) -> dict[str, object]:
                 evidence.extend(ev)
     except BudgetExceeded as exc:  # keep what was found; report the stop, never hide it
         stopped = str(exc)
-    store.save("signals", list(signals.values()), key=lambda s: s.signal_id)  # type: ignore[attr-defined]
-    store.save("group_evidence", evidence, key=_evidence_key)  # type: ignore[arg-type]
-    _regroup(store, cfg, [*venues, *new_venues.values()], store.load("licenses", LicenseRecord))
+    finally:  # any other error (Exa 5xx, Claude APIError) still keeps the paid extractions
+        store.save("signals", list(signals.values()), key=lambda s: s.signal_id)  # type: ignore[attr-defined]
+        store.save("group_evidence", evidence, key=_evidence_key)  # type: ignore[arg-type]
+        _regroup(store, cfg, [*venues, *new_venues.values()], store.load("licenses", LicenseRecord))
     scored = score()
     return {
         "articles": len(seen),

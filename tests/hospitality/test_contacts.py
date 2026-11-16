@@ -366,3 +366,54 @@ def test_contacts_command_runs_top_prospects_only_and_saves(tmp_path, monkeypatc
     assert [c.contact_id for c in store.load("contacts", Contact)] == ["c:g:a"]
     assert cli.main(["contacts", "--top", "2"]) == 0
     assert seen == ["g:a", "g:a", "g:b"]
+
+
+def test_contacts_command_keeps_what_it_found_when_a_later_group_errors(
+    tmp_path, monkeypatch
+) -> None:
+    """M12: a non-budget error (Hunter 401, Firecrawl APIError) must not lose paid contacts."""
+    for var in ("HUNTER_API_KEY", "FIRECRAWL_API_KEY", "ANTHROPIC_API_KEY"):
+        monkeypatch.setenv(var, "k")
+    store = DocStore(f"sqlite:///{tmp_path}/m.db")
+    from scripts.hospitality.models import Group
+
+    store.save(
+        "groups",
+        [
+            Group(group_id=g, name=g, venue_ids=(f"v:{g}",), resolution="singleton")
+            for g in ("g:a", "g:b")
+        ],
+        key=lambda x: x.group_id,
+    )
+    store.save(
+        "venues",
+        [make_venue(f"v:{g}", website=SITE, group_id=g) for g in ("g:a", "g:b")],
+        key=lambda v: v.venue_id,  # type: ignore[attr-defined]
+    )
+    store.save(
+        "scores", [make_scored("g:a", 0.9), make_scored("g:b", 0.8)], key=lambda x: x.group_id
+    )
+    monkeypatch.setattr(cli, "DocStore", lambda: store)
+
+    def fake(account, venues, **kw):
+        if account.group_id == "g:b":
+            raise RuntimeError("hunter 401")
+        return [
+            Contact(
+                contact_id="c:g:a",
+                group_id="g:a",
+                name="Ana Reyes",
+                role="Owner",
+                email=None,
+                email_confidence=None,
+                instagram=None,
+                phone=None,
+                source="team_page",
+                evidence_ref=TEAM_URL,
+            )
+        ]
+
+    monkeypatch.setattr(cli, "find_contacts", fake)
+    with pytest.raises(RuntimeError, match="hunter 401"):
+        cli.contacts(top=2)
+    assert [c.contact_id for c in store.load("contacts", Contact)] == ["c:g:a"]

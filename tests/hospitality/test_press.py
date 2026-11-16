@@ -270,3 +270,35 @@ def test_press_names_still_match_near_exact(a: str, b: str) -> None:
     from scripts.hospitality.discover.press import _same_name
 
     assert _same_name(a, b)
+
+
+def test_cli_press_keeps_what_it_found_when_a_later_search_errors(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """M12: an Exa API error on a later query must not lose the paid extractions before it."""
+    from scripts.hospitality.models import Signal
+    from scripts.hospitality.store import DocStore
+
+    monkeypatch.setenv("EXA_API_KEY", "x")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    store = DocStore(f"sqlite:///{tmp_path}/m.db")
+    store.save("venues", [make_venue("v:known", name="Ghost Bird")], key=lambda v: v.venue_id)
+    monkeypatch.setattr(cli, "DocStore", lambda: store)
+    result = ExaResult(url=URL, title="t", published_date=date(2026, 11, 1), text=ARTICLE)
+    calls = {"n": 0}
+
+    class FlakyExa:
+        def search(self, query, **kw):
+            calls["n"] += 1
+            if calls["n"] > 1:
+                raise RuntimeError("exa 500")
+            return [result]
+
+    monkeypatch.setattr(cli.ExaClient, "from_env", classmethod(lambda c, b: FlakyExa()))
+    facts = _facts(venues=(_pv("Ember Hall", "Williamsburg", group="Kings County Hospitality"),))
+    monkeypatch.setattr(press, "structured", lambda *a, **k: facts)
+    monkeypatch.setattr(cli, "score", lambda: {"scored_groups": 0})
+    with pytest.raises(RuntimeError, match="exa 500"):
+        cli.press(120)
+    assert store.load("signals", Signal)  # the first article's signals survive
+    assert any(v.venue_id.startswith("v:press:") for v in store.load("venues", Venue))

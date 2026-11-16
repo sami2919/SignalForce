@@ -375,3 +375,60 @@ def test_numbers_hidden_in_a_cited_date_or_record_id_fail(text: str) -> None:
 def test_a_cited_date_written_any_usual_way_passes(text: str) -> None:
     d = make_draft((DraftSentence(text=text, evidence_ids=("a",), is_claim=True),))
     assert check(d) == (), text
+
+
+def test_draft_command_keeps_judged_drafts_when_a_later_call_errors(tmp_path, monkeypatch) -> None:
+    """M12: an LLMRefusal or API error mid-run must not lose the drafts already paid for."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    store = DocStore(f"sqlite:///{tmp_path}/m.db")
+    store.save(
+        "groups",
+        [
+            Group(group_id=g, name=g, venue_ids=(f"v:{g}",), resolution="singleton")
+            for g in ("g:a", "g:b")
+        ],
+        key=lambda x: x.group_id,
+    )
+    store.save(
+        "venues",
+        [make_venue(f"v:{g}", group_id=g) for g in ("g:a", "g:b")],
+        key=lambda v: v.venue_id,
+    )
+    store.save(
+        "scores", [make_scored("g:a", 0.9), make_scored("g:b", 0.8)], key=lambda x: x.group_id
+    )
+    store.save(
+        "signals",
+        [make_signal("press_opening", "v:g:a"), make_signal("press_opening", "v:g:b")],
+        key=lambda s: s.signal_id,
+    )
+    monkeypatch.setattr(cli, "DocStore", lambda: store)
+
+    def fake_draft(account, evidence, contact, angle):
+        if account.group_id == "g:b":
+            raise RuntimeError("refused")
+        return make_draft(
+            (DraftSentence(text="x", evidence_ids=(evidence[0].signal_id,), is_claim=True),),
+            draft_id=f"d:{account.group_id}:{angle}",
+            group_id=account.group_id,
+            angle=angle,
+        )
+
+    def fake_judge(d, ev, *, account_text, pass_score):
+        return Judgement(
+            score=8.0,
+            hyper_specific=True,
+            factually_grounded=True,
+            non_obvious=True,
+            deletion_reason="",
+            what_would_make_me_reply="",
+            grounding_violations=(),
+            passed=True,
+        )
+
+    monkeypatch.setattr(cli, "draft", fake_draft)
+    monkeypatch.setattr(cli, "judge", fake_judge)
+    with pytest.raises(RuntimeError, match="refused"):
+        cli.draft_command(top=2)
+    assert [d.draft_id for d in store.load("drafts", Draft)] == ["d:g:a:opening"]
+    assert len(store.load("judgements", Judgement)) == 1

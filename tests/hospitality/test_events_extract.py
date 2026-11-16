@@ -194,3 +194,40 @@ def test_cli_events_extract_end_to_end_mocked(monkeypatch: pytest.MonkeyPatch, t
     assert out["events"] == 1 and out["appearances"] == 1
     saved = store.load("event_appearances", EventAppearance)
     assert [a.person for a in saved] == ["Ana Reyes"]
+
+
+def test_cli_events_extract_keeps_appearances_when_a_later_event_errors(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """M12: a Firecrawl APIError or LLMRefusal on one event must not lose earlier events."""
+    from scripts.hospitality.models import EventAppearance
+    from scripts.hospitality.store import DocStore
+
+    monkeypatch.setenv("FIRECRAWL_API_KEY", "x")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    store = DocStore(f"sqlite:///{tmp_path}/m.db")
+    monkeypatch.setattr(cli, "DocStore", lambda: store)
+    reg = tmp_path / "events.yaml"
+    reg.write_text(
+        "events:\n"
+        f"  - {{event_id: e:a, name: A, start: 2027-05-22, end: 2027-05-25, city: Chicago,\n"
+        f"     event_type: trade_show, cost_usd: 500, lineup_urls: ['{URL}']}}\n"
+        "  - {event_id: e:b, name: B, start: 2027-06-01, end: 2027-06-02, city: New York,\n"
+        "     event_type: festival, cost_usd: 0, lineup_urls: ['https://b.example']}\n"
+    )
+    calls = iter([facts(("Ana Reyes", "Ghost Bird", "speaker")), RuntimeError("refused")])
+
+    def fake_structured(*a, **kw):
+        nxt = next(calls)
+        if isinstance(nxt, Exception):
+            raise nxt
+        return nxt
+
+    with (
+        patch.object(extract, "_fetch_page", return_value=PAGE),
+        patch.object(extract, "structured", side_effect=fake_structured),
+        patch.object(cli, "FirecrawlClient"),
+        pytest.raises(RuntimeError, match="refused"),
+    ):
+        cli.events_extract(reg)
+    assert [a.person for a in store.load("event_appearances", EventAppearance)] == ["Ana Reyes"]
