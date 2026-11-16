@@ -263,3 +263,28 @@ def test_timeout_retries_once():
     # Second call should use doubled timeout (20)
     _, kwargs = mock_req.call_args
     assert kwargs.get("timeout") == 20
+
+
+def test_persistent_429_stops_after_a_bounded_number_of_retries():
+    """M5 (hospitality review): a 429 that never clears must not retry forever."""
+    from scripts.api_client import _MAX_RATE_LIMIT_RETRIES, RateLimitError
+
+    client = BaseAPIClient(base_url="https://api.example.com")
+    resp_429 = make_response(429, headers={"Retry-After": "2"})
+    with patch("requests.Session.request", return_value=resp_429) as mock_req:
+        with patch("time.sleep"):
+            with pytest.raises(RateLimitError) as exc:
+                client.get("/v1/resource")
+    assert mock_req.call_count == _MAX_RATE_LIMIT_RETRIES + 1
+    assert exc.value.status_code == 429 and exc.value.retry_after == 2
+
+
+def test_persistent_403_quota_stops_after_a_bounded_number_of_retries():
+    from scripts.api_client import _MAX_RATE_LIMIT_RETRIES, RateLimitError
+
+    client = BaseAPIClient(base_url="https://api.example.com")
+    resp = make_response(403, headers={"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "1"})
+    with patch("requests.Session.request", return_value=resp) as mock_req, patch("time.sleep"):
+        with pytest.raises(RateLimitError):
+            client.get("/v1/resource")
+    assert mock_req.call_count == _MAX_RATE_LIMIT_RETRIES + 1

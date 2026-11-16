@@ -53,6 +53,9 @@ _BACKOFF_BASE = 1  # seconds
 # X-RateLimit-Reset header.  Without a cap a hostile/compromised endpoint can
 # instruct the client to sleep for days (e.g. Retry-After: 86400).
 _MAX_RETRY_SLEEP = 300  # 5 minutes
+# Rate-limit retries (429, or 403 with an exhausted quota) are bounded too: a limit that never
+# clears raises RateLimitError instead of retrying forever.
+_MAX_RATE_LIMIT_RETRIES = 5
 
 # Query-string parameter names that carry credentials and must be scrubbed from
 # URLs before they appear in log messages or exception strings.
@@ -119,8 +122,9 @@ class BaseAPIClient:
         """Make an HTTP request with retry / backoff logic.
 
         Retry strategy:
-        - 429: sleep Retry-After (or 1s default), retry immediately (not counted as backoff retry)
-        - 403 + X-RateLimit-Remaining=0: sleep until X-RateLimit-Reset, retry
+        - 429: sleep Retry-After (or 1s default), retry (not counted as backoff retry);
+          at most _MAX_RATE_LIMIT_RETRIES times, then RateLimitError
+        - 403 + X-RateLimit-Remaining=0: sleep until X-RateLimit-Reset, retry (same cap)
         - 500/502/503: exponential backoff (1s, 2s, 4s), max 3 retries
         - Timeout: retry once with doubled timeout
         - 400/401/404: raise immediately, no retry
@@ -135,6 +139,7 @@ class BaseAPIClient:
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
         current_timeout = self.timeout
         server_error_retries = 0
+        rate_limit_retries = 0
 
         while True:
             # Log only the scrubbed URL so credentials in query params never reach logs.
@@ -176,6 +181,14 @@ class BaseAPIClient:
                     retry_after = max(0, min(int(retry_after_raw), _MAX_RETRY_SLEEP))
                 except (ValueError, TypeError):
                     retry_after = 1
+                if rate_limit_retries >= _MAX_RATE_LIMIT_RETRIES:
+                    raise RateLimitError(
+                        status_code=429,
+                        message=f"Still rate limited after {_MAX_RATE_LIMIT_RETRIES} retries",
+                        url=safe_url,
+                        retry_after=retry_after,
+                    )
+                rate_limit_retries += 1
                 logger.warning("429 rate limited on %s — sleeping %ds", safe_url, retry_after)
                 time.sleep(retry_after)
                 continue  # retry without counting against backoff limit
@@ -192,6 +205,14 @@ class BaseAPIClient:
                     sleep_for = max(1, min(reset_epoch - int(time.time()), _MAX_RETRY_SLEEP))
                 except (ValueError, TypeError):
                     sleep_for = 1
+                if rate_limit_retries >= _MAX_RATE_LIMIT_RETRIES:
+                    raise RateLimitError(
+                        status_code=403,
+                        message=f"Quota still exhausted after {_MAX_RATE_LIMIT_RETRIES} retries",
+                        url=safe_url,
+                        retry_after=sleep_for,
+                    )
+                rate_limit_retries += 1
                 logger.warning("403 quota exhausted on %s — sleeping %ds", safe_url, sleep_for)
                 time.sleep(sleep_for)
                 continue  # retry without counting against backoff limit
