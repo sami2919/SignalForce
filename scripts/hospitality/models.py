@@ -134,6 +134,13 @@ class PlaceMatch(_Frozen):
     lon: float
 
 
+class ExaResult(_Frozen):
+    url: str
+    title: str
+    published_date: date | None
+    text: str | None
+
+
 class WindowEstimate(_Frozen):
     venue_id: str
     estimated_open: date
