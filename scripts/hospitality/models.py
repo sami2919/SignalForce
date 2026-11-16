@@ -12,6 +12,7 @@ GroupResolution = Literal[
     "shared_domain",
     "website_locations",
     "press",
+    "job_board",
     "agent",
     "manual",
 ]
@@ -29,6 +30,7 @@ SignalType = Literal[
     "platform_switch",
     "alumni_edge",
     "lookalike",
+    "opening_soon",
 ]
 
 
@@ -98,6 +100,32 @@ class GroupEvidence(_Frozen):
     name: str
     resolution: GroupResolution
     evidence_ref: str
+
+
+class CAJob(_Frozen):
+    """One job card from a Culinary Agents search page (employer-side facts only)."""
+
+    company: str
+    company_url: str
+    title: str
+    location: str  # the card's address line, e.g. "149 Grand Street, New York, NY"
+    group: str | None  # the card's parent / group line, when it shows one
+    posted: date | None  # derived from "Posted N days ago" relative to the fetch date
+    url: str  # job URL without tracking parameters
+    opening_soon: bool = False  # the card came from a search filtered to opening-soon employers
+
+
+class CACompany(_Frozen):
+    """A Culinary Agents company (entity) card or profile page."""
+
+    name: str
+    url: str
+    description: str
+    locations: tuple[str, ...]  # addresses the page shows for this entity
+    group: str | None  # "Part of <group>" on the card, when present
+    opening_soon: bool
+    hiring: bool  # the "Hiring Now" tag
+    website: str | None
 
 
 class EntityLink(_Frozen):

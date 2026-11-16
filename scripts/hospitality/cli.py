@@ -6,8 +6,9 @@ import logging
 import math
 import os
 import sys
+import time
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
@@ -73,6 +74,7 @@ from scripts.hospitality.scoring import (
     score_group,
 )
 from scripts.hospitality.signals import license_signals
+from scripts.hospitality.sources.culinary_agents import Fetch, PoliteFetcher, fetch_nyc, to_signals
 from scripts.hospitality.sources.dohmh import (
     fetch_first_inspections,
     fetch_never_inspected,
@@ -664,6 +666,55 @@ def press(days: int = 120, today: date | None = None) -> dict[str, object]:
     }
 
 
+def culinary_agents(
+    fetch: Fetch | None = None,
+    today: date | None = None,
+    sleep: Callable[[float], None] = time.sleep,
+) -> dict[str, object]:
+    """Culinary Agents hiring / opening-soon signals and group evidence; merge groups, rescore."""
+    cfg = load_config()
+    if not cfg.culinary_agents.enabled:  # fail fast, before touching the store or the network
+        raise SystemExit(
+            "The Culinary Agents source is disabled. Its user agreement appears to restrict "
+            "automated data collection: review https://culinaryagents.com/agreement, then set "
+            "culinary_agents.enabled: true in the hospitality config to run it."
+        )
+    today = today or date.today()
+    store = DocStore()
+    venues = store.load("venues", Venue)
+    groups = store.load("groups", Group)
+    budget = CallBudget("culinary_agents", cfg.budgets.get("culinary_agents", 40))
+    jobs, companies = fetch_nyc(cfg.culinary_agents, budget, fetch or PoliteFetcher(), today, sleep)
+    signals, evidence = to_signals(jobs, companies, venues, groups, today, cfg.culinary_agents)
+    store.save("signals", signals, key=lambda s: s.signal_id)  # type: ignore[attr-defined]
+    store.save(
+        "group_evidence",
+        evidence,
+        key=lambda e: f"{e.evidence_ref}|{e.name}",  # type: ignore[attr-defined]
+    )
+    merged_venues, merged_groups = merge_groups(
+        venues, groups, store.load("group_evidence", GroupEvidence)
+    )
+    old = {v.venue_id: v for v in venues}
+    changed = [v for v in merged_venues if old.get(v.venue_id) != v]
+    store.save("venues", changed, key=lambda v: v.venue_id)  # type: ignore[attr-defined]
+    store.clear("groups")  # merged group ids differ from earlier ones; rewrite in full
+    store.save("groups", merged_groups, key=lambda g: g.group_id)  # type: ignore[attr-defined]
+    scored = score()
+    spent = budget.used >= budget.limit
+    return {
+        "pages": budget.used,
+        "jobs": len(jobs),
+        "companies": len(companies),
+        "signals": len(signals),
+        "evidence": len(evidence),
+        "stopped": f"culinary_agents page budget spent ({budget.limit}); results may be partial"
+        if spent
+        else "",
+        "scored_groups": scored["scored_groups"],
+    }
+
+
 def lookalikes(now: datetime | None = None) -> dict[str, object]:
     """Find venues similar to customer sites via Exa, save `lookalike` signals, rescore."""
     if not os.environ.get("EXA_API_KEY"):  # fail fast, before touching the store or the network
@@ -921,6 +972,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     p_press.add_argument(
         "--days", type=int, default=120, help="Search articles from the last N days"
     )
+    sub.add_parser(
+        "culinary-agents",
+        help="Culinary Agents hiring / opening-soon signals (disabled unless configured)",
+    )
     p_contacts = sub.add_parser("contacts", help="Contacts for top prospects (team page, Hunter)")
     p_contacts.add_argument("--top", type=int, default=25, help="Top N ranked prospects")
     sub.add_parser("events-extract", help="Lineup appearances for registry events (public pages)")
@@ -990,6 +1045,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"sample misses: {out['misses_sample']}")
     elif args.command == "press":
         for name, value in press(args.days).items():
+            print(f"{name}: {value}")
+    elif args.command == "culinary-agents":
+        for name, value in culinary_agents().items():
             print(f"{name}: {value}")
     elif args.command == "contacts":
         for name, value in contacts(args.top).items():

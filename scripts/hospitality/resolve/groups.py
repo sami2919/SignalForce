@@ -25,6 +25,7 @@ RESOLUTION_ORDER: tuple[GroupResolution, ...] = (
     "manual",
     "website_locations",
     "press",
+    "job_board",
     "shared_domain",
     "shared_legal_name",
     "agent",

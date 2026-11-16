@@ -13,6 +13,7 @@ priors:   # precision = P(group in a buying window | signal); starting guesses t
   role_hire:         {precision: 0.15, half_life_days: 90, family: people}
   new_gm:            {precision: 0.15, half_life_days: 90, family: people}
   platform_switch:   {precision: 0.05, half_life_days: 90, family: stack}
+  opening_soon:      {precision: 0.30, half_life_days: null, family: opening}
   lookalike:         {precision: 0.10, half_life_days: null, family: discovery}
   alumni_edge:       {precision: 0.0, half_life_days: null, family: relationship}
 window_pre_days: 183
@@ -26,7 +27,7 @@ pending_to_issue_prior_days: 75
 window_unmatched_censor_max_age_days: 90
 fit_weights: {multi_venue: 0.30, reservation_platform: 0.30, events_program: 0.15, accolade: 0.15, full_service_class: 0.10}
 relationship_boost: 0.5
-budgets: {places: 400, firecrawl: 300, exa: 120, hunter: 40, clay: 25, claude_calls: 600}
+budgets: {culinary_agents: 40, places: 400, firecrawl: 300, exa: 120, hunter: 40, clay: 25, claude_calls: 600}
 models: {extract: claude-opus-5-5, draft: claude-opus-5-5, judge: claude-opus-5-5, baseline: claude-opus-5-5}
 match_max_distance_m: 40.0
 match_auto_threshold: 0.90
@@ -35,7 +36,7 @@ match_link_threshold: 0.60
 accolades: []
 # Opening evidence is one fact per venue (venue about to open): only the strongest of these
 # signals counts toward p_window; the rest stay in the trace at contribution 0.
-opening_evidence_signals: [license_pending, license_issued, not_yet_inspected]
+opening_evidence_signals: [license_pending, license_issued, not_yet_inspected, opening_soon]
 # At most this many venues' opening terms enter a group's p_window (strongest first), so a
 # group with dozens of licenses cannot saturate on license count alone.
 max_opening_venues_per_group: 3
@@ -71,3 +72,22 @@ alumni_employers:
   - Momofuku
   - The Corner Store
   - Thomas Keller Restaurant Group
+# Culinary Agents (culinaryagents.com) job-board source. DISABLED by default: its user agreement
+# appears to restrict automated collection, so review https://culinaryagents.com/agreement and
+# set enabled: true yourself. Only robots-allowed public employer-side pages are fetched, the page
+# budget is budgets.culinary_agents, and nothing under /users is ever requested.
+culinary_agents:
+  enabled: false
+  locations: ["New York, NY"]   # 3 pages each; other strings (e.g. "Brooklyn, NY") are untested
+  delay_seconds: 2.0
+  max_company_pages: 10
+  # Senior roles only (regex over the lowercased title); cooks, servers, dishwashers emit nothing.
+  gm_titles: ['\bgeneral manager\b', '^gm$']
+  leadership_titles:
+    - '\bdirector of (operations|hospitality|food (and|&) beverage)\b'
+    - '\b(events?|private dining|private events?|catering) (manager|director|coordinator)\b'
+    - '\b(pre-?opening|opening) (team|manager|gm|general manager)\b'
+    - '\bmaitre d\b'
+    - '\bguest (relations|experience) manager\b'
+    - '\breservations? manager\b'
+  exclude_title_words: [assistant, associate, intern, trainee]

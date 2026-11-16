@@ -21,6 +21,31 @@ class SignalPrior(BaseModel):
     family: SignalFamily
 
 
+class CulinaryAgentsConfig(BaseModel):
+    """Culinary Agents job-board source. Off by default: its user agreement restricts scraping."""
+
+    model_config = ConfigDict(frozen=True)
+
+    enabled: bool = False
+    # Search locations; each costs 3 pages: jobs, opening-soon jobs, opening-soon companies.
+    locations: tuple[str, ...] = ("New York, NY",)
+    delay_seconds: float = 2.0
+    # Opening-soon company profile pages fetched for a website (domain matching), at most.
+    max_company_pages: int = 10
+    # Senior roles that emit `new_gm` / `role_hire`; line-level roles emit nothing.
+    gm_titles: tuple[str, ...] = (r"\bgeneral manager\b", r"^gm$")
+    leadership_titles: tuple[str, ...] = (
+        r"\bdirector of (operations|hospitality|food (and|&) beverage)\b",
+        r"\b(events?|private dining|private events?|catering) (manager|director|coordinator)\b",
+        r"\b(pre-?opening|opening) (team|manager|gm|general manager)\b",
+        r"\bmaitre d\b",
+        r"\bguest (relations|experience) manager\b",
+        r"\breservations? manager\b",
+    )
+    # A title containing any of these words is never senior-leadership evidence.
+    exclude_title_words: tuple[str, ...] = ("assistant", "associate", "intern", "trainee")
+
+
 class HospitalityConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -47,6 +72,7 @@ class HospitalityConfig(BaseModel):
         "license_pending",
         "license_issued",
         "not_yet_inspected",
+        "opening_soon",
     )
     # At most this many venues' opening terms enter a group's p_window (strongest first).
     max_opening_venues_per_group: int = 3
@@ -54,6 +80,7 @@ class HospitalityConfig(BaseModel):
     # and institutional food-service operators are not Magic's buyer).
     disqualify_name_patterns: tuple[str, ...] = ()
     disqualify_reason: str = "contract_foodservice"
+    culinary_agents: CulinaryAgentsConfig = CulinaryAgentsConfig()
     # Employers whose alumni are a warm-intro edge (Loyalist's founders / champions' pedigree).
     alumni_employers: tuple[str, ...] = (
         "Eleven Madison Park",
