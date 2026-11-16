@@ -190,3 +190,9 @@ class MatchResult(_Frozen):
     links: tuple[EntityLink, ...]
     unmatched_licenses: tuple[str, ...]
     unmatched_camis: tuple[str, ...]
+
+
+class CurveRecord(_Frozen):
+    stratum: str
+    n: int
+    steps: tuple[tuple[float, float], ...]

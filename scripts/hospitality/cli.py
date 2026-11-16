@@ -8,9 +8,11 @@ from datetime import date
 
 from scripts.hospitality.config import load_config
 from scripts.hospitality.models import (
+    CurveRecord,
     InspectionVenue,
     LicenseRecord,
     LicenseSource,
+    Venue,
 )
 from scripts.hospitality.resolve.groups import form_groups
 from scripts.hospitality.resolve.match import match_licenses
@@ -24,6 +26,8 @@ from scripts.hospitality.sources.sla import fetch_licenses
 from scripts.hospitality.sources.snapshot import take_snapshot
 from scripts.hospitality.sources.socrata import SocrataClient
 from scripts.hospitality.store import DocStore
+from scripts.hospitality.window.estimate import estimate_all
+from scripts.hospitality.window.survival import build_curves, opening_durations, quantile_time
 
 SLA_SOURCES: tuple[LicenseSource, ...] = ("sla_pending", "sla_active", "sla_inactive")
 
@@ -90,6 +94,37 @@ def resolve() -> dict[str, int]:
     }
 
 
+def window(today: date | None = None) -> dict[str, object]:
+    """Build opening-timing curves and per-venue window estimates; save both."""
+    cfg = load_config()
+    today = today or date.today()
+    store = DocStore()
+    venues = store.load("venues", Venue)
+    licenses = store.load("licenses", LicenseRecord)
+    durations = opening_durations(venues, licenses, today)
+    curves = build_curves(durations)
+    counts: dict[str, int] = {"all": len(durations)}
+    for stratum, _, _ in durations:
+        counts[stratum] = counts.get(stratum, 0) + 1
+    estimates = estimate_all(venues, licenses, curves, cfg, today)
+    for kind in ("curves", "estimates"):
+        store.clear(kind)
+    store.save(
+        "curves",
+        [CurveRecord(stratum=k, n=counts.get(k, 0), steps=c) for k, c in curves.items()],
+        key=lambda r: r.stratum,  # type: ignore[attr-defined]
+    )
+    store.save("estimates", estimates, key=lambda e: e.venue_id)  # type: ignore[attr-defined]
+    summary: list[tuple[str, int, float | None, float | None, float | None]] = []
+    top = sorted((k for k in curves if k != "all"), key=lambda k: -counts[k])[:3]
+    for k in ("all", *top):
+        c = curves[k]
+        summary.append(
+            (k, counts[k], quantile_time(c, 0.25), quantile_time(c, 0.5), quantile_time(c, 0.75))
+        )
+    return {"durations": len(durations), "estimates": len(estimates), "strata": summary}
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="scripts.hospitality.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -97,6 +132,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     sub.add_parser("ingest-dohmh", help="Ingest DOHMH first-inspection venues via Socrata")
     sub.add_parser("snapshot-pending", help="Record today's SLA pending applications")
     sub.add_parser("resolve", help="Match licenses to inspections; build venues and groups")
+    sub.add_parser("window", help="Fit opening-timing curves; estimate venue opening windows")
     args = parser.parse_args(argv)
     if args.command == "ingest-sla":
         for source, n in ingest_sla().items():
@@ -109,6 +145,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     elif args.command == "resolve":
         for name, n in resolve().items():
             print(f"{name}: {n}")
+    elif args.command == "window":
+        out = window()
+        print(f"durations: {out['durations']}")
+        print(f"estimates: {out['estimates']}")
+        for k, n, q1, med, q3 in out["strata"]:  # type: ignore[attr-defined]
+            print(f"{k}: n={n} median={med}d IQR={q1}-{q3}d")
     return 0
 
 
