@@ -10,6 +10,7 @@ they are stored for a human to review.
 import re
 import unicodedata
 from collections.abc import Sequence
+from datetime import date
 
 from pydantic import BaseModel, ConfigDict
 
@@ -165,16 +166,87 @@ def _norm(token: str) -> str:
     return MONTH_ABBREVIATIONS.get(t, t)
 
 
-def _corpus_tokens(texts: Sequence[str]) -> frozenset[str]:
-    """Every token of the texts; ISO dates also yield their month name, year and day."""
+def _tokens(text: str, *, numbers: bool = True) -> set[str]:
+    """Normalized tokens of `text`; with numbers=False, digit tokens are left out."""
+    raw = _TOKEN.findall(_fold(text).replace("_", " "))
+    return {_norm(t) for t in raw if numbers or not t[0].isdigit()}
+
+
+def _iso_dates(text: str) -> list[date]:
+    out: list[date] = []
+    for y, m, d in _ISO_DATE.findall(text):
+        try:
+            out.append(date(int(y), int(m), int(d)))
+        except ValueError:
+            continue
+    return out
+
+
+def _corpus_tokens(texts: Sequence[str], *, numbers: bool = True) -> frozenset[str]:
+    """Every token of the texts. An ISO date yields its year and month name, never its month or
+    day number as a free-standing number (a cited 2026-04-07 must not support "your 4 venues");
+    the full date is matched as a unit by `_strip_supported_dates`."""
     tokens: set[str] = set()
     for text in texts:
-        folded = _fold(text).replace("_", " ")
-        tokens.update(_norm(t) for t in _TOKEN.findall(folded))
-        for y, m, d in _ISO_DATE.findall(folded):
-            if 1 <= int(m) <= 12:
-                tokens.update({y, MONTHS[int(m) - 1], str(int(m)), str(int(d))})
+        for day in _iso_dates(text):
+            tokens.update({str(day.year), MONTHS[day.month - 1]})
+        tokens |= _tokens(_ISO_DATE.sub(" ", text), numbers=numbers)
     return frozenset(tokens)
+
+
+_MONTH_NAME = (
+    r"(?P<mon>jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?"
+    r"|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?"
+)
+_ORD = r"(?:st|nd|rd|th)?"
+_YEAR = r"(?:,?\s+(?P<year>\d{4}))?"
+_DATE_FORMS = (
+    re.compile(r"\b(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})\b"),
+    re.compile(rf"\b{_MONTH_NAME}\s+(?P<day>\d{{1,2}}){_ORD}\b{_YEAR}", re.IGNORECASE),
+    re.compile(
+        rf"\b(?P<day>\d{{1,2}}){_ORD}\s+(?:of\s+)?{_MONTH_NAME}(?![a-z]){_YEAR}", re.IGNORECASE
+    ),
+    re.compile(r"\b(?P<m>\d{1,2})/(?P<d>\d{1,2})(?:/(?P<year>\d{4}|\d{2}))?\b"),
+)
+
+
+def _written_date(m: re.Match[str]) -> tuple[int | None, int, int] | None:
+    """(year or None, month, day) of a date as written, or None if it is not a calendar date."""
+    g = m.groupdict()
+    if g.get("y"):
+        year, month, day = int(g["y"]), int(g["m"]), int(g["d"])
+    else:
+        if g.get("mon"):
+            month = [name[:3] for name in MONTHS].index(g["mon"].lower()[:3]) + 1
+            day = int(g["day"])
+        else:
+            month, day = int(g["m"]), int(g["d"])
+        year = int(g["year"]) if g.get("year") else None
+        if year is not None and year < 100:
+            year += 2000
+    if not (1 <= month <= 12 and 1 <= day <= 31):
+        return None
+    return year, month, day
+
+
+def _strip_supported_dates(text: str, dates: Sequence[date]) -> str:
+    """`text` with every written date that is one of `dates` blanked out. A date that is not
+    supported stays, so its day number (no longer in any corpus) is reported."""
+    years: dict[tuple[int, int], set[int]] = {}
+    for d in dates:
+        years.setdefault((d.month, d.day), set()).add(d.year)
+
+    def blank(m: re.Match[str]) -> str:
+        parts = _written_date(m)
+        if parts is None:
+            return m.group(0)
+        year, month, day = parts
+        ok = (month, day) in years and (year is None or year in years[(month, day)])
+        return " " if ok else m.group(0)
+
+    for form in _DATE_FORMS:
+        text = form.sub(blank, text)
+    return text
 
 
 def fact_tokens(text: str) -> list[tuple[str, str]]:
@@ -192,18 +264,28 @@ def fact_tokens(text: str) -> list[tuple[str, str]]:
     return out
 
 
-def _signal_texts(sig: Signal) -> list[str]:
-    days = [sig.observed_at.date()] + ([sig.occurred_at.date()] if sig.occurred_at else [])
-    return [sig.detail, sig.evidence_ref, sig.source, *(d.isoformat() for d in days)]
+def _signal_dates(sig: Signal) -> list[date]:
+    return [sig.observed_at.date(), *([sig.occurred_at.date()] if sig.occurred_at else [])]
+
+
+def _signal_corpus(sig: Signal) -> frozenset[str]:
+    """What a sentence citing `sig` may say: its detail and dates in full; the words of its
+    record id and source (a press URL names the outlet) but not their digits, which are ids,
+    not facts about the recipient."""
+    days = [d.isoformat() for d in _signal_dates(sig)]
+    return _corpus_tokens([sig.detail, *days]) | _corpus_tokens(
+        [sig.evidence_ref, sig.source], numbers=False
+    )
 
 
 def _unit_violations(
     label: str, text: str, cited: Sequence[Signal], account: frozenset[str]
 ) -> list[str]:
-    corpus = account | _corpus_tokens([t for s in cited for t in _signal_texts(s)])
+    corpus = account.union(*(_signal_corpus(s) for s in cited))
+    dates = [d for s in cited for d in (*_signal_dates(s), *_iso_dates(s.detail))]
     out = [
         f"{label}: '{raw}' is not in its cited evidence or the account"
-        for t, raw in fact_tokens(text)
+        for t, raw in fact_tokens(_strip_supported_dates(text, dates))
         if t not in corpus
     ]
     out += [

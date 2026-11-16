@@ -342,3 +342,36 @@ def test_draft_command_drafts_prospects_only_saves_and_reports(
     assert len(store.load("judgements", Judgement)) == 2
     assert cli.main(["draft", "--top", "10"]) == 0
     assert "pass rate" in capsys.readouterr().out
+
+
+# I4 (quality pass): a cited date may support that date, never its parts as free-standing numbers.
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Your 4 locations keep growing.",  # 4 = the license's month (2026-04-07)
+        "Seven years in, you are still busy.",  # 7 = its day
+        "Your 7 venues share one guest list.",
+        "Your 26 seats fill fast.",  # 26 sits in the evidence ref sla_active:0340-26-1
+        "Oriana's license was issued on April 9.",  # April is right, the day is not
+        "Oriana's license was issued on 4/9.",
+    ],
+)
+def test_numbers_hidden_in_a_cited_date_or_record_id_fail(text: str) -> None:
+    d = make_draft((DraftSentence(text=text, evidence_ids=("a",), is_claim=True),))
+    assert check(d), text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Oriana's license was issued on April 7, 2026.",
+        "Oriana's license was issued on April 7th.",
+        "Oriana's license was issued on 7 April 2026.",
+        "Oriana's license was issued on 4/7/2026.",
+        "Oriana's license was issued on 2026-04-07.",
+        "Oriana was licensed in April 2026.",
+    ],
+)
+def test_a_cited_date_written_any_usual_way_passes(text: str) -> None:
+    d = make_draft((DraftSentence(text=text, evidence_ids=("a",), is_claim=True),))
+    assert check(d) == (), text
