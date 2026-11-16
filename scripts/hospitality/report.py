@@ -201,6 +201,12 @@ def _recall(store: DocStore, cfg: HospitalityConfig, today: date) -> list[str]:
             f"inspection {r.caught} of {r.total} ({r.recall:.1%})"
         ),
         (
+            f"- Of those, caught with a lead within {r.lead_cap_days} days of the first "
+            f"inspection: {r.caught - r.leads_over_cap} of {r.total} "
+            f"({(r.caught - r.leads_over_cap) / r.total:.1%}); an earlier signal is caught but is "
+            "not a buying-window lead"
+        ),
+        (
             f"- Coverage of all first inspections in the window: {r.caught} of "
             f"{r.first_inspections} ({r.coverage:.1%})"
         ),
@@ -273,9 +279,17 @@ def _backtests(store: DocStore) -> list[str]:
         (
             f"Case replay: {len(out.cases)} customers with a known new venue; {len(replayed)} "
             f"could be replayed, {len(out.cases) - len(replayed)} are not evaluable (no dated "
-            "anchor, or the venue appears only after the anchor, which would make a miss certain "
-            f"by construction). Of the replayed cases, {len(caught)} had an opening signal on or "
-            f"before the anchor. {out.undated} customers have no public date at all."
+            "anchor; the venue appears only after the anchor; or no license or application on "
+            "file before the venue opened, so no license signal could have fired: a coverage gap "
+            "of the source, which counts against coverage in the recall audit, not a timing "
+            f"result). Of the replayed cases, {len(caught)} had an opening signal on or before "
+            f"the anchor"
+            + (
+                f"; {len(replayed)} replayed case(s) are too few to estimate a rate."
+                if len(replayed) < 10
+                else "."
+            )
+            + f" {out.undated} customers have no public date at all."
         ),
         "",
         (
@@ -309,6 +323,12 @@ def _backtests(store: DocStore) -> list[str]:
         (
             f"Fit AUC: {shown} (customers n={out.n_customers} vs other scored groups "
             f"n={out.n_others}). Static fit only, no timing; indicative only."
+            + (
+                f" With n={out.n_customers}, too few customers for the AUC to separate signal "
+                "from chance."
+                if out.n_customers < 10
+                else ""
+            )
         ),
     ]
     if out.fit_distinct <= 1:

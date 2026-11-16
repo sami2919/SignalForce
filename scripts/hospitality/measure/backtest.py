@@ -1,8 +1,9 @@
 """Honest backtests against known customers. Both are indicative, never a lift claim.
 
 Case replay asks, for the few customers with a known new venue, whether an opening signal
-existed before they were seen live. A case whose anchor is unknown, or whose venue appears only
-after the anchor, is reported as not evaluable rather than as a miss. Fit AUC asks only whether static fit
+existed before they were seen live. A case whose anchor is unknown, whose venue appears only
+after the anchor, or that has no license or application on file before it opened, is reported
+as not evaluable rather than as a miss. Fit AUC asks only whether static fit
 separates customers from everyone else; it says nothing about timing.
 """
 
@@ -77,7 +78,7 @@ def case_anchor(
         when = own[0].first_public_date
         if when is None:
             return None, None, "undated: the venue's own seed entry has no public date"
-        return when, "venue", ""
+        return when, "venue", _no_prior_license(venue, licenses, when)
     if customer.first_public_date is None:
         return None, None, "undated: the customer has no public date"
     anchor = customer.first_public_date
@@ -91,7 +92,30 @@ def case_anchor(
                 f"{anchor}, so it cannot have preceded the purchase"
             ),
         )
-    return anchor, "customer", ""
+    return anchor, "customer", _no_prior_license(venue, licenses, anchor)
+
+
+def _no_prior_license(venue: Venue, licenses: dict[str, LicenseRecord], anchor: date) -> str:
+    """Why the case cannot be replayed when no license or application is on file before the
+    venue opened (or before the anchor, if earlier); "" when one is. Without one, no license
+    signal could have fired, so "no prior signal" would be guaranteed by the data (I6). This
+    is the same exclusion the recall truth set makes for transfers and renewals."""
+    opened = venue.first_inspection_date
+    cutoff = min(anchor, opened) if opened is not None else anchor
+    dated = [
+        d
+        for lid in venue.license_ids
+        if (lic := licenses.get(lid)) is not None
+        for d in (lic.received_date, lic.original_issue_date)
+        if d is not None
+    ]
+    if any(d <= cutoff for d in dated):
+        return ""
+    on_file = f"the earliest on file is {min(dated)}" if dated else "none is on file"
+    return (
+        f"no license or application on file before {cutoff} ({on_file}): license signals "
+        "could not have fired, a coverage gap of the source rather than a timing miss"
+    )
 
 
 def case_replay(

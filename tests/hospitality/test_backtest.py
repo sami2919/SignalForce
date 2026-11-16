@@ -49,11 +49,19 @@ def test_case_replay_lead_days():
 def test_case_replay_no_signal_is_a_real_miss_and_missing_venue_is_not_evaluable():
     labels = {"g:1": _label(), "g:2": _label("Momofuku")}
     venues = [
-        make_venue("v:o", name="Oriana", group_id="g:1", first_inspection_date=date(2026, 1, 1))
+        make_venue(
+            "v:o",
+            name="Oriana",
+            group_id="g:1",
+            license_ids=("l1",),
+            first_inspection_date=date(2026, 1, 1),
+        )
     ]
+    # A license on file before the opening that produced no signal: a real miss.
+    lics = [make_license("l1", source="sla_active", original_issue_date=date(2024, 1, 1))]
     hints = {"The Noortwyck": "Oriana", "Momofuku": "Zzz"}
     out = {
-        r.customer: r for r in case_replay(labels, venues, _sigs(), hints, seeds=[], licenses=[])
+        r.customer: r for r in case_replay(labels, venues, _sigs(), hints, seeds=[], licenses=lics)
     }
     assert out["The Noortwyck"].status == "replayed" and out["The Noortwyck"].lead_days is None
     assert out["Momofuku"].status == "not_evaluable" and out["Momofuku"].new_venue_id is None
@@ -191,8 +199,10 @@ def test_backtest_replay_keeps_an_inspection_that_predates_the_anchor(tmp_path, 
     store.save("licenses", [lic], key=lambda r: r.record_id)
     out = cli.backtest(store)
     [case] = [c for c in out.cases if c.customer.startswith("Rezd")]
-    assert case.status == "replayed" and case.new_venue_id == "v:m"
-    assert case.lead_days is None  # the 2025-06 license after the 2025-03 inspection is no lead
+    assert case.new_venue_id == "v:m" and case.lead_days is None
+    # The 2025-06 license after the 2025-03 inspection is no lead; and with no license on file
+    # before the opening, no signal could exist: not evaluable, never a miss (I6, live).
+    assert case.status == "not_evaluable" and "no license or application" in case.reason
 
 
 def test_fit_auc_customers_vs_rest():
@@ -300,3 +310,78 @@ def test_run_p0_fails_fast_before_any_step_without_the_keys_it_needs(monkeypatch
         cli.main(["run-p0"])
     assert "GOOGLE_PLACES_API_KEY" in str(exc.value) and "FIRECRAWL_API_KEY" in str(exc.value)
     assert calls == []
+
+
+@pytest.mark.parametrize(
+    ("licenses", "why"),
+    [
+        ((), "no license at all"),
+        # live: KABAWA inspected 2025-05-08, its only license issued 2026-10-22 (a re-issue)
+        (
+            (make_license("l1", source="sla_active", original_issue_date=date(2026, 10, 22)),),
+            "license only after the opening",
+        ),
+    ],
+)
+def test_opening_with_no_license_on_file_before_it_is_not_evaluable(licenses, why):
+    """I6 (quality pass): with no license or application dated before the venue opened (or
+    before the anchor), no license signal could have fired; "no prior signal" was guaranteed,
+    so the case is not evaluable, and the reason says it is a coverage gap."""
+    labels = {"g:1": _label("Momofuku", when=date(2025, 10, 20))}
+    venues = [
+        make_venue(
+            "v:k",
+            name="KABAWA / BAR KABAWA",
+            group_id="g:1",
+            license_ids=tuple(lic.record_id for lic in licenses),
+            first_inspection_date=date(2025, 5, 8),
+        )
+    ]
+    [r] = case_replay(
+        labels, venues, _sigs(), {"Momofuku": "Bar Kabawa"}, seeds=[], licenses=list(licenses)
+    )
+    assert r.status == "not_evaluable", why
+    assert "no license or application" in r.reason and "coverage gap" in r.reason
+
+
+def test_report_case_replay_names_every_exclusion_and_never_reads_as_a_rate(tmp_path, monkeypatch):
+    """I6 (quality pass): with one replayed case the report must not read as a rate, and its
+    not-evaluable summary must name the no-license-on-file exclusion as a coverage gap."""
+    from scripts.hospitality import cli, report
+    from scripts.hospitality.store import DocStore
+
+    store = DocStore(f"sqlite:///{tmp_path}/m.db")
+    store.save("venues", [make_venue("v:1")], key=lambda v: v.venue_id)
+    store.save("scores", [make_scored("g:1")], key=lambda a: a.group_id)
+
+    def case(customer: str, status: str, lead: int | None, reason: str = "") -> CaseReplay:
+        return CaseReplay(
+            group_id="g:1",
+            customer=customer,
+            anchor_date=date(2025, 10, 20),
+            new_venue_id="v:1",
+            first_signal_date=None,
+            lead_days=lead,
+            signal_types=(),
+            status=status,  # type: ignore[arg-type]
+            anchor_basis="customer",
+            reason=reason,
+        )
+
+    result = BacktestResult(
+        cases=(
+            case("A", "replayed", 192),
+            case("B", "not_evaluable", None, "no license or application on file before x"),
+        ),
+        undated=0,
+        fit_auc=0.7,
+        fit_distinct=5,
+        n_customers=3,
+        n_others=100,
+    )
+    monkeypatch.setattr(cli, "backtest", lambda s=None: result)
+    text = "\n".join(report._backtests(store))
+    assert "no license or application on file" in text.split("|")[0]  # in the summary sentence
+    assert "coverage gap" in text
+    assert "too few to estimate a rate" in text
+    assert "n=3" in text and "too few customers" in text

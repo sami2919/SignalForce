@@ -307,3 +307,23 @@ def test_report_states_both_denominators_and_never_says_bare_recall(tmp_path, mo
     )
     assert "- Recall:" not in text
     assert "365" in text  # the lead cap is stated
+
+
+def test_report_states_the_catch_rate_within_the_lead_cap(tmp_path, cfg):
+    """I5 (quality pass): a license 500 days before opening counts as caught, but it is not a
+    buying-window lead; the report must also give caught-within-the-cap over the same truth set,
+    so the headline rate cannot be read as a buying-window rate."""
+    from scripts.hospitality.report import _recall
+
+    store = DocStore(f"sqlite:///{tmp_path}/m.db")
+    first = date(2026, 10, 1)
+    venues = [_restaurant("v:1", first, ("a1",)), _restaurant("v:2", first, ("a2",))]
+    lics = [
+        make_license("a1", source="sla_active", original_issue_date=date(2026, 7, 1)),  # 92 d
+        make_license("a2", source="sla_active", original_issue_date=date(2025, 5, 20)),  # 499 d
+    ]
+    store.save("venues", venues, key=lambda v: v.venue_id)  # type: ignore[attr-defined]
+    store.save("licenses", lics, key=lambda r: r.record_id)  # type: ignore[attr-defined]
+    text = "\n".join(_recall(store, cfg, date(2026, 10, 31)))
+    assert "2 of 2" in text  # caught at all
+    assert "within 365 days of the first inspection: 1 of 2 (50.0%)" in text
