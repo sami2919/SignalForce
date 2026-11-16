@@ -992,6 +992,8 @@ def _print_backtest(out: dict[str, object]) -> None:
         print("Fit is degenerate: every scored group has the same fit, so AUC is 0.5 by tie.")
 
 
+# Keys the paid P0 steps need (websites: Places; crawl: Firecrawl), checked before step one.
+P0_REQUIRED_KEYS: tuple[str, ...] = ("GOOGLE_PLACES_API_KEY", "FIRECRAWL_API_KEY")
 P0_STEPS: tuple[str, ...] = (
     "ingest-sla",
     "snapshot-pending",
@@ -1227,6 +1229,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     elif args.command == "report":
         print(f"report: {report()}")
     elif args.command == "run-p0":
+        missing = [var for var in P0_REQUIRED_KEYS if not os.environ.get(var)]
+        if missing:  # fail fast, before ingest or resolve touch the store (M6)
+            raise SystemExit(f"run-p0 needs {', '.join(missing)}; set it before running the chain")
         for step in P0_STEPS:
             print(f"== {step} ==")
             if main([step]):

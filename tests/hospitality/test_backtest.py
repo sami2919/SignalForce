@@ -148,8 +148,34 @@ def test_run_p0_chains_steps_in_order(monkeypatch):
         return 0
 
     monkeypatch.setattr(cli, "main", fake)
+    monkeypatch.setenv("GOOGLE_PLACES_API_KEY", "k")
+    monkeypatch.setenv("FIRECRAWL_API_KEY", "k")
     assert cli.main(["run-p0"]) == 0
     assert calls == [
         "ingest-sla", "snapshot-pending", "ingest-dohmh", "resolve", "window",
         "websites", "crawl", "labels", "score", "recall", "backtest",
     ]  # fmt: skip
+
+
+def test_run_p0_fails_fast_before_any_step_without_the_keys_it_needs(monkeypatch):
+    """M6: a missing key for a later step (websites, crawl) stops run-p0 before ingest runs."""
+    import pytest
+
+    from scripts.hospitality import cli
+
+    calls: list[str] = []
+    real_main = cli.main
+
+    def fake(argv=None):
+        if argv == ["run-p0"]:
+            return real_main(argv)
+        calls.append(argv[0])
+        return 0
+
+    monkeypatch.setattr(cli, "main", fake)
+    monkeypatch.delenv("GOOGLE_PLACES_API_KEY", raising=False)
+    monkeypatch.delenv("FIRECRAWL_API_KEY", raising=False)
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["run-p0"])
+    assert "GOOGLE_PLACES_API_KEY" in str(exc.value) and "FIRECRAWL_API_KEY" in str(exc.value)
+    assert calls == []
