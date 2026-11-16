@@ -167,29 +167,54 @@ def _recall(store: DocStore, cfg: HospitalityConfig, today: date) -> list[str]:
             "recall audit",
             "It needs resolved venues and licenses with DOHMH first-inspection dates in the store.",
         )
-    out = cli.recall(RECALL_WEEKS, today, store, cfg)
-    total = out["total"]
+    r = cli.recall(RECALL_WEEKS, today, store, cfg)
     lines = [
         (
-            f"Window {out['start']} to {out['end']}; openings = venues first inspected in the window "
-            f"that have an on-premise license and are not a transfer or renewal (n={total})."
+            f"Window {r.start} to {r.end}. What this measures: whether our license signals fire "
+            "before a venue's first DOHMH inspection, for the openings we can tie to a license. "
+            "It is not market-wide recall and not the share of NYC openings found: most venues "
+            "first inspected in the window never matched an on-premise license we can see, and "
+            "they are outside the truth set."
+        ),
+        "",
+        f"- Venues first inspected in the window (every DOHMH first inspection): {r.first_inspections}",
+        f"- Of those, tied to at least one license record: {r.license_matched}",
+        (
+            f"- Of those, new on-premise openings (not a transfer or renewal), the truth set: "
+            f"{r.total}"
         ),
         "",
     ]
-    if not total:
-        lines += ["No license-matched openings fell in the window, so no recall is computed.", ""]
-    else:
-        lines += [
-            f"- Caught before the first inspection: {out['caught']} of {total} (n={total})",
-            f"- Recall: {out['recall']:.3f}",
-            f"- Median lead before first inspection: {_fmt(out['median_lead_days'], ' days')}",  # type: ignore[arg-type]
-            "",
-        ]
+    if not r.total:
+        lines += ["No license-matched openings fell in the window, so nothing is computed.", ""]
+        return lines
+    over = (
+        f"; {r.leads_over_cap} of the {r.caught} leads are longer than {r.lead_cap_days} days "
+        f"and are excluded from this median (a signal that early is not a buying-window lead; "
+        f"the median over all leads is {_fmt(r.median_lead_days, ' days')})"
+        if r.leads_over_cap
+        else f"; no lead is longer than {r.lead_cap_days} days"
+    )
     lines += [
         (
-            "Caveat: recall covers license-matched openings only (venues we could tie to a license) "
-            "and is not a lift claim; it says nothing about openings that never filed a license we "
-            "can see."
+            f"- License-signal timeliness among license-matched openings: caught before the first "
+            f"inspection {r.caught} of {r.total} ({r.recall:.1%})"
+        ),
+        (
+            f"- Coverage of all first inspections in the window: {r.caught} of "
+            f"{r.first_inspections} ({r.coverage:.1%})"
+        ),
+        (
+            f"- Median lead before the first inspection: "
+            f"{_fmt(r.median_lead_days_within_cap, ' days')}{over}."
+        ),
+        "",
+        (
+            "Caveat: the truth set exists only because a license was matched, so the first figure "
+            "is close to circular (a matched license that predates the inspection is a catch by "
+            "construction); misses come from licenses outside the lookback or stale caps. The "
+            "replay uses the same lookback and stale caps as live scoring. Neither figure is a "
+            "lift claim."
         ),
         "",
     ]
@@ -543,7 +568,10 @@ def _limitations(cfg: HospitalityConfig, estimates: Sequence[WindowEstimate]) ->
     lines = [
         "- Priors below are starting assumptions from research, not fitted to Magic data.",
         "- Group counts are a lower bound; possibly-same links are not merged.",
-        "- Recall covers license-matched openings only and is not a lift claim.",
+        (
+            "- The recall audit covers license-matched openings only (a minority of first "
+            "inspections; both denominators are in section 3) and is not a lift claim."
+        ),
         "- Case replay and fit AUC are indicative only (tiny samples).",
         "- A head-to-head win is conservative: the Claude baseline has hindsight.",
         "- The opening-timing median comes from a censoring-corrected curve.",

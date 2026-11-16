@@ -40,7 +40,11 @@ from scripts.hospitality.labels import (
 )
 from scripts.hospitality.llm import LLMRefusal
 from scripts.hospitality.measure.backtest import case_replay, find_venue, fit_auc
-from scripts.hospitality.measure.recall import ground_truth_openings, recall_audit
+from scripts.hospitality.measure.recall import (
+    first_inspections_in,
+    ground_truth_openings,
+    recall_audit,
+)
 from scripts.hospitality.messages.drafter import choose_angles, draft
 from scripts.hospitality.messages.judge import judge
 from scripts.hospitality.models import (
@@ -58,6 +62,7 @@ from scripts.hospitality.models import (
     Judgement,
     LicenseRecord,
     LicenseSource,
+    RecallReport,
     ScoredAccount,
     Signal,
     StackObservation,
@@ -916,26 +921,59 @@ def recall(
     today: date | None = None,
     store: DocStore | None = None,
     cfg: HospitalityConfig | None = None,
-) -> dict[str, object]:
+) -> RecallReport:
     """Replay license signals for venues first inspected in the last `weeks`; report recall.
 
     Each opening is replayed as of the day before its first inspection (no inspection yet, no
     match-miss filter), so only signals that could have existed beforehand are counted. As-of
     replay is `historical`: now-inactive licenses count at their issue date, as they did then.
+    The live lookback and stale caps apply as in `score`, so the replay never counts a signal
+    live scoring would not emit. Recall is reported with its coverage denominator (every first
+    inspection in the window), because the truth set is license-matched openings only.
     """
     cfg = cfg or load_config()
     today = today or date.today()
     start = today - timedelta(weeks=weeks)
     store = store or DocStore()
     licenses = store.load("licenses", LicenseRecord)
-    openings = ground_truth_openings(store.load("venues", Venue), start, today, cfg, licenses)
+    venues = store.load("venues", Venue)
+    inspected = first_inspections_in(venues, start, today)
+    openings = ground_truth_openings(venues, start, today, cfg, licenses)
     replayed: list[Signal] = []
     for v in openings:
         as_of = v.first_inspection_date - timedelta(days=1)  # type: ignore[operator]
         pre = v.model_copy(update={"first_inspection_date": None})
-        replayed.extend(license_signals([pre], licenses, {}, as_of, historical=True))
-    report = recall_audit(openings, replayed, start, today)
-    return {**report.model_dump(mode="json"), "misses_sample": list(report.misses[:10])}
+        replayed.extend(_replay_signals([pre], licenses, {}, as_of, cfg))
+    return recall_audit(
+        openings,
+        replayed,
+        start,
+        today,
+        first_inspections=len(inspected),
+        license_matched=sum(bool(v.license_ids) for v in inspected),
+        lead_cap_days=cfg.recall_lead_cap_days,
+    )
+
+
+def _replay_signals(
+    venues: Sequence[Venue],
+    licenses: Sequence[LicenseRecord],
+    first_seen: dict[str, date],
+    as_of: date,
+    cfg: HospitalityConfig,
+    **kw: object,
+) -> list[Signal]:
+    """As-of license signals with the same lookback and stale caps as live `score`."""
+    return license_signals(
+        venues,
+        licenses,
+        first_seen,
+        as_of,
+        historical=True,
+        issued_lookback_days=cfg.issued_lookback_days,
+        not_yet_inspected_max_age_days=cfg.not_yet_inspected_max_age_days,
+        **kw,  # type: ignore[arg-type]
+    )
 
 
 # Customer label name -> the new venue the research ties to it (docs/research/magic/02).
@@ -1213,12 +1251,21 @@ def main(argv: Sequence[str] | None = None) -> int:
                 f"p={acct.p_window:.2f} fit={acct.fit:.2f} [{why}]"
             )
     elif args.command == "recall":
-        out = recall(args.weeks)
-        print(f"window: {out['start']} to {out['end']}")
-        print(f"openings: {out['total']}, caught before first inspection: {out['caught']}")
-        print(f"recall: {out['recall']:.3f}")
-        print(f"median lead days: {out['median_lead_days']}")
-        print(f"sample misses: {out['misses_sample']}")
+        r = recall(args.weeks)
+        print(f"window: {r.start} to {r.end}")
+        print(
+            f"first inspections in window: {r.first_inspections} (license-matched {r.license_matched})"
+        )
+        print(f"license-matched new openings (truth set): {r.total}")
+        print(f"caught before first inspection: {r.caught} of {r.total} ({r.recall:.3f})")
+        print(
+            f"coverage of all first inspections: {r.caught} of {r.first_inspections} ({r.coverage:.3f})"
+        )
+        print(
+            f"median lead days: {r.median_lead_days_within_cap} (leads <= {r.lead_cap_days} d; "
+            f"{r.leads_over_cap} longer excluded; all leads: {r.median_lead_days})"
+        )
+        print(f"sample misses: {list(r.misses[:10])}")
     elif args.command == "press":
         for name, value in press(args.days).items():
             print(f"{name}: {value}")

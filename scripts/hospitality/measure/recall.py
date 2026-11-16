@@ -1,4 +1,9 @@
-"""Recall audit: of venues that really opened, how many did opening signals catch beforehand."""
+"""Recall audit: of license-matched openings, how many did opening signals catch beforehand.
+
+The truth set is only the openings we could tie to an on-premise license, so `recall` measures
+the timeliness of license signals on those, not the share of NYC openings found. The coverage
+denominator (every first inspection in the window) is reported next to it.
+"""
 
 from collections import defaultdict
 from collections.abc import Collection, Sequence
@@ -53,14 +58,33 @@ def ground_truth_openings(
     ]
 
 
+def first_inspections_in(venues: Sequence[Venue], start: date, end: date) -> list[Venue]:
+    """Every venue first inspected in [start, end], license-matched or not."""
+    return [
+        v
+        for v in venues
+        if v.first_inspection_date is not None and start <= v.first_inspection_date <= end
+    ]
+
+
 def recall_audit(
     openings: Sequence[Venue],
     signals: Sequence[Signal],
     start: date,
     end: date,
+    *,
+    first_inspections: int,
+    license_matched: int,
+    lead_cap_days: int,
     opening_types: Collection[str] = OPENING_SIGNAL_TYPES,
 ) -> RecallReport:
-    """Caught = an opening-family signal observed strictly before the first inspection."""
+    """Caught = an opening-family signal observed strictly before the first inspection.
+
+    `first_inspections` and `license_matched` are the wider denominators (required, so a
+    caller cannot report recall without them). Leads longer than `lead_cap_days` stay caught
+    but are excluded from `median_lead_days_within_cap` and counted in `leads_over_cap`: a
+    signal more than a cap's length before opening is not a buying-window lead.
+    """
     by_venue: dict[str, list[date]] = defaultdict(list)
     for s in signals:
         if s.signal_type in opening_types:
@@ -75,13 +99,20 @@ def recall_audit(
         else:
             misses.append(v.venue_id)
     total = len(openings)
+    fresh = [d for d in leads if d <= lead_cap_days]
     return RecallReport(
         start=start,
         end=end,
         total=total,
         caught=len(leads),
         recall=len(leads) / total if total else 0.0,
+        first_inspections=first_inspections,
+        license_matched=license_matched,
+        coverage=len(leads) / first_inspections if first_inspections else 0.0,
         median_lead_days=float(median(leads)) if leads else None,
+        lead_cap_days=lead_cap_days,
+        median_lead_days_within_cap=float(median(fresh)) if fresh else None,
+        leads_over_cap=len(leads) - len(fresh),
         lead_days=tuple(leads),
         misses=tuple(misses),
     )

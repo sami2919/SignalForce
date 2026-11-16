@@ -278,12 +278,26 @@ class CurveRecord(_Frozen):
 
 
 class RecallReport(_Frozen):
+    """License-signal timeliness among license-matched openings, with its coverage denominator.
+
+    `total` is the truth set (venues first inspected in the window that we could tie to an
+    on-premise license and that are not a transfer); `recall` is caught / total. It is NOT the
+    share of NYC openings found: `coverage` is caught / `first_inspections` (every venue first
+    inspected in the window, matched to a license or not).
+    """
+
     start: date
     end: date
     total: int
     caught: int
     recall: float
-    median_lead_days: float | None
+    first_inspections: int  # every venue first inspected in the window
+    license_matched: int  # of those, venues tied to at least one license record
+    coverage: float  # caught / first_inspections
+    median_lead_days: float | None  # all leads, including stale ones
+    lead_cap_days: int
+    median_lead_days_within_cap: float | None  # leads over the cap excluded
+    leads_over_cap: int
     lead_days: tuple[int, ...]
     misses: tuple[str, ...]
 

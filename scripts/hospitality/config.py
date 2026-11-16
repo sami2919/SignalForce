@@ -77,6 +77,8 @@ class HospitalityConfig(BaseModel):
     not_yet_inspected_max_age_days: float
     # license_issued fires only for licenses issued within this many days.
     issued_lookback_days: int
+    # Recall audit: a lead longer than this is reported as stale and kept out of the median.
+    recall_lead_cap_days: int
     # Google Places candidate acceptance for a venue's website.
     website_match_max_distance_m: float
     website_match_min_name_similarity: float
