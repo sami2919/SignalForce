@@ -108,6 +108,12 @@ class HospitalityConfig(BaseModel):
     judge_pass_score: float
     # A Hunter email is used only at or above this confidence (0-100).
     min_email_confidence: float
+    # Paid-spend caps per group: Hunter email lookups, and drafted angles (one Claude draft and
+    # one judge call each).
+    max_email_lookups_per_group: int
+    draft_angles_per_group: int
+    # The demo report's recall audit looks back this many weeks.
+    report_recall_weeks: int
     # Google Places candidate acceptance for a venue's website.
     website_match_max_distance_m: float
     website_match_min_name_similarity: float

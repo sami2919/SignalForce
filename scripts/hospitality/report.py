@@ -42,7 +42,6 @@ from scripts.hospitality.window.survival import quantile_time
 
 REPORT_NAME = "demo_report.md"
 TOP_N = 25
-RECALL_WEEKS = 12
 
 SECTIONS: tuple[str, ...] = (
     "Universe and location counts",
@@ -168,7 +167,7 @@ def _recall(store: DocStore, cfg: HospitalityConfig, today: date) -> list[str]:
             "recall audit",
             "It needs resolved venues and licenses with DOHMH first-inspection dates in the store.",
         )
-    r = cli.recall(RECALL_WEEKS, today, store, cfg)
+    r = cli.recall(cfg.report_recall_weeks, today, store, cfg)
     lines = [
         (
             f"Window {r.start} to {r.end}. What this measures: whether our license signals fire "

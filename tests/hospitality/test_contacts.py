@@ -61,6 +61,7 @@ def run_find(
     fcm: Mock | None = None,
     budgets: dict[str, CallBudget] | None = None,
     hunter: Mock | None = None,
+    max_lookups: int = 2,
 ):
     hunter = hunter or Mock()
     if hunter_scores is not None:
@@ -77,6 +78,7 @@ def run_find(
             hunter=hunter,
             budgets=budgets or {"firecrawl": CallBudget("fc", 5), "hunter": CallBudget("h", 5)},
             min_email_confidence=70.0,
+            max_email_lookups=max_lookups,
         )
     return out, hunter, fetch, st
 
@@ -417,3 +419,10 @@ def test_contacts_command_keeps_what_it_found_when_a_later_group_errors(
     with pytest.raises(RuntimeError, match="hunter 401"):
         cli.contacts(top=2)
     assert [c.contact_id for c in store.load("contacts", Contact)] == ["c:g:a"]
+
+
+@pytest.mark.parametrize("cap", [1, 3])
+def test_hunter_lookups_per_group_follow_the_configured_cap(cap: int) -> None:
+    """M2: the per-group Hunter lookup cap is config (it decides paid spend), not a constant."""
+    _, hunter, _, _ = run_find(hunter_scores={}, max_lookups=cap)
+    assert hunter.find_email.call_count == cap

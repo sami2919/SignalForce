@@ -599,6 +599,7 @@ def contacts(top: int = 25) -> dict[str, object]:
                     hunter=hunter,
                     budgets=budgets,
                     min_email_confidence=cfg.min_email_confidence,
+                    max_email_lookups=cfg.max_email_lookups_per_group,
                 )
             )
     finally:  # an unexpected error (Hunter 401, Firecrawl APIError) keeps what was paid for
@@ -696,15 +697,13 @@ def events_rank(path: Path = EVENTS_PATH) -> dict[str, object]:
     }
 
 
-DRAFT_ANGLES_PER_GROUP = 3
-
-
 def _contact_text(contact: Contact | None) -> tuple[str, ...]:
     return (contact.name, contact.role) if contact else ()
 
 
 def draft_command(top: int = 10) -> dict[str, object]:
-    """Draft (never send) up to three angles per top cold prospect; judge and save them."""
+    """Draft (never send) up to `draft_angles_per_group` angles per top cold prospect; judge and
+    save them."""
     if not os.environ.get("ANTHROPIC_API_KEY"):  # fail fast, before touching the store
         raise SystemExit("ANTHROPIC_API_KEY is not set; the draft command needs it")
     cfg = load_config()
@@ -737,7 +736,7 @@ def draft_command(top: int = 10) -> dict[str, object]:
                 contacts_by_group.get(acct.group_id, []), key=lambda c: role_priority(c.role)
             )
             contact = people[0] if people else None
-            for angle in choose_angles(evidence)[:DRAFT_ANGLES_PER_GROUP]:
+            for angle in choose_angles(evidence)[: cfg.draft_angles_per_group]:
                 d = draft(acct, evidence, contact, angle)
                 account_text = [*own_names.get(acct.group_id, []), *_contact_text(contact)]
                 judgements[d.draft_id] = judge(

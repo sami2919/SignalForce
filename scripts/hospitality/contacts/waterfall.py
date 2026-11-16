@@ -4,8 +4,9 @@
 2. The page is fetched with the robots-respecting fetcher and one `structured` call reads
    `{name, role}`. A name or role that does not literally occur in the page's visible text is
    dropped (fabrication guard).
-3. Hunter email-finder `(domain, first, last)` runs for at most two people per group, best role
-   first; an email is accepted only at confidence >= 70. An email is either on the page, returned
+3. Hunter email-finder `(domain, first, last)` runs for at most `max_email_lookups` people per
+   group (config), best role first; an email is accepted only at the configured confidence floor
+   (`min_email_confidence`). An email is either on the page, returned
    by Hunter with its confidence, or None: it is never constructed.
 4. Instagram handle and phone are read from the page's links.
 
@@ -39,7 +40,6 @@ from scripts.watch.fetcher import SourceRef, fetch_all
 
 logger = logging.getLogger(__name__)
 
-MAX_EMAIL_LOOKUPS_PER_GROUP = 2
 MAX_PAGE_CHARS = 12000
 FORBIDDEN_URL_PARTS = ("loyalist.com/for/",)
 FORBIDDEN_HOSTS = ("linkedin.com",)
@@ -239,6 +239,7 @@ def find_contacts(
     hunter: HunterClient,
     budgets: dict[str, CallBudget],
     min_email_confidence: float,
+    max_email_lookups: int,
 ) -> list[Contact]:
     """Named contacts for one prospect group. Customers and disqualified groups get none."""
     if account.is_customer or account.disqualified_reason is not None:
@@ -276,7 +277,7 @@ def find_contacts(
     hunted: dict[str, tuple[str | None, float | None]] = {}
     lookups = 0
     for p in people:
-        if page_emails[p.name] or lookups >= MAX_EMAIL_LOOKUPS_PER_GROUP:
+        if page_emails[p.name] or lookups >= max_email_lookups:
             continue
         parts = p.name.split()
         if len(parts) < 2 or not domain:

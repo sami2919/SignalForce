@@ -65,3 +65,27 @@ def test_no_threshold_constants_left_in_the_modules() -> None:
     ):
         for name in names:
             assert not hasattr(mod, name), f"{mod.__name__}.{name}"
+
+
+def test_spend_caps_and_report_window_live_in_config() -> None:
+    """M2 (rest): drafts per group and Hunter lookups per group decide paid spend, and the
+    report's recall window decides a headline number; all three come from required config."""
+    import pytest
+    from pydantic import ValidationError
+
+    import scripts.hospitality.cli as cli_mod
+    import scripts.hospitality.report as report_mod
+    from scripts.hospitality.config import HospitalityConfig
+    from scripts.hospitality.contacts import waterfall
+
+    cfg = load_config()
+    assert cfg.draft_angles_per_group == 3
+    assert cfg.max_email_lookups_per_group == 2
+    assert cfg.report_recall_weeks == 12
+    raw = cfg.model_dump()
+    for key in ("draft_angles_per_group", "max_email_lookups_per_group", "report_recall_weeks"):
+        with pytest.raises(ValidationError):
+            HospitalityConfig.model_validate({k: v for k, v in raw.items() if k != key})
+    assert not hasattr(cli_mod, "DRAFT_ANGLES_PER_GROUP")
+    assert not hasattr(waterfall, "MAX_EMAIL_LOOKUPS_PER_GROUP")
+    assert not hasattr(report_mod, "RECALL_WEEKS")

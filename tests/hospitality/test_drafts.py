@@ -432,3 +432,56 @@ def test_draft_command_keeps_judged_drafts_when_a_later_call_errors(tmp_path, mo
         cli.draft_command(top=2)
     assert [d.draft_id for d in store.load("drafts", Draft)] == ["d:g:a:opening"]
     assert len(store.load("judgements", Judgement)) == 1
+
+
+def test_draft_command_drafts_at_most_the_configured_angles_per_group(
+    tmp_path, monkeypatch
+) -> None:
+    """M2: angles per group decide Claude spend; the cap comes from config."""
+    from scripts.hospitality.config import load_config
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    store = DocStore(f"sqlite:///{tmp_path}/m.db")
+    store.save(
+        "groups",
+        [Group(group_id="g:a", name="g:a", venue_ids=("v:g:a",), resolution="singleton")],
+        key=lambda x: x.group_id,
+    )
+    store.save("venues", [make_venue("v:g:a", group_id="g:a")], key=lambda v: v.venue_id)
+    store.save("scores", [make_scored("g:a", 0.9)], key=lambda x: x.group_id)
+    store.save(
+        "signals",
+        [make_signal(t, "v:g:a") for t in ("press_opening", "new_gm", "platform_switch")],
+        key=lambda s: s.signal_id,
+    )
+    monkeypatch.setattr(cli, "DocStore", lambda: store)
+    cfg = load_config()
+    monkeypatch.setattr(
+        cli, "load_config", lambda: cfg.model_copy(update={"draft_angles_per_group": 1})
+    )
+    seen: list[str] = []
+
+    def fake_draft(account, evidence, contact, angle):
+        seen.append(angle)
+        return make_draft(
+            (DraftSentence(text="x", evidence_ids=(evidence[0].signal_id,), is_claim=True),),
+            draft_id=f"d:{angle}",
+        )
+
+    monkeypatch.setattr(cli, "draft", fake_draft)
+    monkeypatch.setattr(cli, "judge", lambda *a, **k: _passing_judgement())
+    cli.draft_command(top=1)
+    assert seen == ["opening"]
+
+
+def _passing_judgement() -> Judgement:
+    return Judgement(
+        score=8.0,
+        hyper_specific=True,
+        factually_grounded=True,
+        non_obvious=True,
+        deletion_reason="",
+        what_would_make_me_reply="",
+        grounding_violations=(),
+        passed=True,
+    )

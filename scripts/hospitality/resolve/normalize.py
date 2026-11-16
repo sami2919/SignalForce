@@ -97,6 +97,9 @@ GENERIC_NAME_TOKENS = _NOISE_NAME_TOKENS | frozenset(
         "kitchen", "lounge", "park", "pub", "restaurant", "restaurants", "tavern",
     }
 )  # fmt: skip
+# Deliberately code, not config (M2): this match decides who is a Loyalist customer (Review
+# Focus 4), which press / job-board names merge groups, and which benchmark items count. A
+# lower value in a user YAML would silently re-open the C1 leak, so it is pinned by tests here.
 STRICT_NAME_THRESHOLD = 0.9
 
 
