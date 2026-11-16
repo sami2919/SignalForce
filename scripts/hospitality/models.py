@@ -169,3 +169,17 @@ class Contact(_Frozen):
 class PendingSnapshot(_Frozen):
     taken_on: date
     record_id: str
+
+
+class MatchPair(_Frozen):
+    license_id: str
+    camis: str
+    probability: float
+    method: str
+
+
+class MatchResult(_Frozen):
+    pairs: tuple[MatchPair, ...]
+    links: tuple[EntityLink, ...]
+    unmatched_licenses: tuple[str, ...]
+    unmatched_camis: tuple[str, ...]
