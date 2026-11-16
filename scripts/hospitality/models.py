@@ -325,3 +325,47 @@ class Judgement(_Frozen):
     what_would_make_me_reply: str
     grounding_violations: tuple[str, ...]
     passed: bool
+
+
+EventType = Literal[
+    "trade_show", "curated_conference", "festival", "awards", "local_meetup", "magic_dinner"
+]
+Role = Literal[
+    "speaker",
+    "panelist",
+    "festival_chef",
+    "award_nominee",
+    "exhibitor_staff",
+    "sponsor",
+    "past_recap",
+]
+
+
+class Event(_Frozen):
+    event_id: str
+    name: str
+    start: date | None  # None = date not verified; excluded from ranking
+    end: date | None
+    city: str
+    event_type: EventType
+    cost_usd: float
+    lineup_urls: tuple[str, ...]
+    lineup_gated: bool = False  # lineup only in a gated app: never fetched
+
+
+class EventAppearance(_Frozen):
+    event_id: str
+    person: str
+    restaurant: str
+    role: Role
+    source_url: str
+
+
+class LineupEntry(_Frozen):
+    person: str
+    restaurant: str
+    role: Role
+
+
+class LineupFacts(_Frozen):
+    entries: tuple[LineupEntry, ...]

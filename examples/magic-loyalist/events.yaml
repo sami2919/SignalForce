@@ -1,0 +1,66 @@
+# NYC-relevant event registry (spec section 6.12). Only events grounded in the repo's docs.
+# start/end null = date NOT verified: the event is excluded from ranking until a human checks
+# it and fills the dates. cost_usd 0.0 = cost not yet known (nothing in the docs states one).
+# lineup_urls empty = no public lineup URL known yet. Never add a gated app (Swapcard, Whova,
+# Brella) or LinkedIn URL. `verify:` and `date_source:` are human notes, ignored by the loader.
+events:
+  - event_id: e:nra-show-2027
+    name: National Restaurant Association Show 2027
+    start: 2027-05-22
+    end: 2027-05-25
+    city: Chicago
+    event_type: trade_show
+    cost_usd: 0.0
+    lineup_urls: []
+    date_source: docs/superpowers/specs/2026-11-16-magic-loyalist-gtm-system-design.md section 6.12
+    verify: trade-show contrast; ticket, travel cost and exhibitor/lineup URL still to fill
+
+  - event_id: e:welcome-conference
+    name: The Welcome Conference
+    start: null
+    end: null
+    city: unknown
+    event_type: curated_conference
+    cost_usd: 0.0
+    lineup_urls: []
+    verify: named in spec section 6.12 with no date, city or URL in the docs
+
+  - event_id: e:starchefs
+    name: StarChefs
+    start: null
+    end: null
+    city: unknown
+    event_type: curated_conference
+    cost_usd: 0.0
+    lineup_urls: []
+    verify: named in spec section 6.12 with no date, city or URL in the docs
+
+  - event_id: e:nyc-wine-food-festival
+    name: NYC Wine & Food Festival
+    start: null
+    end: null
+    city: New York
+    event_type: festival
+    cost_usd: 0.0
+    lineup_urls: []
+    verify: named in spec section 6.12 with no date or URL in the docs
+
+  - event_id: e:nyc-hospitality-alliance
+    name: NYC Hospitality Alliance (local operator events)
+    start: null
+    end: null
+    city: New York
+    event_type: local_meetup
+    cost_usd: 0.0
+    lineup_urls: []
+    verify: named in spec section 6.12; no specific event, date or URL in the docs
+
+  - event_id: e:james-beard-events
+    name: James Beard events and award ceremonies
+    start: null
+    end: null
+    city: unknown
+    event_type: awards
+    cost_usd: 0.0
+    lineup_urls: []
+    verify: named in spec section 6.12 as a category; pick the specific NYC-relevant events

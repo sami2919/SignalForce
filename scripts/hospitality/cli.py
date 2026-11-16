@@ -28,6 +28,8 @@ from scripts.hospitality.contacts.waterfall import HunterClient, find_contacts, 
 from scripts.hospitality.discover.exa import ExaClient
 from scripts.hospitality.discover.lookalikes import lookalike_signals, seed_url
 from scripts.hospitality.discover.press import PRESS_QUERIES, extract_press, press_to_records
+from scripts.hospitality.events.extract import extract_appearances
+from scripts.hospitality.events.registry import load_events
 from scripts.hospitality.labels import (
     customer_groups,
     labels_from_embeds,
@@ -46,6 +48,7 @@ from scripts.hospitality.models import (
     CustomerLabel,
     Draft,
     EntityLink,
+    EventAppearance,
     Group,
     GroupEvidence,
     InspectionVenue,
@@ -95,6 +98,7 @@ from scripts.hospitality.window.survival import (
 logger = logging.getLogger(__name__)
 
 SEED_PATH = Path(__file__).resolve().parents[2] / "examples/magic-loyalist/customers_seed.yaml"
+EVENTS_PATH = Path(__file__).resolve().parents[2] / "examples/magic-loyalist/events.yaml"
 BENCHMARK_RUNS = 3
 BENCHMARK_MAX_SEARCHES = 20
 BENCHMARK_K = 50
@@ -420,6 +424,39 @@ def contacts(top: int = 25) -> dict[str, object]:
         "hunter_calls": budgets["hunter"].used,
         "names": [groups[a.group_id].name for a in ranked if a.group_id in groups][:5],
     }
+
+
+def events_extract(path: Path = EVENTS_PATH) -> dict[str, object]:
+    """Extract appearances from the lineup pages of verified-date registry events; save them."""
+    for var in ("FIRECRAWL_API_KEY", "ANTHROPIC_API_KEY"):
+        if not os.environ.get(var):  # fail fast, before touching the store or the network
+            raise SystemExit(f"{var} is not set; the events-extract command needs it")
+    cfg = load_config()
+    events = load_events(path)  # unverified dates are excluded
+    budget = CallBudget("firecrawl", cfg.budgets["firecrawl"])
+    firecrawl = FirecrawlClient(os.environ["FIRECRAWL_API_KEY"])
+    found: list[EventAppearance] = []
+    stopped = ""
+    try:
+        for event in events:
+            found.extend(extract_appearances(event, firecrawl, budget))
+    except BudgetExceeded as exc:
+        stopped = str(exc)
+        logger.warning("events-extract stopped: %s", exc)
+    store = DocStore()
+    store.save(
+        "event_appearances",
+        found,
+        key=lambda a: f"{a.event_id}|{a.person}|{a.restaurant}|{a.role}|{a.source_url}",  # type: ignore[attr-defined]
+    )
+    out: dict[str, object] = {
+        "events": len(events),
+        "appearances": len(found),
+        "firecrawl_calls": budget.used,
+    }
+    if stopped:
+        out["stopped"] = stopped
+    return out
 
 
 DRAFT_ANGLES_PER_GROUP = 3
@@ -826,6 +863,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     p_contacts = sub.add_parser("contacts", help="Contacts for top prospects (team page, Hunter)")
     p_contacts.add_argument("--top", type=int, default=25, help="Top N ranked prospects")
+    sub.add_parser("events-extract", help="Lineup appearances for registry events (public pages)")
     p_clay_push = sub.add_parser("clay-push", help="Push top prospects to Clay (webhook)")
     p_clay_push.add_argument("--top", type=int, default=25, help="Top N ranked prospects")
     p_clay_import = sub.add_parser("clay-import", help="Import Clay's enriched CSV as contacts")
@@ -893,6 +931,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"{name}: {value}")
     elif args.command == "contacts":
         for name, value in contacts(args.top).items():
+            print(f"{name}: {value}")
+    elif args.command == "events-extract":
+        for name, value in events_extract().items():
             print(f"{name}: {value}")
     elif args.command == "clay-push":
         for name, value in clay_push(args.top).items():
