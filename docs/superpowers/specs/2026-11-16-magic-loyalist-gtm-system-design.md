@@ -437,7 +437,51 @@ with their scores. A likely-attendee meeting list for the top event, matched to 
 - Cost discipline: cheapest reliable method first; agents run only on residue and the top N, with
   per-account budgets.
 
+## 7a. Differentiation: why this beats prompting Claude directly
+
+Sami's requirement: the system must be clearly better than asking Claude "find companies with
+these signals". Claude runs *inside* the system as extractor, judge and long-tail agent. The
+system adds what a single prompt can't have:
+
+| Prompting Claude | This system |
+|---|---|
+| Returns what is findable and salient (mostly published press) | Enumerates the complete universe from government records |
+| Can't say what it missed | Measures recall against public ground truth (DOHMH first inspections) and lead time in days |
+| Sees the current web only | Keeps history and diffs; dates platform switches (live crawl + Wayback Machine) |
+| Lags press | Catches filings before press, with a calibrated window from the filing→opening curve |
+| Duplicates, wrong location counts | One resolved Group/Venue graph with alumni, investor and customer edges |
+| Non-reproducible ranking | Deterministic, traced scores |
+| Answers | Acts: sequences, suppression, reply routing, lifecycle, event lists |
+| Doesn't learn | Updates numbers from outcomes; proposes its own improvements |
+
+**Head-to-head benchmark (a demo deliverable).** Fix a cutoff date. Ground truth is the
+on-premise-licensed NYC venues first inspected in the N weeks after the cutoff. Compare:
+- a plain Claude run (with web search, documented prompt, run 3× to show variance), asked to
+  find NYC restaurant groups opening a new venue, as of the cutoff;
+- SignalForce's ranked list as of the cutoff.
+
+Report hits, median days of lead time, duplicates/errors, and run-to-run variance.
+
 ## 8. Demo scope (for the meeting)
+
+**Constraint (Sami, 2026-11-16):** the meeting is in 2–3 days, and tools run on free trial or
+signup credits only. Build order is priority order; if time runs out, cut from the bottom.
+
+**Real, on real data (priority order):**
+1. SLA + DOHMH ingest and a simplified graph: exact keys + fuzzy-name rules. Splink is deferred.
+2. Filing→opening window curve.
+3. Scores with traces for the universe.
+4. Recall audit + the head-to-head benchmark against plain Claude (§7a).
+5. Widget crawl of a few hundred top venues + Wayback Machine history to date past switches.
+6. Backtest against public Loyalist customers.
+7. Top-10 contacts via free-tier enrichment; 3 drafts per angle through the judge.
+8. Event registry + one ranked meeting list (§6.12).
+
+**Shown but simulated:** sending infrastructure (documented; warmup can't finish in time);
+sequencer and reply classifier on fixtures; local CRM adapter; Bayesian updates and bandit on
+simulated outcomes.
+
+### Original full demo scope (post-meeting target)
 
 1. NYC SLA + DOHMH ingest and the resolved Group/Venue graph, with location-count reconciliation.
 2. Filing-to-opening window curve from public data.
