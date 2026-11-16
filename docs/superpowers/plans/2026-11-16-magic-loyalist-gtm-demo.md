@@ -1487,6 +1487,48 @@ has weeks of real labels.*
 
 ---
 
+# Added after P1 (user request, 2026-11-16)
+
+### Task 31: Culinary Agents source (hiring, opening-soon, group evidence)
+
+Added by the user on 2026-11-16, after Task 26.
+
+**Files:**
+- Create: `scripts/hospitality/sources/culinary_agents.py`
+- Modify: `scripts/hospitality/models.py` (new signal type + any parsed-record models), `scripts/hospitality/config.py`, `examples/magic-loyalist/hospitality.yaml`, `scripts/hospitality/cli.py`, `scripts/hospitality/scoring.py` only if a new signal type needs wiring
+- Test: `tests/hospitality/test_culinary_agents.py`, fixtures in `tests/fixtures/hospitality/culinary_agents/`
+
+**Rationale.**
+- *Purpose:* culinaryagents.com is a hospitality job board with public company pages (name, description, location, sometimes a group with several locations), job postings, and "opening soon" / "hiring now" markers. It can feed three things the pipeline lacks a source for.
+- *Why it matters:* `role_hire` and `new_gm` are declared signal types that almost nothing emits; the buying window is currently inferred only from liquor licenses; restaurant groups are mostly invisible in public records (plan Concern 4).
+- *Why this way:* a deterministic HTML/JSON parser over a small, polite, budgeted fetch — no LLM needed for structured listing pages.
+
+**Constraints specific to this task.**
+- Terms of use: the site's user agreement appears to restrict automated data collection. So: the source is **disabled by default** (`culinary_agents.enabled: false` in config; the CLI command refuses to run unless enabled, with a message telling the operator to review culinaryagents.com/agreement first), fetches only pages robots.txt allows (the existing fetcher enforces robots), never touches `/users` or anything behind login, uses a hard per-run page budget from config (`budgets.culinary_agents`, default small, e.g. 40) via `CallBudget` spent BEFORE each fetch, and a polite delay between requests. No personal data about job seekers is collected — only employer-side facts.
+- Tests never hit the network: parse saved fixtures. You MAY make a handful of polite live GETs (well under the default budget, with delays) while developing, solely to learn the page structure and save small trimmed fixtures; strip anything not needed.
+
+**Interfaces (produce; adapt names to what the pages really contain):**
+- `CAJob(company: str, company_url: str, title: str, location: str, posted: date | None, url: str)` and `CACompany(name: str, url: str, description: str, locations: tuple[str, ...], opening_soon: bool, hiring: bool, website: str | None)` — frozen models.
+- `parse_job_search(html: str) -> list[CAJob]`, `parse_company(html: str, url: str) -> CACompany | None` — pure functions, tolerant of missing fields (skip and log an unparseable card, never crash).
+- `fetch_nyc(cfg, budget, fetch=...) -> tuple[list[CAJob], list[CACompany]]` — NYC only.
+- `to_signals(jobs, companies, venues, groups, today) -> tuple[list[Signal], list[GroupEvidence]]`:
+  - match a company to a known venue/group with the existing normalization helpers (name similarity + neighbourhood/borough or website domain); a company that matches zero or several venues gets NO signal on an arbitrary venue (log it as an unmatched candidate);
+  - senior/opening-team roles only: a General Manager posting → `new_gm`; Director of Operations, Events/Private Dining Manager, Opening team, Maître d'/Guest Relations/Reservations Manager and similar guest-facing leadership → `role_hire`; line-level roles (cook, server, dishwasher, barista…) emit nothing — restaurants hire constantly, so the role is the signal. The role lists live in config;
+  - a company marked opening soon → new signal type `opening_soon` (add to `SignalType`, with a prior in config alongside the other priors, in the opening family so the per-venue dedupe from Task 14b folds it with license signals rather than double-counting);
+  - a company page listing several locations → `GroupEvidence` for `merge_groups` (resolution kind consistent with the existing `GroupResolution` values; add one only if none fits);
+  - every signal carries the Culinary Agents URL as `evidence_ref` and a human-readable `detail`.
+- CLI: `culinary-agents` — refuses unless enabled; fetches, saves signals + evidence, re-runs group merge and score (follow the `press` command's pattern).
+
+**Steps (TDD):**
+- [ ] 1. Learn the real page structure with a few polite GETs; save trimmed fixtures.
+- [ ] 2. Failing tests: parser on fixtures; line-level role emits nothing; GM → `new_gm`; opening-soon → `opening_soon` folded with a license signal on the same venue (no double count in `score_group`); ambiguous/unmatched company gets no signal; customer group never becomes a cold prospect because of these signals (customer gate holds); budget hard-stops before the fetch over the limit; command refuses when disabled; `/users` URLs never fetched.
+- [ ] 3. Implement; run tests to green.
+- [ ] 4. Wire CLI + config + yaml priors.
+- [ ] 5. Full suite, ruff on touched files, commit: `feat(hospitality): Culinary Agents source for hiring and opening-soon signals`.
+- Do NOT run the full live command against the site beyond the handful of structure-learning requests; the operator enables it after reviewing the terms.
+
+---
+
 ## Self-review notes (done)
 
 - **Spec coverage:**
