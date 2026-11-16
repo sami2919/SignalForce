@@ -87,6 +87,42 @@ Background research: the "Customer 1,001" brief (in conversation; summarized in 
   - Nooks runs about $4–5K per seat per year and is SDR-volume oriented.
   - Technographic vendors crawl monthly and carry false positives.
 
+## 3a. Working backwards from Loyalist's customers (research, 2026-11-16)
+
+Four research passes cover Loyalist's own content, 16 NYC customer dossiers, 10 customers
+outside NYC, and outside press and interviews. Full reports with sources are in
+`docs/research/magic/01–04`. Every customer date is an **upper bound**: the customer was on
+Loyalist by then and probably bought earlier.
+
+- **Datable customers:** 9 of 16 NYC; 3 of 10 elsewhere. NYC dates cluster in Nov 2024 (dated
+  from testimonial image IDs on the old site, whose leading characters encode the upload time) and
+  Oct 2025 (seed release, Resy integration release). The Oct 2025 cluster reflects announcement
+  timing, not purchase timing.
+- **The repeatable trigger is going from one venue to several:** a second unit, a new city, a
+  hotel/club outlet. Guest data then splits across venues and systems, which is Loyalist's
+  "Fragmentation Tax". Purchase lands roughly between 6 months before and 12 months after the new
+  venue opens. NYC median lag is ~8–11 months (upper-bound lags). Grassfed shows the full stack:
+  Atlanta permit public ~8 months before opening; a new CRM user hired; the new bar's site is a
+  Loyalist waitlist.
+- **Second driver: revenue pressure on high-margin guests.** Private dining and win-back (Dinex's
+  new events manager emailing lost Q3 events; EMP's fallen private-dining revenue; High Street
+  buying for holiday events).
+- **Reservation platform is not a qualifier.** NYC customers use Resy (10), OpenTable (4),
+  SevenRooms (2), Tock (1); outside NYC, OpenTable leads (6 of 10). No dated customer switched
+  platform before buying.
+- **Founder network matters:** 4 of 16 NYC customers have ties to the founding team's former
+  employers.
+- **Sales motion:** in person (walk-ins, operator dinners, conferences), partner channels (Resy
+  integration on Platform/360/Advanced plans, Toast, Tripleseat; 10% referral discounts for Resy and
+  OpenTable restaurants), and free agents (Industry Insider Alert, AI Receipt) that need a
+  reservation-system connection. Programmatic outbound is only now being built.
+- **Known objections:** too small for a single location; "our data is a mess"; "my reservation
+  system already has a CRM"; another login; no public pricing or SOC 2. Onboarding is done for the
+  customer (history loaded in ~48h, a cleanup month), which answers "our data is a mess".
+- **Customers are detectable from their websites** (§6.3a).
+- **Limits:** almost all evidence is marketing-selected. No independent reviews were found, and no
+  operator who rejected Loyalist. Treat every count as a prior, not a finding.
+
 ## 4. Approaches considered
 
 | | Approach | Trade-off | Verdict |
@@ -202,19 +238,39 @@ understood patterns become deterministic code. The loop proposes promotions; a h
 
 ### 6.3 Signals
 
-| Family | Signal | Source | Meaning at a prospect | Meaning at a customer |
-|---|---|---|---|---|
-| Opening | SLA pending original, CB notice, DOHMH not-yet-inspected, permit, "opening soon" press | Open data, CB sites, press | Trigger | Expansion |
-| People | New chef, GM, marketing or guest-relations hire; departure | Press, team pages (diffed), Culinary Agents | New decision-maker | Champion risk |
-| Platform | Reservation widget change (e.g. Tock→Resy, OpenTable→SevenRooms), POS link change | Watch layer on venue sites | Switch moment | Integration risk; CX alert |
-| Relationship | Alumni edge to a customer, investor edge, customer referral | Press, team pages, investor lists | Priority boost | n/a |
-| Seasonal | Private-dining page, holiday events push | Venue sites | Angle and timing | Journey suggestion |
+Signals and their starting weights come from working backwards from Loyalist's customers
+(§3a). Counts are k of n customers whose public timeline showed the event *before* their
+earliest Loyalist date. These are small, survivorship-biased samples, so they set **priors**
+for §6.5, and the loop (§6.11) updates them.
+
+| Tier | Signal | Evidence (k/n) | Source | At a prospect | At a customer |
+|---|---|---|---|---|---|
+| **1** | **One → several venues:** second unit, new venue, first venue in a new city, hotel/club outlet | NYC 5/9 dated (8/16 overall); non-NYC 6/10; new city 4/10 | SLA/state liquor filings, permits, CB notices, DOHMH not-yet-inspected, press | Primary trigger. Window −6 to +12 months around opening | Expansion |
+| **1** | **Fragmented stack across a group's venues** (different reservation systems per venue; POS/events tools not unified) | Stated need 5/9 NYC (e.g. COTE: Resy in NYC/Miami, SevenRooms in LV/Singapore) | Widget crawl across all venues of a resolved group | Trigger + angle ("one guest across properties") | Integration-risk check |
+| **1** | **Private-events push:** new event space, events manager hire, Tripleseat/Perfect Venue present, Q4 season | NYC 3/9 dated (+EMP's falling PDR revenue); non-NYC 3/10 | Venue sites (event pages/forms), job posts, press; calendar | Trigger + angle; outreach 10–12 weeks before holidays (Loyalist's own guidance) | Events Journey suggestion |
+| **1** | **Tripleseat + Resy at the same venue** | Product gap named in Loyalist content (Resy doesn't sync Tripleseat; Loyalist does) | Widget crawl | Strong angle | n/a |
+| **2** | Hotel or developer F&B partnership announced | non-NYC 4/10; partner press leads opening by ~3–6 months | Hotel/developer press | Early opening signal | Expansion |
+| **2** | Ops, guest-relations, events or marketing/CRM hire | NYC 2/9; non-NYC 1–2/10 | Job posts (incl. "Loyalist preferred"), press, team-page diffs | New owner of the problem | Champion change |
+| **2** | New GM | Loyalist published a new-GM guide (2026-11-10) | Press, team-page diffs, job posts | Trigger + angle | Champion risk |
+| **Relationship** | Alumni/founder network edge (EMP, USHG, MFG, Corner Store, Momofuku) | 4/16 NYC | Press, team pages | Priority multiplier; intro path | n/a |
+| **Fit, not trigger** | Michelin/JBF status, full-service reservations, 2–10 venues, wine/PDR program | Michelin/JBF 8/10 held, rarely *new* | Michelin/JBF lists, sites | Raises Fit | n/a |
+| **Demoted** | Reservation platform switch | **0/9 before purchase**; 1 switched *after* buying and kept Loyalist | Watch layer | Low prior; kept as a test | Integration risk; CX alert |
+| **Demoted** | Funding / ownership change; new award | 0/9 and 2/10 funding; awards weak | Form D, press | Low prior | n/a |
+| **Disqualify / low fit** | Quick-service or points-program stack (Punchh, Thanx, Incentivio, Olo); single location | Loyalist cedes these (compare pages); "too small" is a known objection | Site crawl | Disqualify QSR/points; single venue = low Fit, not excluded | n/a |
+
+**Meeting talking point.** Magic's GTM post lists "groups switching reservation or POS systems"
+as a scoring signal. Their own public customer timelines show the one-to-several-venues
+transition preceding purchase far more often, and no platform switch before purchase in the
+dated sample. Bring this as a hypothesis for their CRM data to confirm or reject.
 
 ### 6.3a Customer detection: the Loyalist embed fingerprint
 
 **Finding (research, 2026-11-16).** Loyalist customer websites carry Loyalist embeds:
 `api.eatloyalist.com/signup/form` (guest signup/waitlist forms) and `agent.eatloyalist.com`
-(agents). A plain fetch found them on 12 customer sites: Hawthorne & Wood, Bluebird, Próximo,
+(agents). There is also Schema.org `ReserveAction` markup with `"propertyID":"loyalist-venue-id"`
+plus links to `agent.eatloyalist.com/llms/<venue>.txt`, which say the venue is bookable via the
+"Loyalist agent booking network". These were found on about 10 Hogsalt venues, including 4 Charles
+and Au Cheval, and on Oriana. A second detector is NYC job posts listing "Loyalist preferred". A plain fetch found them on 12 customer sites: Hawthorne & Wood, Bluebird, Próximo,
 Fork, High Street, Los Félix, Krüs, Füm, Rabbit Ears, starr-restaurants.com and others. Grassfed's
 Rabbit Ears site is essentially a Loyalist waitlist form.
 
@@ -258,8 +314,14 @@ Rabbit Ears site is essentially a Loyalist waitlist form.
 - Fit an empirical filing-to-opening distribution, stratified by license class and borough. Use a
   Kaplan–Meier style curve; filings that haven't opened yet are censored.
 - For each live filing, output P(opens within t) and a recommended outreach window. Default
-  outreach window: 30–120 days before the estimated opening through 90 days after. The loop
-  refines this.
+  outreach window: **6 months before the estimated opening through 12 months after**, peaking
+  pre-opening when the group wants a guest list ready for opening day. This is the purchase range
+  seen in customer timelines (§3a). The loop refines it.
+- **Historical data caveat (checked 2026-11-16):** the SLA *pending* dataset only holds current
+  applications. Licensed records leave it. The active (`9s3h-dpkz`) and inactive (`6dg3-2z7i`)
+  datasets keep `original_issue_date` but not the application date. So the historical curve
+  measures license issue → first DOHMH inspection (a shorter lead). True application-stage lead
+  time is measured going forward by snapshotting the pending dataset daily from day one.
 - For people and platform signals, a window decays from the observation date. Half-lives start as
   priors and are updated by the loop.
 
