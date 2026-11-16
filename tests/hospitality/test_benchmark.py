@@ -13,9 +13,9 @@ from scripts.hospitality.benchmark.baseline import (
     match_items,
     run_baseline,
 )
-from scripts.hospitality.benchmark.compare import compare
+from scripts.hospitality.benchmark.compare import FAIRNESS_NOTE, compare
 from scripts.hospitality.budget import BudgetExceeded, CallBudget
-from scripts.hospitality.models import BaselineItem, BaselineRun, BenchmarkResult
+from scripts.hospitality.models import BaselineItem, BaselineRun, BenchmarkResult, Contribution
 from tests.hospitality.factories import make_scored, make_venue
 
 
@@ -52,6 +52,25 @@ def fake_client(responses: list | None = None, items: tuple[BaselineItem, ...] =
 # --- compare -------------------------------------------------------------------------------
 
 
+def acct(gid: str, *venue_ids: str, zero: tuple[str, ...] = ()):
+    """A scored group whose counted opening signals sit on `venue_ids` (and zero on `zero`)."""
+    contribs = tuple(
+        Contribution(
+            signal_id=f"s:{v}",
+            signal_type="license_pending",
+            precision=0.3,
+            weight=1.0,
+            contribution=0.3 if v in venue_ids else 0.0,
+        )
+        for v in (*venue_ids, *zero)
+    )
+    return make_scored(gid, contributions=contribs)
+
+
+def venue_of(*accounts) -> dict[str, str]:
+    return {c.signal_id: c.signal_id[2:] for a in accounts for c in a.contributions}
+
+
 def test_compare_counts_hits_dupes_and_unmatched() -> None:
     truth = [make_venue("v:1", name="Oriana"), make_venue("v:2", name="Massara")]
     universe = truth + [make_venue("v:3", name="Other")]
@@ -59,11 +78,11 @@ def test_compare_counts_hits_dupes_and_unmatched() -> None:
         BaselineRun(
             run_index=0,
             searches_used=5,
-            items=(item("Oriana"), item("Oriana NYC"), item("Made Up Place")),
+            items=(item("Oriana"), item("ORIANA"), item("Made Up Place")),
         )
     ]
-    sf_top = [make_scored("g:v:1"), make_scored("g:v:2")]
-    r = compare(sf_top, {"g:v:1": ("v:1",), "g:v:2": ("v:2",)}, runs, truth, universe, k=50)
+    sf_top = [acct("g:v:1", "v:1"), acct("g:v:2", "v:2")]
+    r = compare(sf_top, venue_of(*sf_top), runs, truth, universe, k=50)
     assert r.sf_hits == 2 and r.claude_hits == (1,)
     assert r.claude_duplicates == (1,) and r.claude_unmatched == (1,)
     assert r.truth_total == 2
@@ -71,10 +90,12 @@ def test_compare_counts_hits_dupes_and_unmatched() -> None:
     assert r.sf_precision_at_k == pytest.approx(1.0)
 
 
-def test_compare_always_notes_hindsight_leak() -> None:
+def test_compare_notes_state_biases_both_ways_and_never_claim_conservative() -> None:
     r = compare([], {}, [], [], [], k=5)
-    assert any("Hindsight leak favors the Claude baseline" in n for n in r.notes)
-    assert any("a SignalForce win is conservative" in n for n in r.notes)
+    text = " ".join(r.notes).lower()
+    assert "conservative" not in text
+    assert "favor the claude baseline" in text and "favor signalforce" in text
+    assert FAIRNESS_NOTE in r.notes
 
 
 def test_hallucinated_venue_is_unmatched_deterministically() -> None:
@@ -100,33 +121,76 @@ def test_compare_run_jaccard_measures_variance() -> None:
     assert diff.claude_run_jaccard == 0.0
 
 
-def test_sf_precision_uses_top_k_only() -> None:
+def test_sf_precision_uses_top_k_venues_only() -> None:
     truth = [make_venue("v:1", name="Oriana")]
-    sf_top = [make_scored("g:a"), make_scored("g:b"), make_scored("g:c")]
-    by_group = {"g:a": ("v:x",), "g:b": ("v:1",), "g:c": ("v:1",)}
-    r = compare(sf_top, by_group, [], truth, truth, k=2)
+    sf_top = [acct("g:a", "v:x"), acct("g:b", "v:1"), acct("g:c", "v:1")]
+    r = compare(sf_top, venue_of(*sf_top), [], truth, truth, k=2)
     assert r.sf_hits == 1 and r.sf_precision_at_k == pytest.approx(0.5)
 
 
-# --- match_items ---------------------------------------------------------------------------
+# --- I7: the same unit and the same strict matcher on both sides ---------------------------------
 
 
-def test_match_items_requires_name_similarity() -> None:
-    universe = [make_venue("v:1", name="Oriana")]
-    out = match_items([item("Oriana"), item("Random Cafe")], universe)
-    assert out == {0: "v:1", 1: None}
+def test_signalforce_is_scored_per_venue_carrying_a_counted_signal_not_per_group() -> None:
+    """A group whose counted signal sits on v:2 does not hit because a sibling v:1 opened."""
+    truth = [make_venue("v:1", name="Oriana")]
+    sf_top = [acct("g:a", "v:2", zero=("v:1",))]
+    r = compare(sf_top, venue_of(*sf_top), [], truth, truth, k=50)
+    assert r.sf_hits == 0
 
 
-def test_match_items_location_zip_must_agree() -> None:
-    universe = [make_venue("v:1", name="Oriana", zip_code="10001")]
-    assert match_items([item("Oriana", "12 W 20th St, 10001")], universe) == {0: "v:1"}
-    assert match_items([item("Oriana", "5 Main St, 11201")], universe) == {0: None}
+def test_signalforce_list_is_cut_at_k_venues_like_claude() -> None:
+    truth = [make_venue(f"v:{i}", name=f"Venue {i}") for i in range(4)]
+    sf_top = [acct("g:a", "v:0", "v:1", "v:2"), acct("g:b", "v:3")]
+    r = compare(sf_top, venue_of(*sf_top), [], truth, truth, k=2)
+    assert r.sf_hits == 2 and r.sf_precision_at_k == pytest.approx(1.0)  # 2 venues, not 2 groups
 
 
-def test_match_items_location_borough_must_agree() -> None:
-    universe = [make_venue("v:1", name="Oriana", zip_code="11201")]
-    assert match_items([item("Oriana", "Brooklyn")], universe) == {0: "v:1"}
-    assert match_items([item("Oriana", "Manhattan")], universe) == {0: None}
+def test_one_word_claude_item_never_matches_a_longer_name_by_token_subset() -> None:
+    universe = [make_venue("v:1", name="LOLA TAQUERIA")]
+    assert match_items([item("Lola")], universe) == {0: frozenset()}
+
+
+def test_claude_hit_counts_when_any_tied_candidate_is_a_truth_venue() -> None:
+    old = make_venue("v:0", name="ORIANA")  # an older namesake
+    new = make_venue("v:5", name="ORIANA")
+    r = compare([], {}, [run_of(item("Oriana"))], [new], [old, new], k=10)
+    assert r.claude_hits == (1,) and r.claude_duplicates == (0,)
+
+
+def test_benchmark_forgets_dohmh_records_created_after_the_cutoff(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """As of the cutoff the venue had no DOHMH record (first inspected later), so its 200-day
+    old license was an unmatched license past the match-miss cap: live scoring would have
+    suppressed it then, and the replay must too."""
+    from scripts.hospitality.models import Group
+    from scripts.hospitality.store import DocStore
+    from tests.hospitality.factories import make_license
+
+    store = DocStore(f"sqlite:///{tmp_path}/b.db")
+    monkeypatch.setattr(cli, "DocStore", lambda: store)
+    monkeypatch.setattr(cli, "Anthropic", MagicMock)
+    lic = make_license(
+        "a1", source="sla_active", received_date=None, original_issue_date=date(2026, 3, 5)
+    )
+    venue = make_venue(
+        "v:1",
+        name="Zephyr Hall",
+        license_ids=("a1",),
+        group_id="g:v:1",
+        camis="9",
+        license_description="Restaurant",
+        first_inspection_date=date(2026, 10, 20),  # after the cutoff 2026-09-21
+    )
+    group = Group(group_id="g:v:1", name="Zephyr Hall", venue_ids=("v:1",), resolution="singleton")
+    store.save("venues", [venue], key=lambda v: v.venue_id)
+    store.save("groups", [group], key=lambda g: g.group_id)
+    store.save("licenses", [lic], key=lambda r: r.record_id)
+    monkeypatch.setattr(cli, "run_baseline", lambda *a, **k: [run_of(item("Zephyr Hall"))])
+    result = cli.benchmark(8, today=date(2026, 11, 16))
+    assert result.truth_total == 1 and result.claude_hits == (1,)
+    assert result.sf_hits == 0
 
 
 # --- run_baseline --------------------------------------------------------------------------

@@ -8,12 +8,11 @@ from typing import Any
 
 from anthropic import Anthropic
 from pydantic import BaseModel, ConfigDict
-from rapidfuzz import fuzz, process
 
 from scripts.hospitality import llm
 from scripts.hospitality.config import load_config
+from scripts.hospitality.labels import matches_seed_name
 from scripts.hospitality.models import BaselineItem, BaselineRun, Venue
-from scripts.hospitality.resolve.normalize import normalize_name
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +24,6 @@ BASELINE_PROMPT = (
     "timing. Use web search."
 )
 WEB_SEARCH_TOOL_TYPE = "web_search_20260209"
-MATCH_THRESHOLD = 0.85
 
 _STRUCTURE_SYSTEM = (
     "Extract the venues listed in the text into structured items. Copy only venues that the "
@@ -134,26 +132,23 @@ def _location_agrees(location: str, venue: Venue) -> bool:
     return True
 
 
-def match_items(items: Sequence[BaselineItem], universe: Sequence[Venue]) -> dict[int, str | None]:
-    """Item index -> venue_id of the best name match (>= 0.85, location agreeing), else None.
+def match_items(
+    items: Sequence[BaselineItem], universe: Sequence[Venue]
+) -> dict[int, frozenset[str]]:
+    """Item index -> every venue_id the item strictly names (location agreeing), else empty.
 
-    Deterministic: this is what catches venues the model invented.
+    Deterministic: this is what catches venues the model invented. The match is the same strict
+    near-exact name rule as the customer gate (`matches_seed_name`: a token subset such as
+    "Lola" for "LOLA TAQUERIA" never matches; a "/" part of a trade name does). All tied
+    candidates are returned, so a namesake with an older id cannot hide a true hit.
     """
-    names = [normalize_name(v.name) for v in universe]
-    out: dict[int, str | None] = {}
+    out: dict[int, frozenset[str]] = {}
     for i, it in enumerate(items):
-        query = normalize_name(it.name)
-        found: list[tuple[float, str]] = []
-        if query:
-            for _, score, idx in process.extract(
-                query,
-                names,
-                scorer=fuzz.token_set_ratio,
-                score_cutoff=MATCH_THRESHOLD * 100,
-                limit=None,
-            ):
-                venue = universe[idx]
-                if not it.location or _location_agrees(it.location, venue):
-                    found.append((score, venue.venue_id))
-        out[i] = min(found, key=lambda f: (-f[0], f[1]))[1] if found else None
+        out[i] = frozenset(
+            v.venue_id
+            for v in universe
+            if it.name.strip()
+            and matches_seed_name(it.name, v.name)
+            and (not it.location or _location_agrees(it.location, v))
+        )
     return out

@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
 
-from scripts.hospitality.benchmark.compare import HINDSIGHT_NOTE
+from scripts.hospitality.benchmark.compare import FAIRNESS_NOTE
 from scripts.hospitality.config import HospitalityConfig
 from scripts.hospitality.events.rank import (
     ATTEND_PRIOR,
@@ -221,7 +221,7 @@ def _recall(store: DocStore, cfg: HospitalityConfig, today: date) -> list[str]:
 
 
 def _head_to_head(results: Sequence[BenchmarkResult]) -> list[str]:
-    note = [f"Fairness note: {HINDSIGHT_NOTE}", ""]
+    note = [f"Fairness note: {FAIRNESS_NOTE}", ""]
     if not results:
         return [
             *_not_run(
@@ -233,7 +233,10 @@ def _head_to_head(results: Sequence[BenchmarkResult]) -> list[str]:
         ]
     r = results[0]
     lines = [
-        f"Truth set: n={r.truth_total} venues first inspected after the cutoff; k={r.k}.",
+        (
+            f"Truth set: n={r.truth_total} license-matched new openings first inspected after "
+            f"the cutoff; each method is scored on at most k={r.k} distinct venues."
+        ),
         "",
         "| Method | Hits | Precision@k | Duplicates | Non-venues |",
         "|---|---|---|---|---|",
@@ -249,7 +252,7 @@ def _head_to_head(results: Sequence[BenchmarkResult]) -> list[str]:
         f"Claude run-to-run Jaccard: {r.claude_run_jaccard:.3f} ({len(r.claude_hits)} runs).",
         "",
     ]
-    lines += [f"Note: {n}" for n in r.notes if n != HINDSIGHT_NOTE]
+    lines += [f"Note: {n}" for n in r.notes if n != FAIRNESS_NOTE]
     return [*lines, *note]
 
 
@@ -586,7 +589,10 @@ def _limitations(cfg: HospitalityConfig, estimates: Sequence[WindowEstimate]) ->
             "inspections; both denominators are in section 3) and is not a lift claim."
         ),
         "- Case replay and fit AUC are indicative only (tiny samples).",
-        "- A head-to-head win is conservative: the Claude baseline has hindsight.",
+        (
+            "- The head-to-head has residual biases in both directions (listed in section 4), "
+            "so its result is indicative and a lower bound for neither side."
+        ),
         "- The opening-timing median comes from a censoring-corrected curve.",
         "- Public data only; no Magic data, no real outbound email (drafts only).",
         "",

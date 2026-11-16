@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from scripts.hospitality import cli
-from scripts.hospitality.benchmark.compare import HINDSIGHT_NOTE
+from scripts.hospitality.benchmark.compare import FAIRNESS_NOTE
 from scripts.hospitality.models import (
     BenchmarkResult,
     Contact,
@@ -150,7 +150,7 @@ def full_store(tmp_path: Path) -> DocStore:
                 claude_unmatched=(5, 4),
                 claude_run_jaccard=0.3,
                 truth_total=40,
-                notes=(HINDSIGHT_NOTE, "scope note"),
+                notes=(FAIRNESS_NOTE, "scope note"),
             )
         ],
         key=lambda r: "b",
@@ -260,7 +260,7 @@ def test_all_twelve_headers_in_order_and_hindsight_note(tmp_path, events_yaml) -
     text = build(full_store(tmp_path), tmp_path, events_yaml)
     found = re.findall(r"^## (\d+)\. (.+)$", text, flags=re.MULTILINE)
     assert [(int(n), t) for n, t in found] == list(enumerate(HEADERS, 1))
-    assert HINDSIGHT_NOTE in sections(text)[4]
+    assert FAIRNESS_NOTE in sections(text)[4]
     assert "n=40" in sections(text)[4]  # truth openings carried with the numbers
 
 

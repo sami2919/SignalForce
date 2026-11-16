@@ -1086,9 +1086,12 @@ P0_STEPS: tuple[str, ...] = (
 def benchmark(cutoff_weeks: int = 8, today: date | None = None) -> BenchmarkResult:
     """Head-to-head: SignalForce ranking as of the cutoff vs plain Claude + web search.
 
-    The SignalForce side uses only data dated on or before the cutoff (licenses received or
-    issued, signals observed, inspections, window estimates all as of `cutoff`); the truth set
-    is venues first inspected after the cutoff. Nothing here overwrites the live scores.
+    The SignalForce side uses only data recorded on or before the cutoff (licenses received or
+    issued, signals observed, inspections and the DOHMH records themselves, window estimates
+    all as of `cutoff`); the truth set is venues first inspected after the cutoff. Both sides
+    are scored on at most k distinct venues (`compare`). Residual biases (grouping and matching
+    built with today's data, Claude's hindsight) are stated in `FAIRNESS_NOTE`. Nothing here
+    overwrites the live scores.
     """
     cfg = load_config()
     today = today or date.today()
@@ -1100,13 +1103,17 @@ def benchmark(cutoff_weeks: int = 8, today: date | None = None) -> BenchmarkResu
     links = store.load("links", EntityLink)
     truth = ground_truth_openings(all_venues, cutoff + timedelta(days=1), today, cfg, all_licenses)
 
-    # As-of inputs: forget everything dated after the cutoff.
+    # As-of inputs: forget everything recorded after the cutoff. A venue first inspected later
+    # had no DOHMH record yet, so it loses its camis as well as its inspection: as of the cutoff
+    # it was a license-only site, and the match-miss rule treats it as one (I7a).
     venues = [
-        v.model_copy(update={"first_inspection_date": None})
+        v.model_copy(update={"first_inspection_date": None, "camis": None})
         if v.first_inspection_date is not None and v.first_inspection_date > cutoff
         else v
         for v in all_venues
     ]
+    later = {v.camis for v in all_venues if v.camis} - {v.camis for v in venues if v.camis}
+    links = [link for link in links if link.right_id not in later]
     licenses = [
         lic
         for lic in all_licenses
@@ -1123,14 +1130,14 @@ def benchmark(cutoff_weeks: int = 8, today: date | None = None) -> BenchmarkResu
     observations = [
         o for o in store.load("stack_observations", StackObservation) if o.observed_at <= now
     ]
-    lic_signals = license_signals(
+    lic_signals = _replay_signals(  # historical: a now-lapsed license was live at the cutoff
         venues,
         licenses,
         first_seen,
         cutoff,
+        cfg,
         linked=linked_to_inspected(venues, links),
         max_unmatched_age_days=cap,
-        historical=True,  # as-of replay: a now-lapsed license was live at the cutoff
     )
     stack = [s for s in store.load("signals", Signal) if s.observed_at <= now]
     customer_ids = current_customers(
@@ -1150,14 +1157,15 @@ def benchmark(cutoff_weeks: int = 8, today: date | None = None) -> BenchmarkResu
             signals=[*lic_signals, *stack],
         )
     ]
-    top = rank_prospects(accounts)[:BENCHMARK_K]
-    by_group: dict[str, tuple[str, ...]] = {
-        gid: tuple(vid for vid in g.venue_ids) for gid, g in groups.items()
+    ranked = rank_prospects(accounts)
+    venue_ids = {v.venue_id for v in venues}
+    venue_of_signal = {
+        s.signal_id: s.entity_id for s in [*lic_signals, *stack] if s.entity_id in venue_ids
     }
     runs = run_baseline(
         Anthropic(), cutoff, runs=BENCHMARK_RUNS, max_searches=BENCHMARK_MAX_SEARCHES
     )
-    result = compare(top, by_group, runs, truth, all_venues, k=BENCHMARK_K)
+    result = compare(ranked, venue_of_signal, runs, truth, all_venues, k=BENCHMARK_K)
     store.clear("benchmark")
     store.save("benchmark", [result], key=lambda r: f"cutoff:{cutoff.isoformat()}")
     return result
