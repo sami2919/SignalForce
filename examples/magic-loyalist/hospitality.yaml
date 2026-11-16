@@ -31,3 +31,5 @@ models: {extract: claude-opus-5-5, draft: claude-opus-5-5, judge: claude-opus-5-
 match_max_distance_m: 40.0
 match_auto_threshold: 0.90
 match_link_threshold: 0.60
+# Groups with a Michelin / James Beard accolade, by group_id or name (manual for the demo).
+accolades: []

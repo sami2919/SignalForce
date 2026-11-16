@@ -19,11 +19,14 @@ from scripts.hospitality.labels import (
 )
 from scripts.hospitality.models import (
     CurveRecord,
+    CustomerLabel,
     EntityLink,
     Group,
     InspectionVenue,
     LicenseRecord,
     LicenseSource,
+    ScoredAccount,
+    Signal,
     StackObservation,
     Venue,
     WindowEstimate,
@@ -31,13 +34,15 @@ from scripts.hospitality.models import (
 from scripts.hospitality.resolve.groups import form_groups
 from scripts.hospitality.resolve.match import match_licenses
 from scripts.hospitality.resolve.venues import build_venues
+from scripts.hospitality.scoring import rank_prospects, score_group
+from scripts.hospitality.signals import license_signals
 from scripts.hospitality.sources.dohmh import (
     fetch_first_inspections,
     fetch_never_inspected,
     merge_inspection_venues,
 )
 from scripts.hospitality.sources.sla import fetch_licenses
-from scripts.hospitality.sources.snapshot import take_snapshot
+from scripts.hospitality.sources.snapshot import first_seen_pending, take_snapshot
 from scripts.hospitality.sources.socrata import SocrataClient
 from scripts.hospitality.stack.crawl import crawl_stacks
 from scripts.hospitality.stack.signals import (
@@ -48,7 +53,12 @@ from scripts.hospitality.stack.signals import (
 from scripts.hospitality.stack.websites import PlacesClient, attach_websites
 from scripts.hospitality.store import DocStore
 from scripts.hospitality.window.estimate import estimate_all
-from scripts.hospitality.window.survival import build_curves, opening_durations, quantile_time
+from scripts.hospitality.window.survival import (
+    build_curves,
+    linked_to_inspected,
+    opening_durations,
+    quantile_time,
+)
 
 SEED_PATH = Path(__file__).resolve().parents[2] / "examples/magic-loyalist/customers_seed.yaml"
 SLA_SOURCES: tuple[LicenseSource, ...] = ("sla_pending", "sla_active", "sla_inactive")
@@ -237,6 +247,80 @@ def labels() -> dict[str, int]:
     return {"public_list": counts["public_list"], "embed": counts["embed"]}
 
 
+def score(now: datetime | None = None) -> dict[str, object]:
+    """Build license signals, score every group with signals; save `scores`; rank prospects."""
+    cfg = load_config()
+    now = now or datetime.now(UTC)
+    store = DocStore()
+    venues = store.load("venues", Venue)
+    groups = {g.group_id: g for g in store.load("groups", Group)}
+    licenses = store.load("licenses", LicenseRecord)
+    links = store.load("links", EntityLink)
+    estimates = {e.venue_id: e for e in store.load("estimates", WindowEstimate)}
+    observations = store.load("stack_observations", StackObservation)
+    lic_signals = license_signals(
+        venues,
+        licenses,
+        first_seen_pending(store),
+        now.date(),
+        linked=linked_to_inspected(venues, links),
+        max_unmatched_age_days=cfg.window_unmatched_censor_max_age_days,
+    )
+    store.clear("license_signals")  # recomputed in full each run, so stale ones never linger
+    store.save("license_signals", lic_signals, key=lambda s: s.signal_id)  # type: ignore[attr-defined]
+    signals: list[Signal] = [*lic_signals, *store.load("signals", Signal)]
+
+    labels = store.load("customer_labels", CustomerLabel) or load_seed_labels(SEED_PATH)
+    customers = customer_groups(labels, venues, list(groups.values()))
+    disqualified = disqualified_venues(observations)
+
+    # Index once; scoring 47k groups must not rescan all venues/signals per group.
+    group_of = {v.venue_id: v.group_id for v in venues}
+    venues_by_group: dict[str, list[Venue]] = {}
+    for v in venues:
+        venues_by_group.setdefault(v.group_id, []).append(v)
+    signals_by_group: dict[str, list[Signal]] = {}
+    for sig in signals:
+        gid = group_of.get(sig.entity_id, sig.entity_id)
+        signals_by_group.setdefault(gid, []).append(sig)
+    obs_by_group: dict[str, list[StackObservation]] = {}
+    for o in observations:
+        if o.venue_id in group_of:
+            obs_by_group.setdefault(group_of[o.venue_id], []).append(o)
+
+    accounts: list[ScoredAccount] = []
+    for gid, sigs in signals_by_group.items():
+        group = groups.get(gid)
+        if group is None:
+            continue
+        members = venues_by_group.get(gid, [])
+        reasons = sorted(r for v in members if (r := disqualified.get(v.venue_id)))
+        accounts.append(
+            score_group(
+                group,
+                sigs,
+                estimates,
+                members,
+                obs_by_group.get(gid, []),
+                cfg,
+                now,
+                is_customer=gid in customers,
+                disqualified_reason=reasons[0] if reasons else None,
+            )
+        )
+    store.clear("scores")
+    store.save("scores", accounts, key=lambda a: a.group_id)  # type: ignore[attr-defined]
+    ranked = rank_prospects(accounts)
+    return {
+        "license_signals": dict(Counter(s.signal_type for s in lic_signals)),
+        "scored_groups": len(accounts),
+        "customers": sum(a.is_customer for a in accounts),
+        "disqualified": sum(a.disqualified_reason is not None for a in accounts),
+        "prospects": len(ranked),
+        "top": [(a, groups[a.group_id].name) for a in ranked[:25]],
+    }
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="scripts.hospitality.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -249,6 +333,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     p_web.add_argument("--limit", type=int, default=400, help="Max venues to look up")
     sub.add_parser("crawl", help="Crawl venue websites; detect stacks and emit stack signals")
     sub.add_parser("labels", help="Label customer groups (seed list + Loyalist embeds)")
+    sub.add_parser("score", help="Score groups (noisy-OR) and print the top 25 prospects")
     args = parser.parse_args(argv)
     if args.command == "ingest-sla":
         for source, n in ingest_sla().items():
@@ -279,6 +364,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     elif args.command == "labels":
         for name, n in labels().items():
             print(f"{name}: {n}")
+    elif args.command == "score":
+        out = score()
+        for name in ("license_signals", "scored_groups", "customers", "disqualified", "prospects"):
+            print(f"{name}: {out[name]}")
+        for rank, (acct, name) in enumerate(out["top"], 1):  # type: ignore[arg-type,misc]
+            top3 = sorted(acct.contributions, key=lambda c: -c.contribution)[:3]
+            why = ", ".join(f"{c.signal_type}={c.contribution:.2f}" for c in top3)
+            print(
+                f"{rank:>2}. {name[:40]:<40} priority={acct.priority:.3f} "
+                f"p={acct.p_window:.2f} fit={acct.fit:.2f} [{why}]"
+            )
     return 0
 
 

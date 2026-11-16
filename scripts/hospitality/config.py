@@ -40,6 +40,8 @@ class HospitalityConfig(BaseModel):
     match_max_distance_m: float
     match_auto_threshold: float
     match_link_threshold: float
+    # Manually flagged accolade groups (Michelin / JBF): group ids or names. Empty for the demo.
+    accolades: tuple[str, ...] = ()
 
 
 def load_config(path: Path = DEFAULT_CONFIG_PATH) -> HospitalityConfig:

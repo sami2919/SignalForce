@@ -66,3 +66,72 @@ def make_venue(venue_id: str = "v:1", **overrides: object):
     }
     base.update(overrides)
     return Venue(**base)  # type: ignore[arg-type]
+
+
+def make_estimate(venue_id: str = "v:1", **overrides: object):
+    from datetime import date as _date
+
+    from scripts.hospitality.models import WindowEstimate
+
+    base: dict[str, object] = {
+        "venue_id": venue_id,
+        "estimated_open": _date(2027, 2, 1),
+        "p_open_90d": 0.4,
+        "p_open_180d": 0.7,
+        "basis": "test",
+    }
+    base.update(overrides)
+    return WindowEstimate(**base)  # type: ignore[arg-type]
+
+
+def make_signal(signal_type: str = "license_pending", entity_id: str = "v:1", **overrides: object):
+    from datetime import UTC, datetime
+
+    from scripts.hospitality.models import Signal
+
+    base: dict[str, object] = {
+        "signal_id": f"{signal_type}:{entity_id}",
+        "signal_type": signal_type,
+        "entity_id": entity_id,
+        "observed_at": datetime(2026, 11, 16, tzinfo=UTC),
+        "occurred_at": None,
+        "source": "test",
+        "evidence_ref": "ref",
+        "detail": "",
+    }
+    base.update(overrides)
+    return Signal(**base)  # type: ignore[arg-type]
+
+
+def make_scored(group_id: str = "g:1", priority: float = 0.5, **overrides: object):
+    from scripts.hospitality.models import ScoredAccount
+
+    base: dict[str, object] = {
+        "group_id": group_id,
+        "p_window": min(priority, 1.0),
+        "fit": 0.5,
+        "relationship": 1.0,
+        "priority": priority,
+        "contributions": (),
+        "disqualified_reason": None,
+        "is_customer": False,
+    }
+    base.update(overrides)
+    return ScoredAccount(**base)  # type: ignore[arg-type]
+
+
+def make_observation(venue_id: str = "v:1", platforms: tuple[str, ...] = (), **overrides: object):
+    from datetime import UTC, datetime
+
+    from scripts.hospitality.models import StackObservation
+
+    base: dict[str, object] = {
+        "venue_id": venue_id,
+        "url": "https://example.com",
+        "observed_at": datetime(2026, 11, 1, tzinfo=UTC),
+        "platforms": platforms,
+        "evidence": tuple("e" for _ in platforms),
+        "fetched_via": "fetcher",
+    }
+    base.update(overrides)
+    return StackObservation(**base)  # type: ignore[arg-type]
