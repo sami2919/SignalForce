@@ -354,7 +354,25 @@ def test_tied_ranks_are_shown_as_a_shared_rank_with_the_tie_break(tmp_path, even
     assert "#### 2 (tied 2–3). Quill Room" in s7
     assert "#### 3 (tied 2–3). Orbit Catering" in s7
     assert "#### 1. Zephyr Hall" in s7  # a unique score keeps a plain rank
-    assert "opening 2026-11-01 (15 days from today)" in s7
+    # A past opening must not read as a future one (report quality pass).
+    assert "opening 2026-11-01 (15 days ago)" in s7
+    assert "days from today" not in s7
+
+
+def test_tie_break_says_in_n_days_for_a_future_opening(tmp_path, events_yaml) -> None:
+    store = full_store(tmp_path)
+    future = make_scored("g:b", 0.1, opening_date=date(2026, 12, 6), opening_gap_days=20)
+    store.save("scores", [future], key=lambda a: a.group_id)
+    s7 = sections(build(store, tmp_path, events_yaml))[7]
+    assert "opening 2026-12-06 (in 20 days)" in s7
+
+
+def test_group_caveat_names_only_the_grouping_rules_that_exist(tmp_path, events_yaml) -> None:
+    """Report quality pass: no grouping step reads website location pages."""
+    s1 = sections(build(full_store(tmp_path), tmp_path, events_yaml))[1]
+    assert "location pages" not in s1
+    assert "shared legal name, shared website domain" in s1
+    assert "press and job-board" in s1
 
 
 def test_a_tie_that_runs_past_the_top_n_says_so(tmp_path, events_yaml, monkeypatch) -> None:

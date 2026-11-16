@@ -115,8 +115,9 @@ def _universe(
         + (", ".join(f"{k}: {v}" for k, v in sorted(by_resolution.items())) or "none"),
         "",
         (
-            "Caveat: groups are formed only from shared legal name, shared domain and website "
-            "location pages, so the multi-venue group count is a lower bound; operators with "
+            "Caveat: groups are formed only from a shared legal name, shared website domain, and "
+            "press and job-board evidence that names a venue's group, so the multi-venue group "
+            "count is a lower bound; operators with "
             "differently named entities per venue appear as separate groups. The possibly-same links "
             "are unresolved ambiguity, not counted as merges."
         ),
@@ -391,9 +392,11 @@ def _stack(
     return [*lines, *_customer_section(customers, names)]
 
 
-def _tie_break_line(acct: ScoredAccount) -> str:
+def _tie_break_line(acct: ScoredAccount, today: date) -> str:
     if acct.opening_date is not None:
-        opening = f"opening {acct.opening_date} ({acct.opening_gap_days} days from today)"
+        days = (acct.opening_date - today).days
+        when = f"in {days} days" if days > 0 else f"{-days} days ago" if days < 0 else "today"
+        opening = f"opening {acct.opening_date} ({when})"
     else:
         opening = "no dated opening"
     newest = acct.latest_signal_on or "none"
@@ -405,6 +408,7 @@ def _trace(
     evidence: dict[str, Signal],
     names: dict[str, str],
     rank: int,
+    today: date,
     tie: tuple[int, int] | None = None,
 ) -> list[str]:
     label = f"{rank} (tied {tie[0]}–{tie[1]})" if tie else f"{rank}"
@@ -416,7 +420,7 @@ def _trace(
             f"{acct.fit:.2f}) x relationship {acct.relationship:.2f}"
         ),
         "",
-        _tie_break_line(acct),
+        _tie_break_line(acct, today),
         "",
         "| Signal | Precision | Weight | Contribution | Note | Evidence |",
         "|---|---|---|---|---|---|",
@@ -432,7 +436,10 @@ def _trace(
 
 
 def _prospects(
-    accounts: Sequence[ScoredAccount], signals: Sequence[Signal], names: dict[str, str]
+    accounts: Sequence[ScoredAccount],
+    signals: Sequence[Signal],
+    names: dict[str, str],
+    today: date,
 ) -> list[str]:
     if not accounts:
         return _not_run("prospect ranking", "No scores are stored (run the score command).")
@@ -453,8 +460,9 @@ def _prospects(
         (
             f"The top {len(shown)} hold {distinct} distinct priorities. Ranks that share a "
             "priority are tied: the score cannot separate them, and they are listed by a stated "
-            "tie-break (the opening nearest today, then the newest contributing signal, then "
-            "group id), which is an ordering rule, not evidence that one is the better prospect."
+            "tie-break (the estimated opening nearest the scoring date, then the newest "
+            "contributing signal, then group id), which is an ordering rule, not evidence that "
+            "one is the better prospect."
         ),
         "",
     ]
@@ -471,7 +479,7 @@ def _prospects(
                 f"**Ranks {tie[0]}–{tie[1]} share priority {acct.priority:.3f} (tied){below}.**",
                 "",
             ]
-        lines += _trace(acct, evidence, names, i, tie)
+        lines += _trace(acct, evidence, names, i, today, tie)
     disq = sorted(
         (a for a in accounts if a.disqualified_reason and not a.is_customer),
         key=lambda a: (a.disqualified_reason or "", names.get(a.group_id, a.group_id)),
@@ -682,7 +690,7 @@ def build_report(
         _head_to_head(store.load("benchmark", BenchmarkResult)),
         _backtests(store),
         _stack(store.load("stack_observations", StackObservation), customers, names),
-        _prospects(accounts, signals, names),
+        _prospects(accounts, signals, names, today),
         _contacts(store.load("contacts", Contact), accounts),
         _drafts(store.load("drafts", Draft), store.load("judgements", Judgement), customers, names),
         _events(store, events_path, {a.group_id: a for a in accounts}, venues, customers, cfg),
