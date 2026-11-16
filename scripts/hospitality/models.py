@@ -164,3 +164,8 @@ class Contact(_Frozen):
     phone: str | None
     source: str
     evidence_ref: str
+
+
+class PendingSnapshot(_Frozen):
+    taken_on: date
+    record_id: str

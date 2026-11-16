@@ -4,10 +4,12 @@ import argparse
 import os
 import sys
 from collections.abc import Sequence
+from datetime import date
 
 from scripts.hospitality.config import load_config
 from scripts.hospitality.models import LicenseSource
 from scripts.hospitality.sources.sla import fetch_licenses
+from scripts.hospitality.sources.snapshot import take_snapshot
 from scripts.hospitality.sources.socrata import SocrataClient
 from scripts.hospitality.store import DocStore
 
@@ -27,14 +29,25 @@ def ingest_sla() -> dict[str, int]:
     return counts
 
 
+def snapshot_pending() -> int:
+    """Fetch current SLA pending applications and record today's snapshot."""
+    cfg = load_config()
+    client = SocrataClient("data.ny.gov", app_token=os.environ.get("SOCRATA_APP_TOKEN") or None)
+    records = fetch_licenses(client, cfg, "sla_pending")
+    return take_snapshot(DocStore(), records, date.today())
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="scripts.hospitality.cli")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("ingest-sla", help="Ingest NY SLA licenses for NYC via Socrata")
+    sub.add_parser("snapshot-pending", help="Record today's SLA pending applications")
     args = parser.parse_args(argv)
     if args.command == "ingest-sla":
         for source, n in ingest_sla().items():
             print(f"{source}: {n}")
+    elif args.command == "snapshot-pending":
+        print(f"sla_pending snapshot rows: {snapshot_pending()}")
     return 0
 
 
