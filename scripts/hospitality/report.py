@@ -34,6 +34,7 @@ from scripts.hospitality.models import (
     Signal,
     StackObservation,
     Venue,
+    WebsiteLookup,
     WindowEstimate,
 )
 from scripts.hospitality.scoring import TIE_DECIMALS, rank_prospects, tie_blocks
@@ -352,17 +353,37 @@ def _customer_section(customers: dict[str, CustomerLabel], names: dict[str, str]
     return [*lines, ""]
 
 
+def _website_coverage(lookups: Sequence[WebsiteLookup]) -> list[str]:
+    """One line on how the websites behind the stack figures were found and checked."""
+    if not lookups:
+        return []
+    hits = [w for w in lookups if w.website]
+    how = Counter(w.verified_by or w.source for w in hits)
+    misses = Counter(w.miss_reason or "unspecified" for w in lookups if not w.website)
+    parts = ", ".join(f"{n} {k}" for k, n in how.most_common()) or "none"
+    why = ", ".join(f"{n} {k}" for k, n in misses.most_common()) or "none"
+    return [
+        (
+            f"Website lookups: {len(lookups)} (n={len(lookups)}); found {len(hits)} ({parts}); "
+            f"no site: {why}. Search finds count only when the page shows the venue's own phone "
+            "or address."
+        ),
+        "",
+    ]
+
+
 def _stack(
     observations: Sequence[StackObservation],
     customers: dict[str, CustomerLabel],
     names: dict[str, str],
+    lookups: Sequence[WebsiteLookup] = (),
 ) -> list[str]:
     lines: list[str]
     if not observations:
         lines = _not_run(
             "stack distribution and Loyalist penetration",
-            "No stack crawl is stored (run websites and crawl; they need GOOGLE_PLACES_API_KEY "
-            "and FIRECRAWL_API_KEY).",
+            "No stack crawl is stored (run websites and crawl; they need EXA_API_KEY or "
+            "FIRECRAWL_API_KEY, and crawl needs FIRECRAWL_API_KEY).",
         )
     else:
         latest: dict[str, StackObservation] = {}
@@ -389,7 +410,7 @@ def _stack(
             ),
             "",
         ]
-    return [*lines, *_customer_section(customers, names)]
+    return [*lines, *_website_coverage(lookups), *_customer_section(customers, names)]
 
 
 def _tie_break_line(acct: ScoredAccount, today: date) -> str:
@@ -689,7 +710,12 @@ def build_report(
         _recall(store, cfg, today),
         _head_to_head(store.load("benchmark", BenchmarkResult)),
         _backtests(store),
-        _stack(store.load("stack_observations", StackObservation), customers, names),
+        _stack(
+            store.load("stack_observations", StackObservation),
+            customers,
+            names,
+            store.load("websites", WebsiteLookup),
+        ),
         _prospects(accounts, signals, names, today),
         _contacts(store.load("contacts", Contact), accounts),
         _drafts(store.load("drafts", Draft), store.load("judgements", Judgement), customers, names),

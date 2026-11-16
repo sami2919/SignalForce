@@ -309,15 +309,17 @@ def test_websites_never_looks_up_a_known_website_again(
         return []  # a miss
 
     monkeypatch.setattr(cli.PlacesClient, "search", fake_search)
-    out = cli.websites(today=date(2026, 11, 16))
+    out = cli.websites(provider="places", today=date(2026, 11, 16))
     assert searched == ["Charlie 5 Elm St New York"]  # Bravo's known site was not re-bought
     assert out["lookups"] == 1
     # The miss is recorded too: a rerun within the retry window buys nothing.
     misses = {w.venue_id: w for w in store.load("websites", WebsiteLookup)}
     assert misses["v:lic:l3"].website is None
-    cli.websites(today=date(2026, 11, 20))
+    cli.websites(provider="places", today=date(2026, 11, 20))
     assert len(searched) == 1
-    cli.websites(today=date(2027, 1, 30))  # past website_miss_retry_days: retried once
+    cli.websites(
+        provider="places", today=date(2027, 1, 30)
+    )  # past website_miss_retry_days: retried once
     assert len(searched) == 2
 
 
@@ -357,7 +359,7 @@ def test_websites_regroups_on_a_shared_domain(
         return [places[text_query.split()[0]]]
 
     monkeypatch.setattr(cli.PlacesClient, "search", fake_search)
-    cli.websites(today=date(2026, 11, 16))
+    cli.websites(provider="places", today=date(2026, 11, 16))
     group_of = _group_of(store)
     assert group_of["v:lic:l2"] == group_of["v:lic:l3"]
     groups = {g.group_id: g for g in store.load("groups", Group)}
@@ -402,7 +404,7 @@ def test_pipeline_sequence_keeps_customers_out_and_state_intact(
         ]
 
     monkeypatch.setattr(cli.PlacesClient, "search", fake_search)
-    cli.websites(today=date(2026, 11, 16))
+    cli.websites(provider="places", today=date(2026, 11, 16))
     assert sorted(calls) == ["Bravo", "Charlie"]
 
     async def fake_crawl(venues, now, **_: object) -> list[StackObservation]:

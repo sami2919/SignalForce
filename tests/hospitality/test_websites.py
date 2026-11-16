@@ -102,7 +102,7 @@ def test_attach_websites_no_match_leaves_venue_and_stops_at_budget() -> None:
 def test_websites_command_fails_fast_without_key(monkeypatch, capsys) -> None:
     monkeypatch.delenv("GOOGLE_PLACES_API_KEY", raising=False)
     with pytest.raises(SystemExit) as exc:
-        cli.main(["websites"])
+        cli.main(["websites", "--provider", "places"])
     assert "GOOGLE_PLACES_API_KEY" in str(exc.value)
 
 
@@ -128,4 +128,4 @@ def test_websites_command_uses_the_configured_match_thresholds(monkeypatch, tmp_
         return [make_place(lat=40.71)]  # ~1.1 km away: rejected at the 75 m default
 
     monkeypatch.setattr(cli.PlacesClient, "search", far_place)
-    assert cli.websites()["websites_found"] == 1
+    assert cli.websites(provider="places")["websites_found"] == 1

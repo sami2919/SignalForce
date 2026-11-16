@@ -308,6 +308,13 @@ def test_run_p0_fails_fast_before_any_step_without_the_keys_it_needs(monkeypatch
     monkeypatch.delenv("FIRECRAWL_API_KEY", raising=False)
     with pytest.raises(SystemExit) as exc:
         cli.main(["run-p0"])
+    assert "FIRECRAWL_API_KEY" in str(exc.value)  # default provider: search, no Places key
+    assert calls == []
+    real = cli.load_config()
+    places = real.websites.model_copy(update={"provider": "places"})
+    monkeypatch.setattr(cli, "load_config", lambda: real.model_copy(update={"websites": places}))
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["run-p0"])
     assert "GOOGLE_PLACES_API_KEY" in str(exc.value) and "FIRECRAWL_API_KEY" in str(exc.value)
     assert calls == []
 

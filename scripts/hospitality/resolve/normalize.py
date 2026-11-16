@@ -54,9 +54,13 @@ def normalize_name(raw: str) -> str:
     return " ".join(tokens)
 
 
-def normalize_address(raw: str) -> str:
-    """Canonicalize a street address so spelling variants compare equal."""
-    text = _UNIT_TAIL.sub("", raw.lower())
+def normalize_address(raw: str, *, strip_unit: bool = True) -> str:
+    """Canonicalize a street address so spelling variants compare equal.
+
+    `strip_unit=False` keeps a trailing suite / floor (for running page text, where everything
+    after a "suite" is not a unit).
+    """
+    text = _UNIT_TAIL.sub("", raw.lower()) if strip_unit else raw.lower()
     tokens = re.sub(r"[^a-z0-9]+", " ", text).split()
     out: list[str] = []
     for token in tokens:

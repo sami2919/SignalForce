@@ -230,7 +230,7 @@ def test_websites_includes_seed_customer_venues(tmp_path, monkeypatch) -> None:
 
     monkeypatch.setattr(cli, "iter_website_lookups", fake_lookups)
     monkeypatch.setattr(cli, "PlacesClient", lambda key, budget: object())
-    out = cli.websites()
+    out = cli.websites(provider="places")
     assert looked_up == [["v:1"]] and out["prioritized"] == 1
 
 

@@ -91,6 +91,29 @@ shared_host_domains: [instagram.com, facebook.com, tiktok.com, twitter.com, x.co
   wixsite.com, squarespace.com, godaddysites.com, weebly.com, wordpress.com, blogspot.com,
   webflow.io, menufy.com, chownow.com, slicelife.com, grubhub.com, seamless.com, doordash.com,
   ubereats.com, bit.ly]
+# Website lookup. `search` = Exa primary, Firecrawl search fallback, then a page must show the
+# venue's own phone (DOHMH) or street address to be accepted; `places` = Google Places.
+websites:
+  provider: search
+  search_results: 8
+  max_candidates: 5
+  max_verify_pages: 3          # extra pages after the home page
+  verify_paths: [/contact, /contact-us, /locations, /location, /visit, /about]
+  address_context_tokens: 10
+  max_provider_errors: 3
+  # Never a venue's own site (registrable domain). LinkedIn is also never fetched, in code.
+  excluded_domains: [yelp.com, tripadvisor.com, opentable.com, resy.com, exploretock.com,
+    tock.com, sevenrooms.com, toasttab.com, doordash.com, grubhub.com, ubereats.com,
+    seamless.com, postmates.com, caviar.com, chownow.com, slicelife.com, menupages.com,
+    instagram.com, facebook.com, tiktok.com, twitter.com, x.com, linkedin.com, youtube.com,
+    pinterest.com, reddit.com, google.com, goo.gl, apple.com, bing.com, foursquare.com,
+    mapquest.com, yellowpages.com, eater.com, timeout.com, theinfatuation.com, nytimes.com,
+    newyorker.com, grubstreet.com, thrillist.com, michelin.com, zagat.com, ny.gov, nyc.gov,
+    cityofnewyork.us, culinaryagents.com, wikipedia.org, wikimedia.org, wikidata.org,
+    tripadvisor.co.uk, restaurantji.com, restaurantguru.com, allmenus.com, menuism.com,
+    bizapedia.com, opencorporates.com, dandb.com, chamberofcommerce.com,
+    manta.com, mapcarta.com, nextdoor.com, patch.com, bloomberg.com, forbes.com, eventbrite.com,
+    squarespace.com, wix.com, godaddy.com, loyalist.com, eatloyalist.com]
 # A website lookup that found nothing is retried after this many days (unopened venues often have
 # no listing yet). A found website is never looked up (or billed) again.
 website_miss_retry_days: 60

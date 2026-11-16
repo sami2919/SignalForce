@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import csv
 import logging
 import math
 import os
@@ -18,7 +19,7 @@ from scripts.firecrawl_client import FirecrawlClient
 from scripts.hospitality.benchmark.baseline import run_baseline
 from scripts.hospitality.benchmark.compare import compare
 from scripts.hospitality.budget import BudgetExceeded, CallBudget
-from scripts.hospitality.config import HospitalityConfig, load_config
+from scripts.hospitality.config import HospitalityConfig, WebsitesConfig, load_config
 from scripts.hospitality.contacts.clay import (
     clay_rows,
     import_clay_csv,
@@ -112,6 +113,12 @@ from scripts.hospitality.stack.signals import (
     lapsed_loyalist_venues,
     loyalist_venues,
     stack_signals,
+)
+from scripts.hospitality.stack.website_import import plan_import
+from scripts.hospitality.stack.website_search import (
+    WebsiteFinder,
+    fetch_pages,
+    iter_search_lookups,
 )
 from scripts.hospitality.stack.websites import PlacesClient, iter_website_lookups
 from scripts.hospitality.store import DocStore
@@ -333,17 +340,57 @@ def window(today: date | None = None) -> dict[str, object]:
     }
 
 
-def websites(limit: int = 400, today: date | None = None) -> dict[str, int]:
-    """Look up websites via Google Places for venues with a window estimate; regroup.
+def _spreadsheet_safe(value: str) -> str:
+    """Neutralize a cell a spreadsheet would run as a formula."""
+    return f"'{value}" if value[:1] in ("=", "+", "-", "@") else value
 
+
+def _website_priority(
+    store: DocStore, venues: Sequence[Venue], estimates: Sequence[WindowEstimate]
+) -> list[str]:
+    """Venue ids worth a website, in order: seed-customer venues first, then soonest opening."""
+    by_id = {v.venue_id for v in venues}
+    seed_groups = current_customers(store, SEED_PATH, venues=venues)
+    customer_ids = [v.venue_id for v in venues if v.group_id in seed_groups]
+    ranked = sorted(estimates, key=lambda e: e.estimated_open)
+    ordered = [*customer_ids, *(e.venue_id for e in ranked)]
+    return list(dict.fromkeys(vid for vid in ordered if vid in by_id))
+
+
+def p0_required_keys(cfg: WebsitesConfig) -> tuple[str, ...]:
+    """Keys the paid P0 steps need, checked before step one.
+
+    crawl always needs Firecrawl, which also satisfies the search provider (Exa is optional);
+    the `places` provider adds GOOGLE_PLACES_API_KEY.
+    """
+    places = ("GOOGLE_PLACES_API_KEY",) if cfg.provider == "places" else ()
+    return (*places, "FIRECRAWL_API_KEY")
+
+
+def websites(
+    limit: int = 400, today: date | None = None, provider: str | None = None
+) -> dict[str, int | str]:
+    """Look up websites for venues with a window estimate (and seed customers); regroup.
+
+    `search` (default): Exa, Firecrawl search as the fallback, then each site is accepted only
+    when its pages show the venue's own phone or street address. `places`: Google Places.
     Every lookup (hit or miss) is saved to the `websites` kind as it is made, so a re-resolve
-    keeps it and no venue is ever billed twice for a website already found. A miss is retried
+    keeps it and no venue is looked up twice for a website already found. A miss is retried
     after `website_miss_retry_days`. Venues sharing a website domain then merge.
     """
-    key = os.environ.get("GOOGLE_PLACES_API_KEY")
-    if not key:  # fail fast, before touching the store or the network
-        raise SystemExit("GOOGLE_PLACES_API_KEY is not set; the websites command needs it")
     cfg = load_config()
+    provider = provider or cfg.websites.provider
+    exa_key = os.environ.get("EXA_API_KEY")
+    fc_key = os.environ.get("FIRECRAWL_API_KEY")
+    places_key = os.environ.get("GOOGLE_PLACES_API_KEY")
+    if provider == "places":
+        if not places_key:  # fail fast, before touching the store or the network
+            raise SystemExit("GOOGLE_PLACES_API_KEY is not set; websites with provider places")
+    elif not (exa_key or fc_key):
+        raise SystemExit(
+            "EXA_API_KEY and FIRECRAWL_API_KEY are both unset; the websites search provider "
+            "needs at least one (or pass --provider places with GOOGLE_PLACES_API_KEY)"
+        )
     today = today or date.today()
     store = DocStore()
     venues = store.load("venues", Venue)
@@ -359,37 +406,139 @@ def websites(limit: int = 400, today: date | None = None) -> dict[str, int]:
         )
 
     by_id = {v.venue_id: v for v in venues}
-    # Prioritized: venues with an estimate, soonest-opening first, without a website yet.
-    ranked = sorted(estimates, key=lambda e: e.estimated_open)
-    # Seed customers first: they are always looked up (to label them and seed lookalikes).
-    seed_groups = current_customers(store, SEED_PATH, venues=venues)
-    customer_ids = [v.venue_id for v in venues if v.group_id in seed_groups]
-    ordered = [*customer_ids, *(e.venue_id for e in ranked)]
-    priority = list(dict.fromkeys(vid for vid in ordered if vid in by_id and due(by_id[vid])))[
+    priority = [vid for vid in _website_priority(store, venues, estimates) if due(by_id[vid])][
         :limit
     ]
-    budget = CallBudget("places", min(limit, cfg.budgets["places"]))
+    summary: dict[str, int | str] = {"provider": provider}
     found: list[WebsiteLookup] = []
-    try:
-        for lookup in iter_website_lookups(
+    if provider == "places":
+        budget = CallBudget("places", min(limit, cfg.budgets["places"]))
+        stream = iter_website_lookups(
             venues,
-            PlacesClient(key, budget),
+            PlacesClient(places_key or "", budget),
             priority,
             today,
             cfg.website_match_max_distance_m,
             cfg.website_match_min_name_similarity,
-        ):
+        )
+        calls = {"calls_places": lambda: budget.used}
+        summary["engines"] = "google_places"
+    else:
+        exa = (
+            ExaClient(exa_key, CallBudget("exa", min(limit, cfg.budgets["exa"])))
+            if exa_key
+            else None
+        )
+        fc_budget = CallBudget("firecrawl", min(limit, cfg.budgets["firecrawl"]))
+        phones = {i.camis: i.phone for i in store.load("inspections", InspectionVenue) if i.phone}
+        finder = WebsiteFinder(
+            cfg.websites,
+            exa=exa,
+            firecrawl=FirecrawlClient(fc_key) if fc_key else None,
+            firecrawl_budget=fc_budget if fc_key else None,
+            fetch=fetch_pages,
+            phones=phones,
+        )
+        stream = iter_search_lookups(venues, finder, priority, today)
+        calls = {
+            "calls_exa": lambda: finder.exa_calls,
+            "calls_firecrawl": lambda: finder.firecrawl_calls,
+        }
+        summary["engines"] = "+".join(
+            name for name, key in (("exa", exa_key), ("firecrawl", fc_key)) if key
+        )
+        in_use = (
+            "Exa primary, Firecrawl search fallback"
+            if exa_key and fc_key
+            else "Exa only"
+            if exa_key
+            else "Firecrawl only"
+        )
+        print(f"websites: search provider, {in_use}")
+    try:
+        for lookup in stream:
             found.append(lookup)  # noqa: PERF402 (kept one by one: partial on error)
     finally:  # paid for: keep every lookup made, even if an error ends the run
         store.save("websites", found, key=lambda w: w.venue_id)  # type: ignore[attr-defined]
     updated = apply_websites(venues, found)
     _, groups = _regroup(store, cfg, updated, store.load("licenses", LicenseRecord))
-    return {
-        "prioritized": len(priority),
-        "lookups": budget.used,
-        "websites_found": sum(w.website is not None for w in found),
-        "multi_venue_groups": sum(len(g.venue_ids) > 1 for g in groups),
-    }
+    venue_of = {v.venue_id: v for v in venues}
+    phone_on_record = {i.camis for i in store.load("inspections", InspectionVenue) if i.phone}
+    misses = Counter(w.miss_reason or "unspecified" for w in found if w.website is None)
+    summary.update(
+        {
+            "prioritized": len(priority),
+            "lookups": len(found),
+            "websites_found": sum(w.website is not None for w in found),
+            "verified_phone": sum(w.verified_by == "phone" for w in found),
+            "verified_address": sum(w.verified_by == "address" for w in found),
+            "verified_address_no_phone_record": sum(
+                w.verified_by == "address" and venue_of[w.venue_id].camis not in phone_on_record
+                for w in found
+            ),
+            **{f"misses_{reason}": n for reason, n in sorted(misses.items())},
+            **{name: read() for name, read in calls.items()},
+            "multi_venue_groups": sum(len(g.venue_ids) > 1 for g in groups),
+        }
+    )
+    return summary
+
+
+def websites_import(
+    path: Path, overwrite: bool = False, today: date | None = None
+) -> dict[str, int]:
+    """Import hand-filled websites from a CSV (`venue_id` or `camis`, `website`); regroup."""
+    cfg = load_config()
+    store = DocStore()
+    venues = store.load("venues", Venue)
+    existing = store.load("websites", WebsiteLookup)
+    lookups, counts = plan_import(
+        path,
+        venues,
+        existing,
+        cfg.websites.excluded_domains,
+        overwrite=overwrite,
+        today=today or date.today(),
+    )
+    if lookups:
+        store.save("websites", lookups, key=lambda w: w.venue_id)  # type: ignore[attr-defined]
+        _regroup(store, cfg, apply_websites(venues, lookups), store.load("licenses", LicenseRecord))
+    return counts.model_dump()
+
+
+def websites_export_misses(today: date | None = None) -> Path:
+    """Write the prioritized venues still lacking a website to a CSV to fill in by hand."""
+    store = DocStore()
+    venues = store.load("venues", Venue)
+    estimates = {e.venue_id: e for e in store.load("estimates", WindowEstimate)}
+    lookups = {w.venue_id: w for w in store.load("websites", WebsiteLookup)}
+    by_id = {v.venue_id: v for v in venues}
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    path = OUT_DIR / "website_misses.csv"
+    with path.open("w", newline="", encoding="utf-8") as fh:
+        out = csv.writer(fh)
+        out.writerow(
+            ["venue_id", "camis", "name", "address", "zip_code", "estimated_open", "miss_reason",
+             "website"]
+        )  # fmt: skip
+        for vid in _website_priority(store, venues, list(estimates.values())):
+            v, lookup = by_id[vid], lookups.get(vid)
+            if v.website or (lookup and lookup.website):
+                continue
+            est = estimates.get(vid)
+            out.writerow(
+                [
+                    v.venue_id,
+                    v.camis or "",
+                    _spreadsheet_safe(v.name),
+                    _spreadsheet_safe(v.address),
+                    v.zip_code,
+                    est.estimated_open.isoformat() if est else "",
+                    (lookup.miss_reason or "") if lookup else "not_looked_up",
+                    "",
+                ]
+            )
+    return path
 
 
 def crawl(now: datetime | None = None) -> dict[str, object]:
@@ -1077,8 +1226,6 @@ def _print_backtest(out: BacktestResult) -> None:
         print("Fit is degenerate: every scored group has the same fit, so AUC is 0.5 by tie.")
 
 
-# Keys the paid P0 steps need (websites: Places; crawl: Firecrawl), checked before step one.
-P0_REQUIRED_KEYS: tuple[str, ...] = ("GOOGLE_PLACES_API_KEY", "FIRECRAWL_API_KEY")
 P0_STEPS: tuple[str, ...] = (
     "ingest-sla",
     "snapshot-pending",
@@ -1207,8 +1354,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     sub.add_parser("snapshot-pending", help="Record today's SLA pending applications")
     sub.add_parser("resolve", help="Match licenses to inspections; build venues and groups")
     sub.add_parser("window", help="Fit opening-timing curves; estimate venue opening windows")
-    p_web = sub.add_parser("websites", help="Find websites for prioritized venues (Google Places)")
+    p_web = sub.add_parser(
+        "websites", help="Find and verify websites for prioritized venues (Exa / Firecrawl search)"
+    )
     p_web.add_argument("--limit", type=int, default=400, help="Max venues to look up")
+    p_web.add_argument(
+        "--provider", choices=("search", "places"), help="Override websites.provider in the config"
+    )
+    p_wimp = sub.add_parser("websites-import", help="Import hand-filled websites from a CSV")
+    p_wimp.add_argument("csv", type=Path, help="CSV with venue_id (or camis) and website columns")
+    p_wimp.add_argument(
+        "--overwrite", action="store_true", help="Replace sites found by search or Places"
+    )
+    sub.add_parser(
+        "websites-export-misses", help="Write venues still lacking a website to out/magic/ as CSV"
+    )
     sub.add_parser("crawl", help="Crawl venue websites; detect stacks and emit stack signals")
     sub.add_parser("labels", help="Label customer groups (seed list + Loyalist embeds)")
     sub.add_parser("score", help="Score groups (noisy-OR) and print the top 25 prospects")
@@ -1262,8 +1422,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         for k, n, q1, med, q3 in out["strata"]:  # type: ignore[attr-defined]
             print(f"{k}: n={n} median={med}d IQR={q1}-{q3}d")
     elif args.command == "websites":
-        for name, n in websites(args.limit).items():
+        for name, n in websites(args.limit, provider=args.provider).items():
             print(f"{name}: {n}")
+    elif args.command == "websites-import":
+        for name, n in websites_import(args.csv, overwrite=args.overwrite).items():
+            print(f"{name}: {n}")
+    elif args.command == "websites-export-misses":
+        print(f"misses written to: {websites_export_misses()}")
     elif args.command == "crawl":
         out = crawl()
         for name, value in out.items():
@@ -1330,7 +1495,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     elif args.command == "report":
         print(f"report: {report()}")
     elif args.command == "run-p0":
-        missing = [var for var in P0_REQUIRED_KEYS if not os.environ.get(var)]
+        missing = [
+            var for var in p0_required_keys(load_config().websites) if not os.environ.get(var)
+        ]
         if missing:  # fail fast, before ingest or resolve touch the store (M6)
             raise SystemExit(f"run-p0 needs {', '.join(missing)}; set it before running the chain")
         for step in P0_STEPS:

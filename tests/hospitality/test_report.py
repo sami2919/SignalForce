@@ -396,3 +396,26 @@ def test_timing_section_states_the_match_miss_drop_rule(tmp_path, events_yaml) -
     assert "censored, not dropped" not in s2
     assert "dropped" in s2 and f"{cfg.window_unmatched_censor_max_age_days} days" in s2
     assert f"{cfg.max_opening_days:g} days" in s2
+
+
+def test_stack_section_reports_website_coverage_by_method_and_miss_reason(
+    tmp_path, events_yaml
+) -> None:
+    from scripts.hospitality.models import WebsiteLookup
+
+    store = full_store(tmp_path)
+    day = date(2026, 11, 16)
+    store.save(
+        "websites",
+        [
+            WebsiteLookup(venue_id="v:a", website="https://a.com/", looked_up_on=day,
+                          source="search", verified_by="phone"),
+            WebsiteLookup(venue_id="v:b", website="https://b.com/", looked_up_on=day,
+                          source="search", verified_by="address"),
+            WebsiteLookup(venue_id="v:c", website=None, looked_up_on=day, source="search",
+                          miss_reason="none_verified"),
+        ],
+        key=lambda w: w.venue_id,  # type: ignore[attr-defined]
+    )  # fmt: skip
+    s6 = sections(build(store, tmp_path, events_yaml))[6]
+    assert "Website lookups: 3 (n=3); found 2 (1 phone, 1 address); no site: 1 none_verified" in s6

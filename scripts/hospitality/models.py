@@ -107,6 +107,13 @@ class WebsiteLookup(_Frozen):
     website: str | None
     looked_up_on: date
     source: str = "google_places"
+    # How the site was verified: "phone" / "address" (found by search, checked against the
+    # venue's own public data), "manual" (hand-filled CSV). None for Places and carried rows.
+    verified_by: str | None = None
+    # The page that showed the phone / address (None for manual and Places rows).
+    evidence_url: str | None = None
+    # Why a search found nothing (None on a hit and on rows from before this field).
+    miss_reason: str | None = None
 
 
 class VenueAlias(_Frozen):

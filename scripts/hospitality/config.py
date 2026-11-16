@@ -82,6 +82,46 @@ class BenchmarkConfig(BaseModel):
     web_search_usd_each: float  # list price, for the spend warning only
 
 
+class WebsitesConfig(BaseModel):
+    """Website lookup: provider choice and the search-and-verify rules (lists are data)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    # `search`: Exa (primary) / Firecrawl search (fallback) + deterministic page verification.
+    # `places`: the Google Places provider (needs GOOGLE_PLACES_API_KEY).
+    provider: Literal["search", "places"] = "search"
+    # Search results requested per query, and distinct candidate domains verified at most.
+    search_results: int = 8
+    max_candidates: int = 5
+    # Extra pages fetched per candidate after its home page (the first of `verify_paths`).
+    max_verify_pages: int = 3
+    verify_paths: tuple[str, ...] = (
+        "/contact",
+        "/contact-us",
+        "/locations",
+        "/location",
+        "/visit",
+        "/about",
+    )
+    # A candidate must show the street address, then one of these terms (or the zip) within
+    # this many tokens after it.
+    address_context_tokens: int = 10
+    address_context_terms: tuple[str, ...] = (
+        "new york",
+        "ny",
+        "manhattan",
+        "brooklyn",
+        "queens",
+        "bronx",
+        "staten island",
+    )
+    # A provider that errors this many times in a row is switched off for the run.
+    max_provider_errors: int = 3
+    # Registrable domains that are never a venue's own site (directories, social, marketplaces,
+    # delivery, reservation platforms, government, news). Matched on the registrable domain.
+    excluded_domains: tuple[str, ...]
+
+
 class HospitalityConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -117,6 +157,7 @@ class HospitalityConfig(BaseModel):
     # Google Places candidate acceptance for a venue's website.
     website_match_max_distance_m: float
     website_match_min_name_similarity: float
+    websites: WebsitesConfig
     fit_weights: dict[str, float]
     relationship_boost: float
     budgets: dict[str, int]
