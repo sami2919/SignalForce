@@ -1,19 +1,28 @@
 # Public Loyalist customers, from docs/research/magic/02-dossiers-nyc.md.
 # first_public_date is an UPPER BOUND (the customer started on or before it); null = undated.
 # website_domain only where the research names the venue/group site. No private data.
+# venue_names / venue_domains: the customer's OTHER venues, as the research lists them; a venue
+# matching any of them is gated as this customer's. A name ending in "*" is a brand prefix (any
+# venue whose name starts with it). Names match strictly (near-exact), never by a word subset.
+# dismissed_embeds: venue ids whose detected Loyalist embed a human reviewed and rejected; an
+# embed once observed otherwise stays customer evidence for good.
 customers:
   - name: Major Food Group
     website_domain: majorfood.com
     first_public_date: 2024-11-02
     evidence_ref: https://www.eatloyalist.com/customer-stories/
+    venue_names: [Carbone, Torrisi, "Sadelle's"]
+    venue_domains: [carbonenewyork.com, torrisinyc.com]
   - name: Happy Cooking Hospitality
     website_domain: happycookingnyc.com
     first_public_date: null
     evidence_ref: https://www.eatloyalist.com/customer-stories/
+    venue_names: [Joseph Leonard, "Jeffrey's Grocery", Fairfax, Sailor]
   - name: The Noortwyck
     website_domain: null
     first_public_date: 2024-11-02
     evidence_ref: https://www.eatloyalist.com/customer-stories/
+    venue_names: [Oriana]  # same owners; Oriana also has its own entry
   - name: Oriana
     website_domain: oriananewyork.com
     first_public_date: null
@@ -26,39 +35,54 @@ customers:
     website_domain: null
     first_public_date: 2025-10-20
     evidence_ref: https://www.prnewswire.com/news-releases/magic-raises-10m-to-bring-ai-into-the-real-world-302589060.html
+    venue_names: ["Le Bernardin*"]
   - name: COTE
     website_domain: cotekoreansteakhouse.com
     first_public_date: 2025-10-20
     evidence_ref: https://www.prnewswire.com/news-releases/magic-raises-10m-to-bring-ai-into-the-real-world-302589060.html
+    venue_names: [COTE Korean Steakhouse]
   - name: Dinex Group
     website_domain: danielnyc.com
     first_public_date: 2025-10-20
     evidence_ref: https://www.prnewswire.com/news-releases/magic-raises-10m-to-bring-ai-into-the-real-world-302589060.html
+    venue_names: [Daniel, Café Boulud, Maison Barnes, Le Pavillon, Jōji, Le Gratin, "La Tête d'Or", Brasserie Boulud]
+    venue_domains: [cafeboulud.com]
   - name: Momofuku
     website_domain: momofuku.com
     first_public_date: 2025-10-20
     evidence_ref: https://www.prnewswire.com/news-releases/magic-raises-10m-to-bring-ai-into-the-real-world-302589060.html
+    venue_names: ["Momofuku*", Bar Kabawa]
   - name: Cosme
     website_domain: null
     first_public_date: 2025-10-20
     evidence_ref: https://fortune.com/2025/10/20/mario-carbone-magic-loyalist-major-food-group-ai-restaurants-dining-crm/
+    venue_names: [Bar Cosme, Atla]
   - name: Estela
     website_domain: estelanyc.com
     first_public_date: 2024-11-01
     evidence_ref: https://www.eatloyalist.com/customer-stories/
+    venue_names: [Altro Paradiso, Lodi, Amado]
   - name: Rezdôra
     website_domain: rezdora.nyc
     first_public_date: 2025-10-29
     evidence_ref: https://stocks.observer-reporter.com/observerreporter/article/bizwire-2025-10-29-resy-launches-new-integrations-connecting-the-resy-guestbook-to-marketing-platforms
+    venue_names: [Massara]
+    venue_domains: [massara.nyc]
   - name: Union Square Hospitality Group
     website_domain: null
     first_public_date: null
     evidence_ref: https://www.loyalist.com/
+    venue_names: [Gramercy Tavern, Union Square Cafe]
+    venue_domains: [gramercytavern.com, unionsquarecafe.com]
   - name: Hotel Chelsea
     website_domain: null
     first_public_date: null
     evidence_ref: https://www.loyalist.com/
+    venue_names: [Café Chelsea, El Quijote, Teruko]
   - name: Hogsalt
     website_domain: hogsalt.com
     first_public_date: null
     evidence_ref: https://hogsalt.com
+    venue_names: [4 Charles Prime Rib, Au Cheval, Monkey Bar]
+    venue_domains: [auchevaldiner.com, nycmonkeybar.com]
+dismissed_embeds: []

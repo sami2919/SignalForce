@@ -15,7 +15,7 @@ from scripts.hospitality.models import (
     Judgement,
 )
 from scripts.hospitality.store import DocStore
-from tests.hospitality.factories import make_scored, make_signal, make_venue
+from tests.hospitality.factories import make_embed_label, make_scored, make_signal, make_venue
 
 
 def make_draft(sentences: tuple[DraftSentence, ...], **kw: object) -> Draft:
@@ -177,6 +177,8 @@ def test_draft_command_drafts_prospects_only_saves_and_reports(
     store.save(
         "scores", [make_scored("g:a", 0.9), make_scored("g:c", 0.99, is_customer=True)], key=gk
     )
+    # The gate reads evidence, not the stored flag: g:c's venue has an embed label.
+    store.save("customer_labels", [make_embed_label("v:g:c")], key=lambda c: "c")
     store.save(
         "signals",
         [

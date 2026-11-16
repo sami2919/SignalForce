@@ -70,14 +70,14 @@ def test_match_appearance() -> None:
 
 def test_single_speaker_exact_values() -> None:
     accounts = {"g:1": make_scored("g:1", 0.4)}
-    [s] = rank_events([event()], [app("Ana", "Ghost Bird")], accounts, VENUES)
+    [s] = rank_events([event()], [app("Ana", "Ghost Bird")], accounts, VENUES, {})
     assert s.expected_meetings == pytest.approx(0.057)
     assert s.score_per_dollar == pytest.approx(0.000114)
     assert s.matched_people == 1
 
 
 def test_unmatched_uses_default_priority() -> None:
-    [s] = rank_events([event()], [app("Ana", "Nowhere")], {}, VENUES)
+    [s] = rank_events([event()], [app("Ana", "Nowhere")], {}, VENUES, {})
     assert s.expected_meetings == pytest.approx(0.95 * 0.05 * 0.15)
     assert s.matched_people == 0
 
@@ -90,7 +90,7 @@ def test_unknown_cost_is_not_infinitely_efficient() -> None:
         app("Ana", "Ghost Bird", event_id="e:free"),
         app("Ana", "Ghost Bird", event_id="e:paid"),
     ]
-    ranked = rank_events([free, paid], apps, accounts, VENUES)
+    ranked = rank_events([free, paid], apps, accounts, VENUES, {})
     by_id = {s.event_id: s for s in ranked}
     assert by_id["e:free"].score_per_dollar == 0.0
     assert by_id["e:free"].expected_meetings == pytest.approx(0.057)
@@ -104,6 +104,7 @@ def test_event_without_appearances_ranks_last_with_zero() -> None:
         [app("Ana", "Ghost Bird", event_id="e:full")],
         accounts,
         VENUES,
+        {},
     )
     assert [s.event_id for s in ranked] == ["e:full", "e:empty"]
     assert ranked[1].expected_meetings == 0.0 and ranked[1].matched_people == 0
@@ -115,7 +116,7 @@ def test_customers_and_disqualified_add_no_expected_meetings() -> None:
         "g:4": make_scored("g:4", 0.9, disqualified_reason="contract operator"),
     }
     apps = [app("C", "Old Customer Cafe"), app("D", "Shut Place")]
-    [s] = rank_events([event()], apps, accounts, VENUES)
+    [s] = rank_events([event()], apps, accounts, VENUES, {})
     assert s.expected_meetings == 0.0
 
 
@@ -129,7 +130,7 @@ def test_customers_sort_after_prospects_and_are_flagged() -> None:
         app("Low", "Ghost Bird", "sponsor"),
         app("Unk", "Nowhere", "past_recap"),
     ]
-    targets = meeting_list(event(), apps, accounts, VENUES)
+    targets = meeting_list(event(), apps, accounts, VENUES, {})
     assert [t.person for t in targets] == ["Low", "Unk", "Cust"]
     cust = targets[-1]
     assert cust.is_customer and cust.reason == "warm intro / co-host"
@@ -154,15 +155,23 @@ def test_seed_labelled_group_without_score_is_never_cold() -> None:
     assert s.expected_meetings == 0.0
 
 
+def test_customers_argument_is_required() -> None:
+    # Residual: an omitted `customers` would silently skip the seed/embed gate.
+    with pytest.raises(TypeError):
+        rank_events([event()], [], {}, VENUES)  # type: ignore[call-arg]
+    with pytest.raises(TypeError):
+        meeting_list(event(), [], {}, VENUES)  # type: ignore[call-arg]
+
+
 def test_disqualified_never_a_target() -> None:
     accounts = {"g:4": make_scored("g:4", 0.9, disqualified_reason="closed")}
-    assert meeting_list(event(), [app("D", "Shut Place")], accounts, VENUES) == []
+    assert meeting_list(event(), [app("D", "Shut Place")], accounts, VENUES, {}) == []
 
 
 def test_meeting_list_only_this_events_appearances() -> None:
     accounts = {"g:1": make_scored("g:1", 0.4)}
     apps = [app("A", "Ghost Bird"), app("B", "Ghost Bird", event_id="e:other")]
-    assert [t.person for t in meeting_list(event(), apps, accounts, VENUES)] == ["A"]
+    assert [t.person for t in meeting_list(event(), apps, accounts, VENUES, {})] == ["A"]
 
 
 def test_cli_events_rank(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
@@ -182,3 +191,17 @@ def test_cli_events_rank(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     out = cli.events_rank(reg)
     assert out["events"] == 1 and out["targets"] == 1
     assert (tmp_path / "out" / "meeting_lists.md").exists()
+
+
+def test_match_appearance_never_matches_a_generic_subset_name() -> None:
+    # C1: a speaker from "Major Food Group" must not become venue "FOOD"'s cold-prospect target.
+    venues = [make_venue("v:f", name="FOOD", group_id="g:f"), *VENUES]
+    assert match_appearance(app("M", "Major Food Group"), venues) is None
+    assert (
+        match_appearance(
+            app("H", "Hotel Chelsea"),
+            [make_venue("v:h", name="THE GEM HOTEL CHELSEA", group_id="g:h")],
+        )
+        is None
+    )
+    assert match_appearance(app("G", "ghost bird"), venues) == "g:1"

@@ -133,6 +133,7 @@ def test_labels_from_embeds() -> None:
             first_public_date=date(2026, 11, 16),
             source="embed",
             evidence_ref="api.eatloyalist.com/signup",
+            venue_id="v:1",
         )
     ]
 
@@ -210,7 +211,7 @@ def test_labels_command_counts_by_source_and_saves(tmp_path, monkeypatch, capsys
     assert "public_list: 1" in out and "embed: 1" in out
     saved = store.load("customer_labels", CustomerLabel)
     assert {lbl.source for lbl in saved} == {"public_list", "embed"}
-    assert cli.labels() == {"public_list": 1, "embed": 1}  # rerun is idempotent
+    assert cli.labels() == {"public_list": 1, "embed": 1, "embeds_lapsed": 0}  # idempotent rerun
 
 
 def test_websites_includes_seed_customer_venues(tmp_path, monkeypatch) -> None:
@@ -231,3 +232,111 @@ def test_websites_includes_seed_customer_venues(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(cli, "PlacesClient", lambda key, budget: object())
     out = cli.websites()
     assert looked_up == [["v:1"]] and out["prioritized"] == 1
+
+
+# --- C1: a name match must be near-exact on distinctive tokens, never a token subset ---
+
+# (seed label, live venue/group name) pairs the old token-set matcher scored 1.0 (or >= 0.9).
+LIVE_FALSE_MATCHES = [
+    ("Major Food Group", "FOOD"),
+    ("Le Bernardin", "LE LE"),
+    ("Eleven Madison Park", "THE PARK"),
+    ("Hotel Chelsea", "DOUBLETREE HOTEL MANHATTAN-CHELSEA"),
+    ("Hotel Chelsea", "THE GEM HOTEL CHELSEA"),
+    ("Hotel Chelsea", "RENAISSANCE NEW YORK CHELSEA HOTEL SOMEWHERE NOWHE"),
+    ("Happy Cooking Hospitality", "HOSPITALITY LLC"),
+    ("Union Square Hospitality Group", "AT Hospitality Group LLC"),
+    ("Union Square Hospitality Group", "37 HOSPITALITY GROUP INC."),
+    ("COTE", "L'ABEILLE / L'ABEILLE A COTE / SUSHI ICHIMURA"),
+    ("COTE", "LE BISTRO D'A COTE"),
+    ("El Quijote", "QUIJOTE"),  # a Queens namesake of the Hotel Chelsea outlet
+]
+
+
+@pytest.mark.parametrize(("label_name", "other"), LIVE_FALSE_MATCHES)
+def test_generic_or_subset_names_never_match_a_customer_label(label_name: str, other: str) -> None:
+    venues = [make_venue("v:1", name=other, group_id="g:1")]
+    groups = [Group(group_id="g:1", name=other, venue_ids=("v:1",), resolution="singleton")]
+    assert customer_groups([label(name=label_name)], venues, groups) == {}
+
+
+@pytest.mark.parametrize(
+    ("label_name", "other"),
+    [
+        ("The Noortwyck", "NOORTWYCK LLC, THE"),
+        ("The Noortwyck", "THE NOORT WYCK"),
+        ("Le Bernardin", "LE BERNARDIN"),
+        ("Major Food Group", "Major Food Group LLC"),
+        ("Rezdôra", "REZDORA"),
+        ("Hotel Chelsea", "HOTEL CHELSEA"),
+    ],
+)
+def test_near_exact_names_still_match(label_name: str, other: str) -> None:
+    venues = [make_venue("v:1", name=other, group_id="g:1")]
+    assert set(customer_groups([label(name=label_name)], venues, groups_for(venues))) == {"g:1"}
+
+
+def test_a_label_made_only_of_generic_words_never_matches_by_name() -> None:
+    venues = [make_venue("v:1", name="The Food Group", group_id="g:1")]
+    assert customer_groups([label(name="Food Group")], venues, groups_for(venues)) == {}
+
+
+# --- I3: a customer's other venues (seed data) gate their groups too ---
+
+
+def test_seed_venue_names_and_domains_gate_other_venues() -> None:
+    venues = [
+        make_venue("v:1", name="REZDORA", group_id="g:1"),
+        make_venue("v:2", name="MASSARA", group_id="g:2"),  # same owner, own singleton group
+        make_venue("v:3", name="Other", website="https://www.massara.nyc/", group_id="g:3"),
+        make_venue("v:4", name="Cold", group_id="g:4"),
+    ]
+    rez = label(
+        name="Rezdôra",
+        website_domain="rezdora.nyc",
+        venue_names=("Massara",),
+        venue_domains=("massara.nyc",),
+    )
+    assert set(customer_groups([rez], venues, groups_for(venues))) == {"g:1", "g:2", "g:3"}
+
+
+def test_prefix_venue_name_covers_brand_venues_only_when_marked() -> None:
+    venues = [
+        make_venue("v:1", name="MOMOFUKU NOODLE BAR/BANG BAR", group_id="g:1"),
+        make_venue("v:2", name="MOMOFUKU SSAM BAR", group_id="g:2"),
+        make_venue("v:3", name="NOODLE BAR MOMOFUKU STYLE", group_id="g:3"),  # not a prefix
+    ]
+    plain = label(name="Momofuku")
+    assert customer_groups([plain], venues, groups_for(venues)) == {}
+    marked = label(name="Momofuku", venue_names=("Momofuku*",))
+    assert set(customer_groups([marked], venues, groups_for(venues))) == {"g:1", "g:2"}
+
+
+def test_generic_prefix_is_ignored() -> None:
+    venues = [make_venue("v:1", name="THE FOOD STOP", group_id="g:1")]
+    marked = label(name="Food Co", venue_names=("The Food*",))
+    assert customer_groups([marked], venues, groups_for(venues)) == {}
+
+
+def test_real_seed_gates_known_customer_venues() -> None:
+    names = {
+        "v:1": "LA TETE D'OR",
+        "v:2": "MASSARA",
+        "v:3": "CARBONE",
+        "v:4": "BAR KABAWA",
+        "v:5": "MOMOFUKU NOODLE BAR/BANG BAR",
+        "v:6": "THE NOORT WYCK",
+        "v:7": "COTE KOREAN STEAKHOUSE",
+        "v:8": "EL QUIJOTE / LOBBY BAR AT THE HOTEL CHELSEA",
+    }
+    venues = [make_venue(vid, name=n, group_id=f"g:{vid}") for vid, n in names.items()]
+    got = customer_groups(load_seed_labels(SEED), venues, groups_for(venues))
+    assert set(got) == {f"g:{vid}" for vid in names}
+    assert got["g:v:2"].name == "Rezdôra" and got["g:v:1"].name == "Dinex Group"
+
+
+def test_case_hint_venues_are_seed_venues_of_their_customer() -> None:
+    by_name = {lbl.name: lbl for lbl in load_seed_labels(SEED)}
+    for customer, venue in cli.CASE_HINTS.items():
+        lbl = by_name[customer]
+        assert venue in (lbl.name, *lbl.venue_names), (customer, venue)

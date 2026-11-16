@@ -15,7 +15,7 @@ from scripts.hospitality.contacts.waterfall import (
 from scripts.hospitality.models import Contact, TeamFacts, TeamPerson
 from scripts.hospitality.store import DocStore
 from scripts.watch.fetcher import ProbeResult
-from tests.hospitality.factories import make_scored, make_venue
+from tests.hospitality.factories import make_embed_label, make_scored, make_venue
 
 SITE = "https://www.acme.com"
 TEAM_URL = "https://www.acme.com/team"
@@ -336,6 +336,8 @@ def test_contacts_command_runs_top_prospects_only_and_saves(tmp_path, monkeypatc
         ],
         key=key,
     )
+    # The gate reads evidence, not the stored flag: g:c's venue has an embed label.
+    store.save("customer_labels", [make_embed_label("v:g:c")], key=lambda c: "c")
     monkeypatch.setattr(cli, "DocStore", lambda: store)
     seen: list[str] = []
 

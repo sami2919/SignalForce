@@ -12,7 +12,6 @@ from scripts.hospitality.models import (
     Contact,
     Contribution,
     CurveRecord,
-    CustomerLabel,
     Draft,
     DraftSentence,
     EntityLink,
@@ -24,6 +23,7 @@ from scripts.hospitality.models import (
 from scripts.hospitality.report import build_report
 from scripts.hospitality.store import DocStore
 from tests.hospitality.factories import (
+    make_embed_label,
     make_estimate,
     make_license,
     make_scored,
@@ -134,19 +134,9 @@ def full_store(tmp_path: Path) -> DocStore:
         ],
         key=lambda a: a.group_id,
     )
-    store.save(
-        "customer_labels",
-        [
-            CustomerLabel(
-                name="Moth Bistro",
-                website_domain=None,
-                first_public_date=None,
-                source="public_list",
-                evidence_ref="ref",
-            )
-        ],
-        key=lambda c: c.name,
-    )
+    # Customer evidence: a stored embed label on Moth Bistro's venue (stored seed copies are
+    # ignored; the seed YAML is authoritative). The crawl below saw the embed there too.
+    store.save("customer_labels", [make_embed_label("v:c", name="Moth Bistro")], key=lambda c: "c")
     store.save(
         "benchmark",
         [
@@ -169,8 +159,8 @@ def full_store(tmp_path: Path) -> DocStore:
         "stack_observations",
         [
             StackObservation(
-                venue_id="v:a",
-                url="https://zephyr.test",
+                venue_id="v:c",
+                url="https://moth.test",
                 observed_at=datetime(2026, 11, 1, tzinfo=UTC),
                 platforms=("resy", "loyalist"),
                 evidence=("e", "e"),

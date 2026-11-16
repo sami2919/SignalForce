@@ -23,7 +23,7 @@ from scripts.hospitality.events.rank import (
     rank_events,
 )
 from scripts.hospitality.events.registry import load_events
-from scripts.hospitality.labels import customer_groups, load_seed_labels
+from scripts.hospitality.labels import current_customers, with_customer_flags
 from scripts.hospitality.models import (
     BenchmarkResult,
     CaseReplay,
@@ -550,11 +550,8 @@ def build_report(
     venues = store.load("venues", Venue)
     groups = store.load("groups", Group)
     licenses = store.load("licenses", LicenseRecord)
-    accounts = store.load("scores", ScoredAccount)
-    labels = store.load("customer_labels", CustomerLabel)
-    if not labels and cli.SEED_PATH.exists():
-        labels = load_seed_labels(cli.SEED_PATH)
-    customers = customer_groups(labels, venues, groups)
+    customers = current_customers(store, cli.SEED_PATH, venues=venues, groups=groups)
+    accounts = with_customer_flags(store.load("scores", ScoredAccount), customers)
     names = {g.group_id: g.name for g in groups}
     signals = [*store.load("license_signals", Signal), *store.load("signals", Signal)]
 

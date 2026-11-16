@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import re
+import unicodedata
 from urllib.parse import urlparse
 
 from rapidfuzz import fuzz
@@ -70,6 +71,74 @@ def normalize_address(raw: str) -> str:
 def name_similarity(a: str, b: str) -> float:
     """Token-set similarity of two normalized names, in [0, 1]."""
     return float(fuzz.token_set_ratio(normalize_name(a), normalize_name(b))) / 100.0
+
+
+# Tokens that carry no identity at all: English articles, corporate filler, place filler. Dropped
+# before a strict comparison ("NOORTWYCK LLC, THE" == "The Noortwyck"). Foreign articles stay in
+# the compared name ("El Quijote" is not the Queens "QUIJOTE") but are generic below.
+_NOISE_NAME_TOKENS = frozenset(
+    {
+        "a", "an", "and", "at", "by", "for", "in", "of", "on", "the", "to",
+        "associates", "co", "company", "corp", "corporation", "enterprises", "holding",
+        "holdings", "inc", "international", "llc", "lp", "ltd", "management", "mgmt",
+        "partners", "services", "ventures",
+        "city", "new", "ny", "nyc", "york",
+    }
+)  # fmt: skip
+# Words that say what kind of business a name is, not which one. A name made only of these and
+# noise tokens identifies nobody, so it can never carry a strict name match.
+GENERIC_NAME_TOKENS = _NOISE_NAME_TOKENS | frozenset(
+    {
+        "d", "da", "de", "del", "della", "des", "di", "du", "e", "el", "il", "l", "la", "le",
+        "les", "lo", "los", "y",
+        "bar", "bars", "bistro", "brasserie", "cafe", "caterers", "catering", "club", "clubs",
+        "coffee", "concepts", "dining", "diner", "eatery", "food", "foods", "foodservice",
+        "grill", "group", "groups", "hospitality", "hotel", "hotels", "house", "inn",
+        "kitchen", "lounge", "park", "pub", "restaurant", "restaurants", "tavern",
+    }
+)  # fmt: skip
+STRICT_NAME_THRESHOLD = 0.9
+
+
+def _fold(raw: str) -> str:
+    """Strip accents (Rezdôra -> Rezdora) so a spelling without them compares equal."""
+    return "".join(c for c in unicodedata.normalize("NFKD", raw) if not unicodedata.combining(c))
+
+
+def _strict_tokens(raw: str) -> list[str]:
+    return [t for t in normalize_name(_fold(raw)).split() if t not in _NOISE_NAME_TOKENS]
+
+
+def distinctive_tokens(raw: str) -> frozenset[str]:
+    """The normalized tokens of a name that are not generic business words."""
+    return frozenset(_strict_tokens(raw)) - GENERIC_NAME_TOKENS
+
+
+def strict_name_match(a: str, b: str, threshold: float = STRICT_NAME_THRESHOLD) -> bool:
+    """Near-exact name equality, for decisions a namesake must never pass (customer labels).
+
+    Both names need a distinctive token, they must share one, and the whole names must be
+    near-equal by `token_sort_ratio` (order-insensitive, but a token subset is NOT a match:
+    "Major Food Group" never matches "FOOD", "Hotel Chelsea" never "THE GEM HOTEL CHELSEA").
+    """
+    da, db = distinctive_tokens(a), distinctive_tokens(b)
+    ta, tb = _strict_tokens(a), _strict_tokens(b)
+    # A shared distinctive token, or the same letters split differently ("NOORT WYCK").
+    if not da or not db or not (da & db or "".join(ta) == "".join(tb)):
+        return False
+    return float(fuzz.token_sort_ratio(" ".join(ta), " ".join(tb))) / 100.0 >= threshold
+
+
+def name_prefix_match(prefix: str, name: str) -> bool:
+    """True when `name`'s tokens start with all of `prefix`'s tokens and the prefix is distinctive.
+
+    Only for a brand a human has marked as a prefix in the seed list ("Momofuku*" covers
+    "MOMOFUKU NOODLE BAR"); never applied to a name on its own.
+    """
+    if not distinctive_tokens(prefix):
+        return False
+    p, n = _strict_tokens(prefix), _strict_tokens(name)
+    return len(n) >= len(p) and n[: len(p)] == p
 
 
 def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

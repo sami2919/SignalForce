@@ -33,9 +33,10 @@ from scripts.hospitality.events.extract import extract_appearances
 from scripts.hospitality.events.rank import meeting_list, rank_events
 from scripts.hospitality.events.registry import load_events
 from scripts.hospitality.labels import (
+    current_customers,
+    customer_evidence,
     customer_groups,
-    labels_from_embeds,
-    load_seed_labels,
+    with_customer_flags,
 )
 from scripts.hospitality.llm import LLMRefusal
 from scripts.hospitality.measure.backtest import case_replay, find_venue, fit_auc
@@ -86,6 +87,7 @@ from scripts.hospitality.sources.socrata import SocrataClient
 from scripts.hospitality.stack.crawl import crawl_stacks
 from scripts.hospitality.stack.signals import (
     disqualified_venues,
+    lapsed_loyalist_venues,
     loyalist_venues,
     stack_signals,
 )
@@ -227,7 +229,7 @@ def websites(limit: int = 400) -> dict[str, int]:
     # Prioritized: venues with an estimate, soonest-opening first, without a website yet.
     ranked = sorted(estimates, key=lambda e: e.estimated_open)
     # Seed customers first: they are always looked up (to label them and seed lookalikes).
-    seed_groups = customer_groups(load_seed_labels(SEED_PATH), venues, store.load("groups", Group))
+    seed_groups = current_customers(store, SEED_PATH, venues=venues)
     customer_ids = [v.venue_id for v in venues if v.group_id in seed_groups and not v.website]
     ordered = [*customer_ids, *(e.venue_id for e in ranked)]
     priority = list(
@@ -273,26 +275,40 @@ def crawl(now: datetime | None = None) -> dict[str, object]:
 
 
 def labels() -> dict[str, int]:
-    """Label customer groups from the seed list and detected embeds; save labels; count by source."""
+    """Snapshot the customer evidence (seed + every embed ever seen); count groups by source.
+
+    Not required for the gate: every consumer computes `current_customers` itself. Embeds once
+    seen stay labels; one missing from its venue's latest crawl is logged for review.
+    """
     store = DocStore()
     venues = store.load("venues", Venue)
     groups = store.load("groups", Group)
     observations = store.load("stack_observations", StackObservation)
-    first_seen: dict[str, date] = {}
-    for o in sorted(observations, key=lambda o: o.observed_at):
-        if "loyalist" in o.platforms:
-            first_seen.setdefault(o.venue_id, o.observed_at.date())
-    embeds = labels_from_embeds(loyalist_venues(observations), venues, first_seen)
-    all_labels = [*load_seed_labels(SEED_PATH), *embeds]
-    customers = customer_groups(all_labels, venues, groups)
+    stored = store.load("customer_labels", CustomerLabel)
+    evidence = customer_evidence(SEED_PATH, venues, observations, stored)
+    customers = customer_groups(evidence, venues, groups)
     store.clear("customer_labels")
     store.save(
         "customer_labels",
-        all_labels,
-        key=lambda c: f"{c.source}|{c.name}|{c.website_domain}",  # type: ignore[attr-defined]
+        evidence,
+        key=lambda c: f"{c.source}|{c.name}|{c.website_domain}|{c.venue_id}",  # type: ignore[attr-defined]
     )
+    lapsed = lapsed_loyalist_venues(observations)
+    for venue_id in lapsed:
+        logger.warning("Loyalist embed missing from the latest crawl of %s: review", venue_id)
     counts = Counter(label.source for label in customers.values())
-    return {"public_list": counts["public_list"], "embed": counts["embed"]}
+    return {
+        "public_list": counts["public_list"],
+        "embed": counts["embed"],
+        "embeds_lapsed": len(lapsed),
+    }
+
+
+def _gated_scores(store: DocStore) -> list[ScoredAccount]:
+    """Stored scores with `is_customer` recomputed now: a stored flag can be stale."""
+    return with_customer_flags(
+        store.load("scores", ScoredAccount), current_customers(store, SEED_PATH)
+    )
 
 
 def _score_accounts(
@@ -308,8 +324,9 @@ def _score_accounts(
     signals: Sequence[Signal],
 ) -> list[ScoredAccount]:
     """Score every group that has signals; reads the store, writes nothing."""
-    labels = store.load("customer_labels", CustomerLabel) or load_seed_labels(SEED_PATH)
-    customers = customer_groups(labels, venues, list(groups.values()))
+    customers = current_customers(
+        store, SEED_PATH, venues=venues, groups=list(groups.values()), observations=observations
+    )
     disqualified = disqualified_venues(observations)
     licenses_by_id = {lic.record_id: lic for lic in licenses}
 
@@ -407,7 +424,7 @@ def contacts(top: int = 25) -> dict[str, object]:
     store = DocStore()
     venues = store.load("venues", Venue)
     groups = {g.group_id: g for g in store.load("groups", Group)}
-    ranked = rank_prospects(store.load("scores", ScoredAccount))[:top]
+    ranked = rank_prospects(_gated_scores(store))[:top]
     budgets = {
         "firecrawl": CallBudget("firecrawl", cfg.budgets["firecrawl"]),
         "hunter": CallBudget("hunter", cfg.budgets["hunter"]),
@@ -471,9 +488,9 @@ def events_rank(path: Path = EVENTS_PATH) -> dict[str, object]:
     appearances = store.load("event_appearances", EventAppearance)
     venues = store.load("venues", Venue)
     groups = store.load("groups", Group)
-    accounts = {a.group_id: a for a in store.load("scores", ScoredAccount)}
-    labels = store.load("customer_labels", CustomerLabel) or load_seed_labels(SEED_PATH)
-    customers = customer_groups(labels, venues, groups)
+    customers = current_customers(store, SEED_PATH, venues=venues, groups=groups)
+    scores = with_customer_flags(store.load("scores", ScoredAccount), customers)
+    accounts = {a.group_id: a for a in scores}
     ranked = rank_events(events, appearances, accounts, venues, customers)
     by_id = {e.event_id: e for e in events}
     lines = ["# Event ranking and meeting lists", ""]
@@ -526,7 +543,7 @@ def draft_command(top: int = 10) -> dict[str, object]:
     contacts_by_group: dict[str, list[Contact]] = {}
     for c in store.load("contacts", Contact):
         contacts_by_group.setdefault(c.group_id, []).append(c)
-    ranked = rank_prospects(store.load("scores", ScoredAccount))[:top]
+    ranked = rank_prospects(_gated_scores(store))[:top]
     drafts: list[Draft] = []
     judgements: dict[str, Judgement] = {}
     for acct in ranked:
@@ -561,7 +578,7 @@ def clay_push(top: int = 25) -> dict[str, object]:
         raise SystemExit("CLAY_WEBHOOK_URL is not set; the clay-push command needs it")
     cfg = load_config()
     store = DocStore()
-    ranked = rank_prospects(store.load("scores", ScoredAccount))[:top]
+    ranked = rank_prospects(_gated_scores(store))[:top]
     rows = clay_rows(ranked, store.load("venues", Venue), store.load("contacts", Contact))
     budget = CallBudget("clay", cfg.budgets["clay"])
     pushed = push_to_clay(url, rows, budget)
@@ -571,7 +588,7 @@ def clay_push(top: int = 25) -> dict[str, object]:
 def clay_import(path: Path) -> dict[str, object]:
     """Import Clay's enriched CSV as contacts for known prospect groups; never downgrade."""
     store = DocStore()
-    known = {a.group_id for a in rank_prospects(store.load("scores", ScoredAccount))}
+    known = {a.group_id for a in rank_prospects(_gated_scores(store))}
     parsed = import_clay_csv(path)
     kept = [c for c in parsed if c.group_id in known]
     for c in parsed:
@@ -723,10 +740,16 @@ def lookalikes(now: datetime | None = None) -> dict[str, object]:
     now = now or datetime.now(UTC)
     store = DocStore()
     venues = store.load("venues", Venue)
-    seeds = store.load("customer_labels", CustomerLabel) or load_seed_labels(SEED_PATH)
+    groups = store.load("groups", Group)
+    seeds = customer_evidence(
+        SEED_PATH,
+        venues,
+        store.load("stack_observations", StackObservation),
+        store.load("customer_labels", CustomerLabel),
+    )
     exa_budget = CallBudget("exa", cfg.budgets["exa"])
     exa = ExaClient.from_env(exa_budget)
-    signals = lookalike_signals(exa, seeds, venues, now)
+    signals = lookalike_signals(exa, seeds, venues, now, groups=groups)
     store.save("signals", signals, key=lambda s: s.signal_id)  # type: ignore[attr-defined]
     scored = score()
     return {
@@ -784,8 +807,7 @@ def backtest(store: DocStore | None = None) -> dict[str, object]:
     venues = store.load("venues", Venue)
     groups = store.load("groups", Group)
     licenses = store.load("licenses", LicenseRecord)
-    labels_ = store.load("customer_labels", CustomerLabel) or load_seed_labels(SEED_PATH)
-    customers = customer_groups(labels_, venues, groups)
+    customers = current_customers(store, SEED_PATH, venues=venues, groups=groups)
     hints = {gid: CASE_HINTS[c.name] for gid, c in customers.items() if c.name in CASE_HINTS}
     pending_seen = first_seen_pending(store)
     stored = store.load("signals", Signal)
@@ -810,7 +832,7 @@ def backtest(store: DocStore | None = None) -> dict[str, object]:
         ):
             best[key] = case
     cases = list(best.values())
-    accounts = store.load("scores", ScoredAccount)
+    accounts = with_customer_flags(store.load("scores", ScoredAccount), customers)
     return {
         "cases": cases,
         "undated": sum(1 for c in customers.values() if c.first_public_date is None),
@@ -906,8 +928,9 @@ def benchmark(cutoff_weeks: int = 8, today: date | None = None) -> BenchmarkResu
         historical=True,  # as-of replay: a now-lapsed license was live at the cutoff
     )
     stack = [s for s in store.load("signals", Signal) if s.observed_at <= now]
-    labels = store.load("customer_labels", CustomerLabel) or load_seed_labels(SEED_PATH)
-    customer_ids = customer_groups(labels, venues, list(groups.values()))
+    customer_ids = current_customers(
+        store, SEED_PATH, venues=venues, groups=list(groups.values()), observations=observations
+    )
     accounts = [
         a.model_copy(update={"is_customer": a.group_id in customer_ids})
         for a in _score_accounts(

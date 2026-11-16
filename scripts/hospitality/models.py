@@ -186,6 +186,11 @@ class CustomerLabel(_Frozen):
     first_public_date: date | None
     source: Literal["public_list", "embed"]
     evidence_ref: str
+    # The customer's other venues (seed data): a venue matching any of them is the customer's.
+    # A name ending in "*" is a brand prefix ("Momofuku*" covers "MOMOFUKU NOODLE BAR").
+    venue_names: tuple[str, ...] = ()
+    venue_domains: tuple[str, ...] = ()
+    venue_id: str | None = None  # embed labels: the venue the embed was observed on
 
 
 class Contribution(_Frozen):

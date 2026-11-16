@@ -14,7 +14,7 @@ from datetime import datetime
 from scripts.hospitality.budget import BudgetExceeded
 from scripts.hospitality.discover.exa import ExaClient
 from scripts.hospitality.labels import customer_groups
-from scripts.hospitality.models import CustomerLabel, Signal, Venue
+from scripts.hospitality.models import CustomerLabel, Group, Signal, Venue
 from scripts.hospitality.resolve.normalize import registrable_domain
 
 logger = logging.getLogger(__name__)
@@ -32,9 +32,15 @@ def lookalike_signals(
     venues: Sequence[Venue],
     now: datetime,
     per_seed: int = 10,
+    *,
+    groups: Sequence[Group],
 ) -> list[Signal]:
-    """One `lookalike` signal per (seed, resolved non-customer venue, result URL)."""
-    customer_gids = set(customer_groups(seeds, venues, []))
+    """One `lookalike` signal per (seed, resolved non-customer venue, result URL).
+
+    `groups` is required so the customer gate also matches group names, exactly as every other
+    consumer does (seeds are the full customer evidence, see `labels.customer_evidence`).
+    """
+    customer_gids = set(customer_groups(seeds, venues, groups))
     customer_domains = {
         d for s in seeds if s.website_domain and (d := registrable_domain(s.website_domain))
     }

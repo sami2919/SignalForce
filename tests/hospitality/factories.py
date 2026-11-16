@@ -46,6 +46,20 @@ def make_inspection(camis: str = "1", first: date | None = None, **overrides: ob
     return InspectionVenue(**base)  # type: ignore[arg-type]
 
 
+def make_embed_label(venue_id: str, name: str = "Embed Customer"):
+    """A stored embed label: evidence that `venue_id`'s group already runs Loyalist."""
+    from scripts.hospitality.models import CustomerLabel
+
+    return CustomerLabel(
+        name=name,
+        website_domain=None,
+        first_public_date=None,
+        source="embed",
+        evidence_ref="api.eatloyalist.com/signup",
+        venue_id=venue_id,
+    )
+
+
 def make_venue(venue_id: str = "v:1", **overrides: object):
     from scripts.hospitality.models import Venue
 

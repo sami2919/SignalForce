@@ -91,9 +91,21 @@ def disqualified_venues(observations: Sequence[StackObservation]) -> dict[str, s
 
 
 def loyalist_venues(observations: Sequence[StackObservation]) -> dict[str, str]:
-    """venue_id → embed evidence for venues already running Loyalist."""
+    """venue_id → embed evidence (earliest sighting) for venues EVER observed running Loyalist.
+
+    Sticky on purpose: a later observation without the embed (Firecrawl budget spent, so only
+    the plain fetcher ran and a JS-injected widget went unseen) is not proof it was removed, and
+    unlabelling would turn a customer into a cold prospect. See `lapsed_loyalist_venues`.
+    """
     out: dict[str, str] = {}
-    for venue_id, obs in _latest(observations).items():
-        if "loyalist" in obs.platforms:
-            out[venue_id] = obs.evidence[obs.platforms.index("loyalist")]
+    for obs in sorted(observations, key=lambda o: o.observed_at):
+        if "loyalist" in obs.platforms and obs.venue_id not in out:
+            out[obs.venue_id] = obs.evidence[obs.platforms.index("loyalist")]
     return out
+
+
+def lapsed_loyalist_venues(observations: Sequence[StackObservation]) -> list[str]:
+    """Venues once seen with Loyalist whose latest observation lacks it: review for churn."""
+    ever = loyalist_venues(observations)
+    latest = _latest(observations)
+    return sorted(v for v in ever if "loyalist" not in latest[v].platforms)

@@ -16,7 +16,7 @@ from scripts.hospitality.contacts.clay import (
 )
 from scripts.hospitality.models import Contact, Contribution, Group
 from scripts.hospitality.store import DocStore
-from tests.hospitality.factories import make_scored, make_venue
+from tests.hospitality.factories import make_embed_label, make_scored, make_venue
 
 URL = "https://api.clay.com/v3/sources/webhook/secret-token-123"
 
@@ -182,12 +182,12 @@ def setup_store(tmp_path, monkeypatch) -> DocStore:
     key = lambda x: x.group_id
     store.save(
         "groups",
-        [Group(group_id=g, name=g, venue_ids=(f"v:{g}",), resolution="singleton") for g in "ab"],
+        [Group(group_id=g, name=g, venue_ids=(f"v:{g}",), resolution="singleton") for g in "abc"],
         key=key,
     )
     store.save(
         "venues",
-        [make_venue(f"v:{g}", name=f"N{g}", group_id=g) for g in "ab"],
+        [make_venue(f"v:{g}", name=f"N{g}", group_id=g) for g in "abc"],
         key=lambda v: v.venue_id,
     )
     store.save(
@@ -195,6 +195,8 @@ def setup_store(tmp_path, monkeypatch) -> DocStore:
         [make_scored("a", 0.9), make_scored("b", 0.8), make_scored("c", 0.99, is_customer=True)],
         key=key,
     )
+    # The gate reads evidence, not the stored flag: c's venue has an embed label.
+    store.save("customer_labels", [make_embed_label("v:c")], key=lambda c: "c")
     monkeypatch.setattr(cli, "DocStore", lambda: store)
     return store
 

@@ -16,7 +16,7 @@ from scripts.hospitality.models import (
     ScoredAccount,
     Venue,
 )
-from scripts.hospitality.resolve.normalize import name_similarity
+from scripts.hospitality.resolve.normalize import name_similarity, strict_name_match
 
 ATTEND_PRIOR: dict[str, float] = {
     "speaker": 0.95,
@@ -35,37 +35,43 @@ MEETING_RATE_PRIOR: dict[str, float] = {
     "local_meetup": 0.20,
     "magic_dinner": 0.50,
 }
-RESTAURANT_MATCH_THRESHOLD = 0.85
 UNMATCHED_PRIORITY = 0.05
 IN_WINDOW_P = 0.5  # p_window at or above this counts as "in a buying window"
 CUSTOMER_REASON = "warm intro / co-host"
 
 
 def match_appearance(app: EventAppearance, venues: Sequence[Venue]) -> str | None:
-    """group_id of the best-matching venue (name similarity >= 0.85), else None."""
-    best: tuple[float, str] | None = None
+    """group_id of the best strictly matching venue, else None.
+
+    Strict (near-exact on distinctive tokens): the match decides whether the person is a
+    customer's warm intro or a cold target, so a subset namesake ("FOOD" for "Major Food
+    Group") must never win. Ties go to the higher similarity, then the smaller venue_id.
+    """
+    best: tuple[float, str, str] | None = None
     for v in venues:
-        sim = name_similarity(app.restaurant, v.name)
-        if sim >= RESTAURANT_MATCH_THRESHOLD and (best is None or sim > best[0]):
-            best = (sim, v.group_id)
-    return best[1] if best else None
+        if not strict_name_match(app.restaurant, v.name):
+            continue
+        cand = (-name_similarity(app.restaurant, v.name), v.venue_id, v.group_id)
+        if best is None or cand < best:
+            best = cand
+    return best[2] if best else None
 
 
 def _is_customer(
     group_id: str | None,
     accounts: dict[str, ScoredAccount],
-    customers: dict[str, CustomerLabel] | None,
+    customers: dict[str, CustomerLabel],
 ) -> bool:
     if group_id is None:
         return False
     acct = accounts.get(group_id)
-    return (acct is not None and acct.is_customer) or group_id in (customers or {})
+    return (acct is not None and acct.is_customer) or group_id in customers
 
 
 def _cold_priority(
     group_id: str | None,
     accounts: dict[str, ScoredAccount],
-    customers: dict[str, CustomerLabel] | None,
+    customers: dict[str, CustomerLabel],
 ) -> float:
     """Priority of a cold target; 0.0 for customers and disqualified groups."""
     if group_id is None:
@@ -83,7 +89,7 @@ def rank_events(
     appearances: Sequence[EventAppearance],
     accounts: dict[str, ScoredAccount],
     venues: Sequence[Venue],
-    customers: dict[str, CustomerLabel] | None = None,
+    customers: dict[str, CustomerLabel],
 ) -> list[EventScore]:
     """Events by expected meetings per dollar, best first.
 
@@ -121,7 +127,7 @@ def meeting_list(
     appearances: Sequence[EventAppearance],
     accounts: dict[str, ScoredAccount],
     venues: Sequence[Venue],
-    customers: dict[str, CustomerLabel] | None = None,
+    customers: dict[str, CustomerLabel],
 ) -> list[MeetingTarget]:
     """Who to meet at `event`: prospects by p_attend * priority, then customers (warm intro)."""
     prospects: list[MeetingTarget] = []
