@@ -37,6 +37,11 @@ def reset_budget() -> None:
     _CALL_BUDGET = None
 
 
+def spend_call(n: int = 1) -> None:
+    """Spend from the shared Claude call budget (for the one non-parse call path: web search)."""
+    _budget(load_config()).spend(n)
+
+
 def structured(
     model_cls: type[T],
     *,

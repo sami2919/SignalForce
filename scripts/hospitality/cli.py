@@ -9,9 +9,13 @@ from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
+from anthropic import Anthropic
+
 from scripts.firecrawl_client import FirecrawlClient
+from scripts.hospitality.benchmark.baseline import run_baseline
+from scripts.hospitality.benchmark.compare import compare
 from scripts.hospitality.budget import CallBudget
-from scripts.hospitality.config import load_config
+from scripts.hospitality.config import HospitalityConfig, load_config
 from scripts.hospitality.labels import (
     customer_groups,
     labels_from_embeds,
@@ -19,6 +23,7 @@ from scripts.hospitality.labels import (
 )
 from scripts.hospitality.measure.recall import ground_truth_openings, recall_audit
 from scripts.hospitality.models import (
+    BenchmarkResult,
     CurveRecord,
     CustomerLabel,
     EntityLink,
@@ -67,6 +72,11 @@ from scripts.hospitality.window.survival import (
 )
 
 SEED_PATH = Path(__file__).resolve().parents[2] / "examples/magic-loyalist/customers_seed.yaml"
+BENCHMARK_RUNS = 3
+BENCHMARK_MAX_SEARCHES = 20
+BENCHMARK_K = 50
+# Anthropic's published web-search list price (USD per search); re-check before relying on it.
+WEB_SEARCH_USD_EACH = 0.01
 SLA_SOURCES: tuple[LicenseSource, ...] = ("sla_pending", "sla_active", "sla_inactive")
 
 
@@ -253,29 +263,19 @@ def labels() -> dict[str, int]:
     return {"public_list": counts["public_list"], "embed": counts["embed"]}
 
 
-def score(now: datetime | None = None) -> dict[str, object]:
-    """Build license signals, score every group with signals; save `scores`; rank prospects."""
-    cfg = load_config()
-    now = now or datetime.now(UTC)
-    store = DocStore()
-    venues = store.load("venues", Venue)
-    groups = {g.group_id: g for g in store.load("groups", Group)}
-    licenses = store.load("licenses", LicenseRecord)
-    links = store.load("links", EntityLink)
-    estimates = {e.venue_id: e for e in store.load("estimates", WindowEstimate)}
-    observations = store.load("stack_observations", StackObservation)
-    lic_signals = license_signals(
-        venues,
-        licenses,
-        first_seen_pending(store),
-        now.date(),
-        linked=linked_to_inspected(venues, links),
-        max_unmatched_age_days=cfg.window_unmatched_censor_max_age_days,
-    )
-    store.clear("license_signals")  # recomputed in full each run, so stale ones never linger
-    store.save("license_signals", lic_signals, key=lambda s: s.signal_id)  # type: ignore[attr-defined]
-    signals: list[Signal] = [*lic_signals, *store.load("signals", Signal)]
-
+def _score_accounts(
+    store: DocStore,
+    cfg: HospitalityConfig,
+    now: datetime,
+    *,
+    venues: Sequence[Venue],
+    groups: dict[str, Group],
+    licenses: Sequence[LicenseRecord],
+    estimates: dict[str, WindowEstimate],
+    observations: Sequence[StackObservation],
+    signals: Sequence[Signal],
+) -> list[ScoredAccount]:
+    """Score every group that has signals; reads the store, writes nothing."""
     labels = store.load("customer_labels", CustomerLabel) or load_seed_labels(SEED_PATH)
     customers = customer_groups(labels, venues, list(groups.values()))
     disqualified = disqualified_venues(observations)
@@ -316,6 +316,43 @@ def score(now: datetime | None = None) -> dict[str, object]:
                 disqualified_reason=operator or (reasons[0] if reasons else None),
             )
         )
+    return accounts
+
+
+def score(now: datetime | None = None) -> dict[str, object]:
+    """Build license signals, score every group with signals; save `scores`; rank prospects."""
+    cfg = load_config()
+    now = now or datetime.now(UTC)
+    store = DocStore()
+    venues = store.load("venues", Venue)
+    groups = {g.group_id: g for g in store.load("groups", Group)}
+    licenses = store.load("licenses", LicenseRecord)
+    links = store.load("links", EntityLink)
+    estimates = {e.venue_id: e for e in store.load("estimates", WindowEstimate)}
+    observations = store.load("stack_observations", StackObservation)
+    lic_signals = license_signals(
+        venues,
+        licenses,
+        first_seen_pending(store),
+        now.date(),
+        linked=linked_to_inspected(venues, links),
+        max_unmatched_age_days=cfg.window_unmatched_censor_max_age_days,
+    )
+    store.clear("license_signals")  # recomputed in full each run, so stale ones never linger
+    store.save("license_signals", lic_signals, key=lambda s: s.signal_id)  # type: ignore[attr-defined]
+    signals: list[Signal] = [*lic_signals, *store.load("signals", Signal)]
+
+    accounts = _score_accounts(
+        store,
+        cfg,
+        now,
+        venues=venues,
+        groups=groups,
+        licenses=licenses,
+        estimates=estimates,
+        observations=observations,
+        signals=signals,
+    )
     store.clear("scores")
     store.save("scores", accounts, key=lambda a: a.group_id)  # type: ignore[attr-defined]
     ranked = rank_prospects(accounts)
@@ -350,6 +387,97 @@ def recall(weeks: int = 12, today: date | None = None) -> dict[str, object]:
     return {**report.model_dump(mode="json"), "misses_sample": list(report.misses[:10])}
 
 
+def benchmark(cutoff_weeks: int = 8, today: date | None = None) -> BenchmarkResult:
+    """Head-to-head: SignalForce ranking as of the cutoff vs plain Claude + web search.
+
+    The SignalForce side uses only data dated on or before the cutoff (licenses received or
+    issued, signals observed, inspections, window estimates all as of `cutoff`); the truth set
+    is venues first inspected after the cutoff. Nothing here overwrites the live scores.
+    """
+    cfg = load_config()
+    today = today or date.today()
+    cutoff = today - timedelta(weeks=cutoff_weeks)
+    store = DocStore()
+    all_venues = store.load("venues", Venue)
+    groups = {g.group_id: g for g in store.load("groups", Group)}
+    all_licenses = store.load("licenses", LicenseRecord)
+    links = store.load("links", EntityLink)
+    truth = ground_truth_openings(all_venues, cutoff + timedelta(days=1), today, cfg, all_licenses)
+
+    # As-of inputs: forget everything dated after the cutoff.
+    venues = [
+        v.model_copy(update={"first_inspection_date": None})
+        if v.first_inspection_date is not None and v.first_inspection_date > cutoff
+        else v
+        for v in all_venues
+    ]
+    licenses = [
+        lic
+        for lic in all_licenses
+        if not (lic.source == "sla_pending" and (lic.received_date or cutoff) > cutoff)
+        and not (lic.source != "sla_pending" and (lic.original_issue_date or cutoff) > cutoff)
+    ]
+    first_seen = {k: d for k, d in first_seen_pending(store).items() if d <= cutoff}
+    now = datetime(cutoff.year, cutoff.month, cutoff.day, tzinfo=UTC)
+    cap = cfg.window_unmatched_censor_max_age_days
+    curves = build_curves(
+        opening_durations(venues, licenses, cutoff, links, max_unmatched_age_days=cap)
+    )
+    estimates = {e.venue_id: e for e in estimate_all(venues, licenses, curves, cfg, cutoff, links)}
+    observations = [
+        o for o in store.load("stack_observations", StackObservation) if o.observed_at <= now
+    ]
+    lic_signals = license_signals(
+        venues,
+        licenses,
+        first_seen,
+        cutoff,
+        linked=linked_to_inspected(venues, links),
+        max_unmatched_age_days=cap,
+    )
+    stack = [s for s in store.load("signals", Signal) if s.observed_at <= now]
+    labels = store.load("customer_labels", CustomerLabel) or load_seed_labels(SEED_PATH)
+    customer_ids = customer_groups(labels, venues, list(groups.values()))
+    accounts = [
+        a.model_copy(update={"is_customer": a.group_id in customer_ids})
+        for a in _score_accounts(
+            store,
+            cfg,
+            now,
+            venues=venues,
+            groups=groups,
+            licenses=licenses,
+            estimates=estimates,
+            observations=observations,
+            signals=[*lic_signals, *stack],
+        )
+    ]
+    top = rank_prospects(accounts)[:BENCHMARK_K]
+    by_group: dict[str, tuple[str, ...]] = {
+        gid: tuple(vid for vid in g.venue_ids) for gid, g in groups.items()
+    }
+    runs = run_baseline(
+        Anthropic(), cutoff, runs=BENCHMARK_RUNS, max_searches=BENCHMARK_MAX_SEARCHES
+    )
+    result = compare(top, by_group, runs, truth, all_venues, k=BENCHMARK_K)
+    store.clear("benchmark")
+    store.save("benchmark", [result], key=lambda r: f"cutoff:{cutoff.isoformat()}")
+    return result
+
+
+def _print_benchmark(r: BenchmarkResult) -> None:
+    print(f"truth openings after cutoff: {r.truth_total}  (k={r.k})")
+    print(f"SignalForce: hits={r.sf_hits} precision@k={r.sf_precision_at_k:.3f}")
+    for i, hit in enumerate(r.claude_hits):
+        print(
+            f"Claude run {i}: hits={hit} precision={r.claude_precision_at_k[i]:.3f} "
+            f"duplicates={r.claude_duplicates[i]} non-venues={r.claude_unmatched[i]}"
+        )
+    print(f"Claude run-to-run Jaccard: {r.claude_run_jaccard:.3f}")
+    for note in r.notes:
+        print(f"note: {note}")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="scripts.hospitality.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -365,6 +493,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     sub.add_parser("score", help="Score groups (noisy-OR) and print the top 25 prospects")
     p_recall = sub.add_parser("recall", help="Recall of license signals vs DOHMH first inspections")
     p_recall.add_argument("--weeks", type=int, default=12, help="Look-back window in weeks")
+    p_bench = sub.add_parser(
+        "benchmark", help="Head-to-head vs plain Claude + web search (spends real money)"
+    )
+    p_bench.add_argument("--cutoff-weeks", type=int, default=8, help="Cutoff = today minus weeks")
+    p_bench.add_argument("--yes", action="store_true", help="Confirm the Claude spend")
     args = parser.parse_args(argv)
     if args.command == "ingest-sla":
         for source, n in ingest_sla().items():
@@ -413,6 +546,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"recall: {out['recall']:.3f}")
         print(f"median lead days: {out['median_lead_days']}")
         print(f"sample misses: {out['misses_sample']}")
+    elif args.command == "benchmark":
+        if not os.environ.get("ANTHROPIC_API_KEY"):  # fail fast, before any store or network use
+            raise SystemExit("ANTHROPIC_API_KEY is not set; the benchmark command needs it")
+        searches = BENCHMARK_RUNS * BENCHMARK_MAX_SEARCHES
+        print(
+            f"Maximum spend: {BENCHMARK_RUNS} runs x {BENCHMARK_MAX_SEARCHES} searches = "
+            f"{searches} web searches (~${searches * WEB_SEARCH_USD_EACH:.2f} at list price) "
+            f"plus tokens (up to 16000 output tokens per call, "
+            f"{load_config().budgets['claude_calls']} calls hard cap)."
+        )
+        if not args.yes:
+            raise SystemExit("Re-run with --yes to spend this on the Claude API")
+        _print_benchmark(benchmark(args.cutoff_weeks))
     return 0
 
 

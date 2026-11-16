@@ -217,3 +217,29 @@ class RecallReport(_Frozen):
     median_lead_days: float | None
     lead_days: tuple[int, ...]
     misses: tuple[str, ...]
+
+
+class BaselineItem(_Frozen):
+    name: str
+    location: str
+    group: str | None
+    expected_opening: str | None
+
+
+class BaselineRun(_Frozen):
+    run_index: int
+    items: tuple[BaselineItem, ...]
+    searches_used: int
+
+
+class BenchmarkResult(_Frozen):
+    k: int
+    sf_hits: int
+    sf_precision_at_k: float
+    claude_hits: tuple[int, ...]
+    claude_precision_at_k: tuple[float, ...]
+    claude_duplicates: tuple[int, ...]
+    claude_unmatched: tuple[int, ...]
+    claude_run_jaccard: float
+    truth_total: int
+    notes: tuple[str, ...]
