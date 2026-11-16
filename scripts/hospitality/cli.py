@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import logging
 import math
 import os
 import sys
@@ -17,6 +18,12 @@ from scripts.hospitality.benchmark.baseline import run_baseline
 from scripts.hospitality.benchmark.compare import compare
 from scripts.hospitality.budget import BudgetExceeded, CallBudget
 from scripts.hospitality.config import HospitalityConfig, load_config
+from scripts.hospitality.contacts.clay import (
+    clay_rows,
+    import_clay_csv,
+    merge_contact,
+    push_to_clay,
+)
 from scripts.hospitality.contacts.waterfall import HunterClient, find_contacts
 from scripts.hospitality.discover.exa import ExaClient
 from scripts.hospitality.discover.lookalikes import lookalike_signals, seed_url
@@ -80,6 +87,8 @@ from scripts.hospitality.window.survival import (
     opening_durations,
     quantile_time,
 )
+
+logger = logging.getLogger(__name__)
 
 SEED_PATH = Path(__file__).resolve().parents[2] / "examples/magic-loyalist/customers_seed.yaml"
 BENCHMARK_RUNS = 3
@@ -409,6 +418,41 @@ def contacts(top: int = 25) -> dict[str, object]:
     }
 
 
+def clay_push(top: int = 25) -> dict[str, object]:
+    """Push the top cold prospects to the Clay table by webhook (customers never pushed)."""
+    url = os.environ.get("CLAY_WEBHOOK_URL")
+    if not url:  # fail fast, before touching the store or the network
+        raise SystemExit("CLAY_WEBHOOK_URL is not set; the clay-push command needs it")
+    cfg = load_config()
+    store = DocStore()
+    ranked = rank_prospects(store.load("scores", ScoredAccount))[:top]
+    rows = clay_rows(ranked, store.load("venues", Venue), store.load("contacts", Contact))
+    budget = CallBudget("clay", cfg.budgets["clay"])
+    pushed = push_to_clay(url, rows, budget)
+    return {"rows": len(rows), "pushed": pushed, "clay_calls": budget.used}
+
+
+def clay_import(path: Path) -> dict[str, object]:
+    """Import Clay's enriched CSV as contacts for known prospect groups; never downgrade."""
+    store = DocStore()
+    known = {a.group_id for a in rank_prospects(store.load("scores", ScoredAccount))}
+    parsed = import_clay_csv(path)
+    kept = [c for c in parsed if c.group_id in known]
+    for c in parsed:
+        if c.group_id not in known:
+            logger.warning("clay import skipped: group %s is not a known prospect", c.group_id)
+    existing = {c.contact_id: c for c in store.load("contacts", Contact)}
+    merged = [
+        merge_contact(existing[c.contact_id], c) if c.contact_id in existing else c for c in kept
+    ]
+    store.save("contacts", merged, key=lambda c: c.contact_id)  # type: ignore[attr-defined]
+    return {
+        "imported": len(merged),
+        "skipped": len(parsed) - len(kept),
+        "with_email": sum(c.email is not None for c in merged),
+    }
+
+
 def press(days: int = 120, today: date | None = None) -> dict[str, object]:
     """Search press for openings, extract facts, save signals/venues/evidence, merge, rescore."""
     if not os.environ.get("EXA_API_KEY"):  # fail fast, before touching the store or the network
@@ -735,6 +779,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     p_contacts = sub.add_parser("contacts", help="Contacts for top prospects (team page, Hunter)")
     p_contacts.add_argument("--top", type=int, default=25, help="Top N ranked prospects")
+    p_clay_push = sub.add_parser("clay-push", help="Push top prospects to Clay (webhook)")
+    p_clay_push.add_argument("--top", type=int, default=25, help="Top N ranked prospects")
+    p_clay_import = sub.add_parser("clay-import", help="Import Clay's enriched CSV as contacts")
+    p_clay_import.add_argument("csv", type=Path, help="Clay CSV export")
     sub.add_parser("lookalikes", help="Exa lookalikes of customer sites, matched to known venues")
     sub.add_parser("backtest", help="Case replay on known customers + fit AUC (indicative)")
     sub.add_parser("run-p0", help="Run the whole P0 chain, ingest through backtest")
@@ -796,6 +844,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"{name}: {value}")
     elif args.command == "contacts":
         for name, value in contacts(args.top).items():
+            print(f"{name}: {value}")
+    elif args.command == "clay-push":
+        for name, value in clay_push(args.top).items():
+            print(f"{name}: {value}")
+    elif args.command == "clay-import":
+        for name, value in clay_import(args.csv).items():
             print(f"{name}: {value}")
     elif args.command == "lookalikes":
         for name, value in lookalikes().items():
