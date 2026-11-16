@@ -59,15 +59,35 @@ def _parse_all(rows: Any) -> list[InspectionVenue]:
     return [v for v in venues if v is not None]
 
 
+def _collapse_variants(rows: Any) -> list[dict[str, Any]]:
+    """One row per camis: the earliest `first_date`, the newest variant's attributes (M9).
+
+    The grouped query returns one row per (camis, dba, address, cuisine, phone, lat/lon)
+    variant. A renamed or re-geocoded site therefore has several rows, and keeping any one
+    variant's date can make an old site look like a new opening (Review Focus 2).
+    """
+    by_camis: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        by_camis.setdefault(str(row.get("camis") or ""), []).append(row)
+    out: list[dict[str, Any]] = []
+    for variants in by_camis.values():
+        dated = [str(r["first_date"]) for r in variants if r.get("first_date")]
+        newest = max(variants, key=lambda r: str(r.get("last_date") or ""))
+        out.append({**newest, "first_date": min(dated) if dated else newest.get("first_date")})
+    return out
+
+
 def fetch_first_inspections(client: SocrataClient) -> list[InspectionVenue]:
     """One row per venue with its earliest real inspection date (sentinel excluded)."""
-    select = f"{_GROUP},min(inspection_date) as first_date"
+    select = f"{_GROUP},min(inspection_date) as first_date,max(inspection_date) as last_date"
     return _parse_all(
-        client.rows(
-            DATASET_ID,
-            select=select,
-            where=f"inspection_date > '{SENTINEL_CUTOFF}'",
-            group=_GROUP,
+        _collapse_variants(
+            client.rows(
+                DATASET_ID,
+                select=select,
+                where=f"inspection_date > '{SENTINEL_CUTOFF}'",
+                group=_GROUP,
+            )
         )
     )
 

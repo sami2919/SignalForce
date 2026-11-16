@@ -128,3 +128,39 @@ def test_grouped_query_orders_by_group_columns_and_sends_having() -> None:
     list(client.rows("abcd-1234", group="camis,dba", having="max(x) < 1"))
     params = client.get_list.call_args.kwargs["params"]
     assert params["$order"] == "camis,dba" and params["$having"] == "max(x) < 1"
+
+
+def _variant(dba: str, first: str, last: str, lat: str) -> dict:
+    return {
+        "camis": "50000001",
+        "dba": dba,
+        "boro": "Manhattan",
+        "building": "1",
+        "street": "MAIN ST",
+        "zipcode": "10001",
+        "cuisine_description": "American",
+        "phone": "2125550100",
+        "latitude": lat,
+        "longitude": "-74.0",
+        "first_date": first,
+        "last_date": last,
+    }
+
+
+def test_a_renamed_or_regeocoded_site_keeps_its_true_first_inspection() -> None:
+    """M9: rows group by camis plus mutable attributes; the earliest date must win.
+
+    The site opened (first inspection) in 2019 as OLD NAME, then was renamed and re-geocoded
+    in 2026. The grouped query returns one row per variant; the 2026 variant's min date must
+    not make the site look like a 2026 opening.
+    """
+    rows = [
+        _variant("OLD NAME", "2019-03-01T00:00:00.000", "2025-12-01T00:00:00.000", "40.70"),
+        _variant("NEW NAME", "2026-09-01T00:00:00.000", "2026-11-01T00:00:00.000", "40.71"),
+    ]
+    client = Mock(rows=Mock(return_value=iter(rows)))
+    venues = fetch_first_inspections(client)
+    assert len(venues) == 1
+    assert venues[0].first_inspection_date == date(2019, 3, 1)
+    assert venues[0].dba == "NEW NAME" and venues[0].lat == 40.71  # current attributes
+    assert "max(inspection_date) as last_date" in client.rows.call_args.kwargs["select"]
