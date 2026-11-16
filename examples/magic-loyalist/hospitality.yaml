@@ -1,0 +1,28 @@
+datasets: {sla_pending: f8i8-k2gm, sla_active: 9s3h-dpkz, sla_inactive: 6dg3-2z7i, dohmh: 43nn-pn8j}
+nyc_counties: [New York, Kings, Queens, Bronx, Richmond]
+on_premise_descriptions: [Restaurant, Food & Beverage Business, Hotel, Catering Establishment, Summer Restaurant]
+priors:   # precision = P(group in a buying window | signal); starting guesses the loop updates
+  license_pending:   {precision: 0.30, half_life_days: null, family: opening}
+  license_issued:    {precision: 0.30, half_life_days: null, family: opening}
+  not_yet_inspected: {precision: 0.15, half_life_days: null, family: opening}
+  press_opening:     {precision: 0.35, half_life_days: null, family: opening}
+  stack_fragmented:  {precision: 0.25, half_life_days: null, family: stack}
+  tripleseat_resy:   {precision: 0.25, half_life_days: null, family: stack}
+  private_events:    {precision: 0.15, half_life_days: 120, family: events}
+  hotel_partnership: {precision: 0.20, half_life_days: 180, family: opening}
+  role_hire:         {precision: 0.15, half_life_days: 90, family: people}
+  new_gm:            {precision: 0.15, half_life_days: 90, family: people}
+  platform_switch:   {precision: 0.05, half_life_days: 90, family: stack}
+  lookalike:         {precision: 0.10, half_life_days: null, family: discovery}
+  alumni_edge:       {precision: 0.0, half_life_days: null, family: relationship}
+window_pre_days: 183
+window_post_days: 365
+window_outside_half_life_days: 60
+pending_to_issue_prior_days: 75
+fit_weights: {multi_venue: 0.30, reservation_platform: 0.30, events_program: 0.15, accolade: 0.15, full_service_class: 0.10}
+relationship_boost: 0.5
+budgets: {places: 400, firecrawl: 300, exa: 120, hunter: 40, clay: 25, claude_calls: 600}
+models: {extract: claude-opus-5-5, draft: claude-opus-5-5, judge: claude-opus-5-5, baseline: claude-opus-5-5}
+match_max_distance_m: 40.0
+match_auto_threshold: 0.90
+match_link_threshold: 0.60
