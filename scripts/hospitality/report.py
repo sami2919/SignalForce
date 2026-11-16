@@ -131,14 +131,21 @@ def _universe(
     return lines
 
 
-def _timing(curves: Sequence[CurveRecord]) -> list[str]:
+def _timing(curves: Sequence[CurveRecord], cfg: HospitalityConfig) -> list[str]:
     if not curves:
         return _not_run("opening-timing curve", "No curves are stored (run the window command).")
     ordered = sorted(curves, key=lambda c: (c.stratum != "all", -c.n, c.stratum))
     lines = [
         (
-            "Days from license to first inspection, from a Kaplan-Meier curve that corrects for "
-            "censoring (applications that have not opened yet are censored, not dropped)."
+            "Days from license issue to first DOHMH inspection, from a Kaplan-Meier curve that "
+            "corrects for censoring: an issued license whose site is not inspected yet is "
+            "censored at its age. It is dropped instead when the missing inspection is more "
+            "likely a match miss than a site that has not opened: the license is possibly-same "
+            "linked to an already-inspected site, or it has no DOHMH record at all and is older "
+            f"than {cfg.window_unmatched_censor_max_age_days} days. Licenses issued after the "
+            "site's first inspection (transfers, renewals) and durations over "
+            f"{cfg.max_opening_days:g} days are dropped too; pending applications are not on "
+            "the curve."
         ),
         "",
         "| Stratum | n | 25th pct (days) | Median (days) | 75th pct (days) |",
@@ -644,7 +651,7 @@ def build_report(
 
     body: list[list[str]] = [
         _universe(venues, groups, licenses, store.load("links", EntityLink)),
-        _timing(store.load("curves", CurveRecord)),
+        _timing(store.load("curves", CurveRecord), cfg),
         _recall(store, cfg, today),
         _head_to_head(store.load("benchmark", BenchmarkResult)),
         _backtests(store),
