@@ -89,6 +89,7 @@ def make_signal(signal_type: str = "license_pending", entity_id: str = "v:1", **
 
     from scripts.hospitality.models import Signal
 
+    observed = overrides.pop("observed", None)  # a date, as shorthand for observed_at
     base: dict[str, object] = {
         "signal_id": f"{signal_type}:{entity_id}",
         "signal_type": signal_type,
@@ -99,6 +100,8 @@ def make_signal(signal_type: str = "license_pending", entity_id: str = "v:1", **
         "evidence_ref": "ref",
         "detail": "",
     }
+    if observed is not None:
+        base["observed_at"] = datetime(observed.year, observed.month, observed.day, tzinfo=UTC)  # type: ignore[attr-defined]
     base.update(overrides)
     return Signal(**base)  # type: ignore[arg-type]
 

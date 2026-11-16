@@ -206,3 +206,14 @@ class CurveRecord(_Frozen):
     stratum: str
     n: int
     steps: tuple[tuple[float, float], ...]
+
+
+class RecallReport(_Frozen):
+    start: date
+    end: date
+    total: int
+    caught: int
+    recall: float
+    median_lead_days: float | None
+    lead_days: tuple[int, ...]
+    misses: tuple[str, ...]

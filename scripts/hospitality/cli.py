@@ -6,7 +6,7 @@ import os
 import sys
 from collections import Counter
 from collections.abc import Sequence
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from scripts.firecrawl_client import FirecrawlClient
@@ -17,6 +17,7 @@ from scripts.hospitality.labels import (
     labels_from_embeds,
     load_seed_labels,
 )
+from scripts.hospitality.measure.recall import ground_truth_openings, recall_audit
 from scripts.hospitality.models import (
     CurveRecord,
     CustomerLabel,
@@ -328,6 +329,27 @@ def score(now: datetime | None = None) -> dict[str, object]:
     }
 
 
+def recall(weeks: int = 12, today: date | None = None) -> dict[str, object]:
+    """Replay license signals for venues first inspected in the last `weeks`; report recall.
+
+    Each opening is replayed as of the day before its first inspection (no inspection yet, no
+    match-miss filter), so only signals that could have existed beforehand are counted.
+    """
+    cfg = load_config()
+    today = today or date.today()
+    start = today - timedelta(weeks=weeks)
+    store = DocStore()
+    licenses = store.load("licenses", LicenseRecord)
+    openings = ground_truth_openings(store.load("venues", Venue), start, today, cfg, licenses)
+    replayed: list[Signal] = []
+    for v in openings:
+        as_of = v.first_inspection_date - timedelta(days=1)  # type: ignore[operator]
+        pre = v.model_copy(update={"first_inspection_date": None})
+        replayed.extend(license_signals([pre], licenses, {}, as_of))
+    report = recall_audit(openings, replayed, start, today)
+    return {**report.model_dump(mode="json"), "misses_sample": list(report.misses[:10])}
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="scripts.hospitality.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -341,6 +363,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     sub.add_parser("crawl", help="Crawl venue websites; detect stacks and emit stack signals")
     sub.add_parser("labels", help="Label customer groups (seed list + Loyalist embeds)")
     sub.add_parser("score", help="Score groups (noisy-OR) and print the top 25 prospects")
+    p_recall = sub.add_parser("recall", help="Recall of license signals vs DOHMH first inspections")
+    p_recall.add_argument("--weeks", type=int, default=12, help="Look-back window in weeks")
     args = parser.parse_args(argv)
     if args.command == "ingest-sla":
         for source, n in ingest_sla().items():
@@ -382,6 +406,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 f"{rank:>2}. {name[:40]:<40} priority={acct.priority:.3f} "
                 f"p={acct.p_window:.2f} fit={acct.fit:.2f} [{why}]"
             )
+    elif args.command == "recall":
+        out = recall(args.weeks)
+        print(f"window: {out['start']} to {out['end']}")
+        print(f"openings: {out['total']}, caught before first inspection: {out['caught']}")
+        print(f"recall: {out['recall']:.3f}")
+        print(f"median lead days: {out['median_lead_days']}")
+        print(f"sample misses: {out['misses_sample']}")
     return 0
 
 
