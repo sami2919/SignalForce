@@ -7,13 +7,20 @@ import sys
 from collections import Counter
 from collections.abc import Sequence
 from datetime import UTC, date, datetime
+from pathlib import Path
 
 from scripts.firecrawl_client import FirecrawlClient
 from scripts.hospitality.budget import CallBudget
 from scripts.hospitality.config import load_config
+from scripts.hospitality.labels import (
+    customer_groups,
+    labels_from_embeds,
+    load_seed_labels,
+)
 from scripts.hospitality.models import (
     CurveRecord,
     EntityLink,
+    Group,
     InspectionVenue,
     LicenseRecord,
     LicenseSource,
@@ -43,6 +50,7 @@ from scripts.hospitality.store import DocStore
 from scripts.hospitality.window.estimate import estimate_all
 from scripts.hospitality.window.survival import build_curves, opening_durations, quantile_time
 
+SEED_PATH = Path(__file__).resolve().parents[2] / "examples/magic-loyalist/customers_seed.yaml"
 SLA_SOURCES: tuple[LicenseSource, ...] = ("sla_pending", "sla_active", "sla_inactive")
 
 
@@ -160,9 +168,13 @@ def websites(limit: int = 400) -> dict[str, int]:
     by_id = {v.venue_id: v for v in venues}
     # Prioritized: venues with an estimate, soonest-opening first, without a website yet.
     ranked = sorted(estimates, key=lambda e: e.estimated_open)
-    priority = [
-        e.venue_id for e in ranked if e.venue_id in by_id and not by_id[e.venue_id].website
-    ][:limit]
+    # Seed customers first: they are always looked up (to label them and seed lookalikes).
+    seed_groups = customer_groups(load_seed_labels(SEED_PATH), venues, store.load("groups", Group))
+    customer_ids = [v.venue_id for v in venues if v.group_id in seed_groups and not v.website]
+    ordered = [*customer_ids, *(e.venue_id for e in ranked)]
+    priority = list(
+        dict.fromkeys(vid for vid in ordered if vid in by_id and not by_id[vid].website)
+    )[:limit]
     budget = CallBudget("places", min(limit, cfg.budgets["places"]))
     updated = attach_websites(venues, PlacesClient(key, budget), priority)
     changed = [u for u, v in zip(updated, venues, strict=True) if u != v]
@@ -202,6 +214,29 @@ def crawl(now: datetime | None = None) -> dict[str, object]:
     }
 
 
+def labels() -> dict[str, int]:
+    """Label customer groups from the seed list and detected embeds; save labels; count by source."""
+    store = DocStore()
+    venues = store.load("venues", Venue)
+    groups = store.load("groups", Group)
+    observations = store.load("stack_observations", StackObservation)
+    first_seen: dict[str, date] = {}
+    for o in sorted(observations, key=lambda o: o.observed_at):
+        if "loyalist" in o.platforms:
+            first_seen.setdefault(o.venue_id, o.observed_at.date())
+    embeds = labels_from_embeds(loyalist_venues(observations), venues, first_seen)
+    all_labels = [*load_seed_labels(SEED_PATH), *embeds]
+    customers = customer_groups(all_labels, venues, groups)
+    store.clear("customer_labels")
+    store.save(
+        "customer_labels",
+        all_labels,
+        key=lambda c: f"{c.source}|{c.name}|{c.website_domain}",  # type: ignore[attr-defined]
+    )
+    counts = Counter(label.source for label in customers.values())
+    return {"public_list": counts["public_list"], "embed": counts["embed"]}
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="scripts.hospitality.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -213,6 +248,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     p_web = sub.add_parser("websites", help="Find websites for prioritized venues (Google Places)")
     p_web.add_argument("--limit", type=int, default=400, help="Max venues to look up")
     sub.add_parser("crawl", help="Crawl venue websites; detect stacks and emit stack signals")
+    sub.add_parser("labels", help="Label customer groups (seed list + Loyalist embeds)")
     args = parser.parse_args(argv)
     if args.command == "ingest-sla":
         for source, n in ingest_sla().items():
@@ -240,6 +276,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         out = crawl()
         for name, value in out.items():
             print(f"{name}: {value}")
+    elif args.command == "labels":
+        for name, n in labels().items():
+            print(f"{name}: {n}")
     return 0
 
 

@@ -1,0 +1,64 @@
+# Public Loyalist customers, from docs/research/magic/02-dossiers-nyc.md.
+# first_public_date is an UPPER BOUND (the customer started on or before it); null = undated.
+# website_domain only where the research names the venue/group site. No private data.
+customers:
+  - name: Major Food Group
+    website_domain: majorfood.com
+    first_public_date: 2024-11-02
+    evidence_ref: https://www.eatloyalist.com/customer-stories/
+  - name: Happy Cooking Hospitality
+    website_domain: happycookingnyc.com
+    first_public_date: null
+    evidence_ref: https://www.eatloyalist.com/customer-stories/
+  - name: The Noortwyck
+    website_domain: null
+    first_public_date: 2024-11-02
+    evidence_ref: https://www.eatloyalist.com/customer-stories/
+  - name: Oriana
+    website_domain: oriananewyork.com
+    first_public_date: null
+    evidence_ref: https://www.oriananewyork.com
+  - name: Eleven Madison Park
+    website_domain: null
+    first_public_date: null
+    evidence_ref: https://www.eatloyalist.com/
+  - name: Le Bernardin
+    website_domain: null
+    first_public_date: 2025-10-20
+    evidence_ref: https://www.prnewswire.com/news-releases/magic-raises-10m-to-bring-ai-into-the-real-world-302589060.html
+  - name: COTE
+    website_domain: cotekoreansteakhouse.com
+    first_public_date: 2025-10-20
+    evidence_ref: https://www.prnewswire.com/news-releases/magic-raises-10m-to-bring-ai-into-the-real-world-302589060.html
+  - name: Dinex Group
+    website_domain: danielnyc.com
+    first_public_date: 2025-10-20
+    evidence_ref: https://www.prnewswire.com/news-releases/magic-raises-10m-to-bring-ai-into-the-real-world-302589060.html
+  - name: Momofuku
+    website_domain: momofuku.com
+    first_public_date: 2025-10-20
+    evidence_ref: https://www.prnewswire.com/news-releases/magic-raises-10m-to-bring-ai-into-the-real-world-302589060.html
+  - name: Cosme
+    website_domain: null
+    first_public_date: 2025-10-20
+    evidence_ref: https://fortune.com/2025/10/20/mario-carbone-magic-loyalist-major-food-group-ai-restaurants-dining-crm/
+  - name: Estela
+    website_domain: estelanyc.com
+    first_public_date: 2024-11-01
+    evidence_ref: https://www.eatloyalist.com/customer-stories/
+  - name: Rezdôra
+    website_domain: rezdora.nyc
+    first_public_date: 2025-10-29
+    evidence_ref: https://stocks.observer-reporter.com/observerreporter/article/bizwire-2025-10-29-resy-launches-new-integrations-connecting-the-resy-guestbook-to-marketing-platforms
+  - name: Union Square Hospitality Group
+    website_domain: null
+    first_public_date: null
+    evidence_ref: https://www.loyalist.com/
+  - name: Hotel Chelsea
+    website_domain: null
+    first_public_date: null
+    evidence_ref: https://www.loyalist.com/
+  - name: Hogsalt
+    website_domain: hogsalt.com
+    first_public_date: null
+    evidence_ref: https://hogsalt.com
