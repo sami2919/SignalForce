@@ -333,3 +333,37 @@ def test_cli_report_targets_gitignored_out_magic(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cli, "OUT_DIR", tmp_path / "out")
     written = cli.report()
     assert written == tmp_path / "out" / "demo_report.md" and written.exists()
+
+
+def test_tied_ranks_are_shown_as_a_shared_rank_with_the_tie_break(tmp_path, events_yaml) -> None:
+    """I8: ranks that share one priority must read as tied, not as an ordered list."""
+    store = full_store(tmp_path)
+    tied = [
+        make_scored(
+            "g:b",
+            0.1,
+            opening_date=date(2026, 11, 1),
+            opening_gap_days=15,
+            latest_signal_on=date(2026, 6, 1),
+        ),
+        make_scored("g:d", 0.1, opening_date=date(2026, 3, 1), opening_gap_days=260),
+    ]
+    store.save("scores", tied, key=lambda a: a.group_id)  # g:d now an eligible prospect
+    s7 = sections(build(store, tmp_path, events_yaml))[7]
+    assert "Ranks 2–3 share priority 0.100" in s7
+    assert "#### 2 (tied 2–3). Quill Room" in s7
+    assert "#### 3 (tied 2–3). Orbit Catering" in s7
+    assert "#### 1. Zephyr Hall" in s7  # a unique score keeps a plain rank
+    assert "opening 2026-11-01 (15 days from today)" in s7
+
+
+def test_a_tie_that_runs_past_the_top_n_says_so(tmp_path, events_yaml, monkeypatch) -> None:
+    from scripts.hospitality import report
+
+    store = full_store(tmp_path)
+    tied = [make_scored("g:b", 0.1), make_scored("g:d", 0.1)]
+    store.save("scores", tied, key=lambda a: a.group_id)
+    monkeypatch.setattr(report, "TOP_N", 2)
+    s7 = sections(build(store, tmp_path, events_yaml))[7]
+    assert "Ranks 2–3 share priority 0.100 (tied); rank 3 is below the top 2" in s7
+    assert "no dated opening" in s7

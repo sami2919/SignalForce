@@ -3,7 +3,7 @@
 import math
 import re
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
@@ -164,6 +164,77 @@ def contract_operator_reason(names: Iterable[str], cfg: HospitalityConfig) -> st
     return None
 
 
+def non_restaurant_name_reason(names: Iterable[str], cfg: HospitalityConfig) -> str | None:
+    """`non_restaurant_name:<reason>` for the first configured reason any name matches."""
+    norms = [n for n in (normalize_name(name) for name in names) if n]
+    for reason, raw in cfg.non_restaurant_name_patterns.items():
+        patterns = [re.compile(p, re.IGNORECASE) for p in raw]
+        if any(p.search(n) for p in patterns for n in norms):
+            return f"non_restaurant_name:{reason}"
+    return None
+
+
+def _premises_label(
+    venue: Venue, licenses_by_id: Mapping[str, LicenseRecord], cfg: HospitalityConfig
+) -> str | None:
+    rule = cfg.non_restaurant_premises
+    if venue.zip_code in rule.zip_codes:
+        return rule.zip_codes[venue.zip_code]
+    descriptions = [
+        lic.description for lid in venue.license_ids if (lic := licenses_by_id.get(lid))
+    ]
+    labels = {rule.license_descriptions.get(d) for d in descriptions}
+    if not descriptions or None in labels:
+        return None  # no premises evidence, or at least one restaurant-type license
+    return "+".join(sorted(labels))  # type: ignore[arg-type]
+
+
+def premises_reason(
+    venues: Sequence[Venue], licenses_by_id: Mapping[str, LicenseRecord], cfg: HospitalityConfig
+) -> str | None:
+    """`non_restaurant_premises:<label>` when EVERY venue is a non-restaurant premises, else None.
+
+    Data, not names: the zip code (airport property) and the SLA license description. A venue
+    without premises evidence (a press-only venue, no license) is never non-restaurant.
+    """
+    labels: set[str] = set()
+    for venue in venues:
+        label = _premises_label(venue, licenses_by_id, cfg)
+        if label is None:
+            return None
+        labels.add(label)
+    return "non_restaurant_premises:" + "+".join(sorted(labels)) if labels else None
+
+
+def _tie_facts(
+    rows: Sequence[tuple[Signal, SignalPrior, float, float]],
+    counted: set[str],
+    estimates: Mapping[str, WindowEstimate],
+    venues: Sequence[Venue],
+    now: datetime,
+) -> tuple[date | None, int | None, date | None]:
+    """(opening date nearest today, its distance in days, newest contributing signal date)."""
+    inspected = {v.venue_id: v.first_inspection_date for v in venues}
+    today = now.date()
+    openings: list[date] = []
+    latest: date | None = None
+    for sig, prior, _weight, raw in rows:
+        if sig.signal_id not in counted or raw <= 0 or prior.family == "relationship":
+            continue
+        seen = _aware(sig.observed_at).date()
+        latest = seen if latest is None or seen > latest else latest
+        if prior.family != "opening":
+            continue
+        est = estimates.get(sig.entity_id)
+        when = est.estimated_open if est is not None else inspected.get(sig.entity_id)
+        if when is not None:
+            openings.append(when)
+    if not openings:
+        return None, None, latest
+    nearest = min(openings, key=lambda d: (abs((d - today).days), d))
+    return nearest, abs((nearest - today).days), latest
+
+
 def score_group(
     group: Group,
     signals: Sequence[Signal],
@@ -208,6 +279,7 @@ def score_group(
     fit = fit_score(group, venues, observations, cfg)
     relationship = 1.0 + cfg.relationship_boost if alumni else 1.0
     priority = 0.0 if disqualified_reason else p_window * (0.5 + 0.5 * fit) * relationship
+    opening_date, gap, latest = _tie_facts(rows, counted, estimates, venues, now)
     return ScoredAccount(
         group_id=group.group_id,
         p_window=p_window,
@@ -217,6 +289,9 @@ def score_group(
         contributions=tuple(contributions),
         disqualified_reason=disqualified_reason,
         is_customer=is_customer,
+        opening_date=opening_date,
+        opening_gap_days=gap,
+        latest_signal_on=latest,
     )
 
 
@@ -226,7 +301,48 @@ def zero_out(account_inputs: ScoreInputs, signal_type: str) -> ScoredAccount:
     return score_group(**account_inputs.model_copy(update={"signals": kept}).kwargs())
 
 
+# Priorities closer than this are one score (float noise is not a ranking difference).
+TIE_DECIMALS = 9
+
+
+def _tie_key(a: ScoredAccount) -> float:
+    return round(a.priority, TIE_DECIMALS)
+
+
 def rank_prospects(accounts: Sequence[ScoredAccount]) -> list[ScoredAccount]:
-    """Cold prospects only (no customers, no disqualified), by priority desc then group_id."""
+    """Cold prospects only (no customers, no disqualified), by priority desc.
+
+    Equal priorities are a tie the score cannot separate; they are ordered by a stated rule:
+    the opening nearest today first (the buying moment), then the most recent contributing
+    signal, then group_id. `tie_blocks` reports which ranks share a score.
+    """
     eligible = [a for a in accounts if not a.is_customer and a.disqualified_reason is None]
-    return sorted(eligible, key=lambda a: (-a.priority, a.group_id))
+
+    def key(a: ScoredAccount) -> tuple[float, float, bool, int, str]:
+        gap = float(a.opening_gap_days) if a.opening_gap_days is not None else math.inf
+        newest = a.latest_signal_on
+        return (
+            -_tie_key(a),
+            gap,
+            newest is None,
+            -(newest.toordinal() if newest else 0),
+            a.group_id,
+        )
+
+    return sorted(eligible, key=key)
+
+
+def tie_blocks(ranked: Sequence[ScoredAccount]) -> dict[str, tuple[int, int]]:
+    """group_id -> (first rank, last rank) for every group sharing its priority with another.
+
+    Ranks are 1-based positions in `ranked`; groups with a unique priority are absent.
+    """
+    out: dict[str, tuple[int, int]] = {}
+    start = 0
+    for i in range(1, len(ranked) + 1):
+        if i == len(ranked) or _tie_key(ranked[i]) != _tie_key(ranked[start]):
+            if i - start > 1:
+                for a in ranked[start:i]:
+                    out[a.group_id] = (start + 1, i)
+            start = i
+    return out

@@ -42,7 +42,7 @@ from scripts.hospitality.models import (
     Venue,
     WindowEstimate,
 )
-from scripts.hospitality.scoring import rank_prospects
+from scripts.hospitality.scoring import TIE_DECIMALS, rank_prospects, tie_blocks
 from scripts.hospitality.store import DocStore
 from scripts.hospitality.window.survival import quantile_time
 
@@ -329,16 +329,32 @@ def _stack(
     return [*lines, *_customer_section(customers, names)]
 
 
+def _tie_break_line(acct: ScoredAccount) -> str:
+    if acct.opening_date is not None:
+        opening = f"opening {acct.opening_date} ({acct.opening_gap_days} days from today)"
+    else:
+        opening = "no dated opening"
+    newest = acct.latest_signal_on or "none"
+    return f"Tie-break: {opening}; newest contributing signal {newest}."
+
+
 def _trace(
-    acct: ScoredAccount, evidence: dict[str, Signal], names: dict[str, str], rank: int
+    acct: ScoredAccount,
+    evidence: dict[str, Signal],
+    names: dict[str, str],
+    rank: int,
+    tie: tuple[int, int] | None = None,
 ) -> list[str]:
+    label = f"{rank} (tied {tie[0]}–{tie[1]})" if tie else f"{rank}"
     lines = [
-        f"#### {rank}. {names.get(acct.group_id, acct.group_id)}",
+        f"#### {label}. {names.get(acct.group_id, acct.group_id)}",
         "",
         (
             f"priority {acct.priority:.3f} = P(window) {acct.p_window:.3f} x (0.5 + 0.5 x fit "
             f"{acct.fit:.2f}) x relationship {acct.relationship:.2f}"
         ),
+        "",
+        _tie_break_line(acct),
         "",
         "| Signal | Precision | Weight | Contribution | Note | Evidence |",
         "|---|---|---|---|---|---|",
@@ -368,8 +384,32 @@ def _prospects(
         ),
         "",
     ]
-    for i, acct in enumerate(ranked[:TOP_N], 1):
-        lines += _trace(acct, evidence, names, i)
+    shown = ranked[:TOP_N]
+    ties = tie_blocks(ranked)
+    distinct = len({round(a.priority, TIE_DECIMALS) for a in shown})
+    lines += [
+        (
+            f"The top {len(shown)} hold {distinct} distinct priorities. Ranks that share a "
+            "priority are tied: the score cannot separate them, and they are listed by a stated "
+            "tie-break (the opening nearest today, then the newest contributing signal, then "
+            "group id), which is an ordering rule, not evidence that one is the better prospect."
+        ),
+        "",
+    ]
+    for i, acct in enumerate(shown, 1):
+        tie = ties.get(acct.group_id)
+        if tie and tie[0] == i:
+            first_below = len(shown) + 1
+            below = ""
+            if tie[1] > first_below:
+                below = f"; ranks {first_below}–{tie[1]} are below the top {len(shown)}"
+            elif tie[1] == first_below:
+                below = f"; rank {first_below} is below the top {len(shown)}"
+            lines += [
+                f"**Ranks {tie[0]}–{tie[1]} share priority {acct.priority:.3f} (tied){below}.**",
+                "",
+            ]
+        lines += _trace(acct, evidence, names, i, tie)
     disq = sorted(
         (a for a in accounts if a.disqualified_reason and not a.is_customer),
         key=lambda a: (a.disqualified_reason or "", names.get(a.group_id, a.group_id)),

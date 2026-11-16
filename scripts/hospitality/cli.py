@@ -83,7 +83,9 @@ from scripts.hospitality.resolve.match import match_licenses
 from scripts.hospitality.resolve.venues import build_venues
 from scripts.hospitality.scoring import (
     contract_operator_reason,
+    non_restaurant_name_reason,
     operator_names,
+    premises_reason,
     rank_prospects,
     score_group,
 )
@@ -488,7 +490,12 @@ def _score_accounts(
             continue
         members = venues_by_group.get(gid, [])
         reasons = sorted(r for v in members if (r := disqualified.get(v.venue_id)))
-        operator = contract_operator_reason(operator_names(group, members, licenses_by_id), cfg)
+        names = operator_names(group, members, licenses_by_id)
+        operator = (
+            contract_operator_reason(names, cfg)
+            or non_restaurant_name_reason(names, cfg)
+            or premises_reason(members, licenses_by_id, cfg)
+        )
         accounts.append(
             score_group(
                 group,

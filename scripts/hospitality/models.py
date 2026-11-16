@@ -232,6 +232,11 @@ class ScoredAccount(_Frozen):
     contributions: tuple[Contribution, ...]
     disqualified_reason: str | None
     is_customer: bool
+    # Tie-break facts (I8), shown in the report: equal priorities are ordered by the opening
+    # nearest today (estimated open, or first inspection if already open), then signal recency.
+    opening_date: date | None = None
+    opening_gap_days: int | None = None  # |opening_date - scoring date|
+    latest_signal_on: date | None = None  # newest signal that contributed
 
 
 class Contact(_Frozen):

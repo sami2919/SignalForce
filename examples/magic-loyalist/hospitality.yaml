@@ -74,6 +74,27 @@ disqualify_name_patterns:
   - '\bconcessions?\b'                   # stadium / arena / venue concession operators
   - '\b(sky|admirals|centurion) club\b'  # airline lounges
   - '\bairline lounge\b'
+# Non-restaurant premises, from the data rather than names. A venue is non-restaurant when its
+# zip code is listed (JFK and LaGuardia airport property: terminal concessions run by
+# concessionaire JVs), or when EVERY one of its licenses has a listed SLA description (a
+# Catering Establishment license only: banquet halls, event spaces). A group is disqualified only
+# when every venue is non-restaurant, and a venue with no premises evidence never is. Hotel and
+# Food & Beverage Business classes are NOT listed: hotel restaurants and bars can be Loyalist's
+# buyer (Hotel Chelsea is a customer).
+non_restaurant_premises:
+  zip_codes: {"11430": airport, "11371": airport}
+  license_descriptions: {Catering Establishment: catering_establishment}
+# Non-buyers the data cannot express, by reason (checked in order; the first match wins).
+# Case-insensitive regexes over normalized group / venue / licensee names, kept narrow: a
+# restaurant with a catering arm ("... Restaurant & Catering LLC") or a namesake ("The Museum
+# Bar", "Bar Society") must not match.
+non_restaurant_name_patterns:
+  institution: ['\bzoo\b', '\baquarium\b', '\bwildlife conservation society\b']
+  caterer: ['\bcaterers?\b']
+  hotel_chain:
+    - '^marriott (resorts|international|hotels?|vacations?)\b'
+    - '\bhilton (management|worldwide|garden inn|hotels?)\b'
+    - '\bhyatt (equities|corporation|hotels?)\b'
 # People who previously worked at these employers produce an alumni_edge (warm-intro) signal.
 alumni_employers:
   - Eleven Madison Park

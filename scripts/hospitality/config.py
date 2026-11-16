@@ -46,6 +46,19 @@ class CulinaryAgentsConfig(BaseModel):
     exclude_title_words: tuple[str, ...] = ("assistant", "associate", "intern", "trainee")
 
 
+class PremisesRule(BaseModel):
+    """Data-driven non-restaurant premises (I8). A venue is non-restaurant when its zip code is
+    listed, or when every one of its licenses has a listed description. A group is disqualified
+    only when every venue is (one airport outpost does not disqualify a restaurant group), and a
+    venue with no premises evidence (no license, unlisted zip) never counts as non-restaurant.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    zip_codes: dict[str, str]  # zip -> label, e.g. "11430": airport
+    license_descriptions: dict[str, str]  # SLA description -> label
+
+
 class HospitalityConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -83,9 +96,15 @@ class HospitalityConfig(BaseModel):
     # At most this many venues' opening terms enter a group's p_window (strongest first).
     max_opening_venues_per_group: int = 3
     # Case-insensitive regexes over normalized group / venue / licensee names (contract
-    # and institutional food-service operators are not Magic's buyer).
-    disqualify_name_patterns: tuple[str, ...] = ()
+    # and institutional food-service operators are not Magic's buyer). Required: a config that
+    # omits a disqualifier list must fail to load, not silently disqualify nothing (M2).
+    disqualify_name_patterns: tuple[str, ...]
     disqualify_reason: str = "contract_foodservice"
+    # Premises that are not a restaurant, read from the data (zip code, license class).
+    non_restaurant_premises: PremisesRule
+    # reason -> regexes, for non-buyers the data cannot express (zoos, caterers, hotel chains);
+    # checked in order, the first matching reason wins.
+    non_restaurant_name_patterns: dict[str, tuple[str, ...]]
     culinary_agents: CulinaryAgentsConfig = CulinaryAgentsConfig()
     # Employers whose alumni are a warm-intro edge (Loyalist's founders / champions' pedigree).
     alumni_employers: tuple[str, ...] = (
