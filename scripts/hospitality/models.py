@@ -156,6 +156,7 @@ class Contribution(_Frozen):
     precision: float
     weight: float
     contribution: float
+    note: str = ""  # why a zero contribution was folded / capped (empty when it counted)
 
 
 class ScoredAccount(_Frozen):

@@ -7,8 +7,10 @@ from scripts.hospitality.labels import cold_prospects
 from scripts.hospitality.models import CustomerLabel, Group
 from scripts.hospitality.scoring import (
     ScoreInputs,
+    contract_operator_reason,
     fit_score,
     noisy_or,
+    operator_names,
     rank_prospects,
     score_group,
     window_weight,
@@ -198,3 +200,138 @@ def test_zero_out_removes_contribution(cfg) -> None:
     without = zero_out(inputs, "license_pending")
     assert without.p_window < full.p_window
     assert [c.signal_type for c in without.contributions] == ["private_events"]
+
+
+# --- Task 14b: per-venue dedupe, venue cap, contract-operator disqualification ---
+
+
+def _multi_inputs(cfg, signals, n_venues: int = 1, **overrides) -> ScoreInputs:
+    venues = tuple(make_venue(f"v:{i}", group_id="g:1") for i in range(1, n_venues + 1))
+    group = Group(
+        group_id="g:1",
+        name="Acme",
+        venue_ids=tuple(v.venue_id for v in venues),
+        resolution="manual",
+    )
+    return make_score_inputs(cfg, signals, group=group, venues=venues, **overrides)
+
+
+def test_opening_family_counts_once_per_venue(cfg) -> None:
+    sigs = [
+        make_signal("license_pending", "v:1"),
+        make_signal("license_issued", "v:1"),
+        make_signal("not_yet_inspected", "v:1"),
+    ]
+    scored = score_group(**_multi_inputs(cfg, sigs).kwargs())
+    assert scored.p_window == pytest.approx(0.30)  # strongest single contribution only
+    by_type = {c.signal_type: c for c in scored.contributions}
+    assert len(scored.contributions) == 3  # trace stays complete
+    assert by_type["not_yet_inspected"].contribution == 0.0
+    assert "folded" in by_type["not_yet_inspected"].note
+    assert by_type["license_pending"].contribution == pytest.approx(0.30) or (
+        by_type["license_issued"].contribution == pytest.approx(0.30)
+    )
+    assert by_type["not_yet_inspected"].weight == pytest.approx(1.0)  # raw weight kept
+
+
+def test_strongest_opening_signal_wins_within_venue(cfg) -> None:
+    sigs = [make_signal("not_yet_inspected", "v:1"), make_signal("license_issued", "v:1")]
+    scored = score_group(**_multi_inputs(cfg, sigs).kwargs())
+    by_type = {c.signal_type: c for c in scored.contributions}
+    assert by_type["license_issued"].contribution == pytest.approx(0.30)
+    assert by_type["not_yet_inspected"].contribution == 0.0
+
+
+def test_other_signal_types_on_same_venue_still_combine(cfg) -> None:
+    sigs = [
+        make_signal("license_issued", "v:1"),
+        make_signal("not_yet_inspected", "v:1"),
+        make_signal("private_events", "v:1"),
+        make_signal("press_opening", "v:1"),
+    ]
+    scored = score_group(**_multi_inputs(cfg, sigs).kwargs())
+    assert scored.p_window == pytest.approx(1 - 0.7 * 0.85 * 0.65)
+
+
+def test_venue_cap_limits_opening_terms_strongest_first(cfg) -> None:
+    sigs = [make_signal("license_issued", f"v:{i}") for i in range(1, 9)]
+    scored = score_group(**_multi_inputs(cfg, sigs, n_venues=8).kwargs())
+    assert cfg.max_opening_venues_per_group == 3
+    assert scored.p_window == pytest.approx(1 - 0.7**3)
+    assert sum(c.contribution > 0 for c in scored.contributions) == 3
+    assert len(scored.contributions) == 8
+    capped = [c for c in scored.contributions if c.contribution == 0.0]
+    assert all("cap" in c.note for c in capped)
+
+
+def test_two_or_three_openings_beat_one_but_dozens_do_not_saturate(cfg) -> None:
+    def p(n: int) -> float:
+        sigs = [make_signal("license_issued", f"v:{i}") for i in range(1, n + 1)]
+        return score_group(**_multi_inputs(cfg, sigs, n_venues=n).kwargs()).p_window
+
+    assert p(1) < p(2) < p(3)
+    assert p(30) == pytest.approx(p(3))
+
+
+def test_venue_cap_keeps_strongest_venues(cfg) -> None:
+    est = {
+        f"v:{i}": make_estimate(f"v:{i}", estimated_open=date(2030, 1, 1)) for i in range(1, 3)
+    }  # far outside the window -> weak
+    sigs = [make_signal("license_issued", f"v:{i}") for i in range(1, 6)]
+    scored = score_group(**_multi_inputs(cfg, sigs, n_venues=5, estimates=est).kwargs())
+    kept = {c.signal_id for c in scored.contributions if c.contribution > 0}
+    assert kept == {"license_issued:v:3", "license_issued:v:4", "license_issued:v:5"}
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Aramark Services Inc",
+        "OTG JFK T5 Venture II, LLC",
+        "OTG Management LLC",
+        "SSP America, Inc.",
+        "HMSHost JFK T5 Partners, LLC",
+        "HOST INTERNATIONAL INC",
+        "Compass Group USA, Inc.",
+        "Sodexo Operations, LLC",
+        "Delaware North Companies",
+        "Levy Premium Foodservice",
+        "Restaurant Associates",
+    ],
+)
+def test_contract_operator_names_disqualified(cfg, name: str) -> None:
+    assert contract_operator_reason([name], cfg) == "contract_foodservice"
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Compass Rose Bistro LLC",
+        "Levy's Deli Corp",
+        "Levine Hospitality Group",
+        "The Compass Kitchen",
+        "Sushi Noz LLC",
+        "Host Table LLC",
+        "Ssp Pizza Inc",
+        "Aramis Restaurant Corp",
+        "Delaware Diner LLC",
+    ],
+)
+def test_ordinary_restaurants_not_disqualified(cfg, name: str) -> None:
+    assert contract_operator_reason([name], cfg) is None
+
+
+def test_contract_operator_matches_any_of_the_names(cfg) -> None:
+    assert contract_operator_reason(["Nice Place LLC", "x", "SODEXO INC"], cfg) is not None
+    assert contract_operator_reason([], cfg) is None
+
+
+def test_operator_names_include_licensee_legal_and_dba(cfg) -> None:
+    from tests.hospitality.factories import make_license
+
+    lic = make_license("sla:1", legal_name="OTG JFK T5 Venture II, LLC", dba="Nom Wah")
+    venue = make_venue("v:1", name="Nom Wah", license_ids=("sla:1",))
+    group = Group(group_id="g:1", name="Nom Wah Co", venue_ids=("v:1",), resolution="singleton")
+    names = operator_names(group, [venue], {"sla:1": lic})
+    assert "OTG JFK T5 Venture II, LLC" in names
+    assert contract_operator_reason(names, cfg) == "contract_foodservice"

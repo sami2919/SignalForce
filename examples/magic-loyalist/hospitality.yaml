@@ -33,3 +33,32 @@ match_auto_threshold: 0.90
 match_link_threshold: 0.60
 # Groups with a Michelin / James Beard accolade, by group_id or name (manual for the demo).
 accolades: []
+# Opening evidence is one fact per venue (venue about to open): only the strongest of these
+# signals counts toward p_window; the rest stay in the trace at contribution 0.
+opening_evidence_signals: [license_pending, license_issued, not_yet_inspected]
+# At most this many venues' opening terms enter a group's p_window (strongest first), so a
+# group with dozens of licenses cannot saturate on license count alone.
+max_opening_venues_per_group: 3
+# Contract / institutional food-service operators and non-restaurant premises are not Magic's
+# buyer. Case-insensitive regexes over normalized (lowercase, no punctuation or corp suffix)
+# group, venue and licensee names. Kept narrow: anchored on operator names, never bare words.
+disqualify_reason: contract_foodservice
+disqualify_name_patterns:
+  - '\baramark\b'
+  - '^otg (management|jfk|lga|ewr|venture)'
+  - '^ssp america\b'
+  - '\bhmshost\b'
+  - '^host international\b'
+  - '^compass group\b'
+  - '\bsodexo\b'
+  - '^delaware north\b'
+  - '^levy (premium|restaurants?|food)'
+  - '^restaurant associates\b'
+  - '\bcenterplate\b'
+  - '\bbon appetit management\b'
+  - '^legends hospitality\b'
+  - '\bcai foods\b'                       # amusement-park concessions (Luna Park)
+  - '\bcentral amusement international\b'
+  - '\bconcessions?\b'                   # stadium / arena / venue concession operators
+  - '\b(sky|admirals|centurion) club\b'  # airline lounges
+  - '\bairline lounge\b'

@@ -34,7 +34,12 @@ from scripts.hospitality.models import (
 from scripts.hospitality.resolve.groups import form_groups
 from scripts.hospitality.resolve.match import match_licenses
 from scripts.hospitality.resolve.venues import build_venues
-from scripts.hospitality.scoring import rank_prospects, score_group
+from scripts.hospitality.scoring import (
+    contract_operator_reason,
+    operator_names,
+    rank_prospects,
+    score_group,
+)
 from scripts.hospitality.signals import license_signals
 from scripts.hospitality.sources.dohmh import (
     fetch_first_inspections,
@@ -273,6 +278,7 @@ def score(now: datetime | None = None) -> dict[str, object]:
     labels = store.load("customer_labels", CustomerLabel) or load_seed_labels(SEED_PATH)
     customers = customer_groups(labels, venues, list(groups.values()))
     disqualified = disqualified_venues(observations)
+    licenses_by_id = {lic.record_id: lic for lic in licenses}
 
     # Index once; scoring 47k groups must not rescan all venues/signals per group.
     group_of = {v.venue_id: v.group_id for v in venues}
@@ -295,6 +301,7 @@ def score(now: datetime | None = None) -> dict[str, object]:
             continue
         members = venues_by_group.get(gid, [])
         reasons = sorted(r for v in members if (r := disqualified.get(v.venue_id)))
+        operator = contract_operator_reason(operator_names(group, members, licenses_by_id), cfg)
         accounts.append(
             score_group(
                 group,
@@ -305,7 +312,7 @@ def score(now: datetime | None = None) -> dict[str, object]:
                 cfg,
                 now,
                 is_customer=gid in customers,
-                disqualified_reason=reasons[0] if reasons else None,
+                disqualified_reason=operator or (reasons[0] if reasons else None),
             )
         )
     store.clear("scores")

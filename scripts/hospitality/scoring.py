@@ -1,7 +1,8 @@
 """Noisy-OR P(in buying window) per group, with an explainable contribution trace."""
 
 import math
-from collections.abc import Sequence
+import re
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -11,12 +12,14 @@ from scripts.hospitality.config import HospitalityConfig, SignalPrior
 from scripts.hospitality.models import (
     Contribution,
     Group,
+    LicenseRecord,
     ScoredAccount,
     Signal,
     StackObservation,
     Venue,
     WindowEstimate,
 )
+from scripts.hospitality.resolve.normalize import normalize_name
 from scripts.hospitality.stack.fingerprints import EVENTS, RESERVATION
 
 _SECONDS_PER_DAY = 86400.0
@@ -99,6 +102,68 @@ def fit_score(
     return min(1.0, sum(w for k, w in cfg.fit_weights.items() if checks.get(k, False)))
 
 
+def _opening_dedupe(
+    rows: Sequence[tuple[Signal, SignalPrior, float, float]], cfg: HospitalityConfig
+) -> tuple[set[str], dict[str, str]]:
+    """Which signals count toward p_window, and why the rest were zeroed.
+
+    Opening evidence (pending / issued / not-yet-inspected) is one fact per venue: only the
+    strongest counts. Then only the strongest `max_opening_venues_per_group` venues count.
+    Every other signal counts independently.
+    """
+    evidence = set(cfg.opening_evidence_signals)
+    counted = {sig.signal_id for sig, *_ in rows if sig.signal_type not in evidence}
+    notes: dict[str, str] = {}
+    by_venue: dict[str, list[tuple[Signal, float]]] = {}
+    for sig, _prior, _weight, raw in rows:
+        if sig.signal_type in evidence:
+            by_venue.setdefault(sig.entity_id, []).append((sig, raw))
+    best: dict[str, tuple[Signal, float]] = {}
+    for venue_id, items in by_venue.items():
+        ordered = sorted(items, key=lambda x: (-x[1], x[0].signal_id))
+        best[venue_id] = ordered[0]
+        for sig, _ in ordered[1:]:
+            notes[sig.signal_id] = (
+                f"folded into strongest opening signal {ordered[0][0].signal_id} for this venue"
+            )
+    ranked = sorted(best.items(), key=lambda kv: (-kv[1][1], kv[0]))
+    for rank, (venue_id, (sig, _raw)) in enumerate(ranked):
+        if rank < cfg.max_opening_venues_per_group:
+            counted.add(sig.signal_id)
+        else:
+            notes[sig.signal_id] = (
+                f"beyond venue cap: only the strongest {cfg.max_opening_venues_per_group} "
+                f"venues' opening terms count (venue {venue_id})"
+            )
+    return counted, notes
+
+
+def operator_names(
+    group: Group, venues: Sequence[Venue], licenses_by_id: Mapping[str, LicenseRecord]
+) -> list[str]:
+    """Group, venue and licensee (legal / DBA) names to screen for contract operators."""
+    names = [group.name]
+    for venue in venues:
+        names.append(venue.name)
+        for lic_id in venue.license_ids:
+            if (lic := licenses_by_id.get(lic_id)) is not None:
+                names.extend((lic.legal_name, lic.dba))
+    return [n for n in names if n]
+
+
+def contract_operator_reason(names: Iterable[str], cfg: HospitalityConfig) -> str | None:
+    """`cfg.disqualify_reason` if any name matches a contract-operator pattern, else None.
+
+    Names are normalized (lowercase, punctuation and corp suffixes dropped) before matching.
+    """
+    patterns = [re.compile(p, re.IGNORECASE) for p in cfg.disqualify_name_patterns]
+    for name in names:
+        norm = normalize_name(name)
+        if norm and any(p.search(norm) for p in patterns):
+            return cfg.disqualify_reason
+    return None
+
+
 def score_group(
     group: Group,
     signals: Sequence[Signal],
@@ -113,13 +178,18 @@ def score_group(
 ) -> ScoredAccount:
     """Score one group: priority = p_window * (0.5 + 0.5 * fit) * relationship."""
     own = {group.group_id, *group.venue_ids}
-    contributions: list[Contribution] = []
-    window_ps: list[float] = []
-    alumni = False
+    rows: list[tuple[Signal, SignalPrior, float, float]] = []
     for sig in sorted((s for s in signals if s.entity_id in own), key=lambda s: s.signal_id):
         prior = cfg.priors[sig.signal_type]
         weight = window_weight(sig, prior, estimates.get(sig.entity_id), now, cfg)
-        contribution = prior.precision * weight
+        rows.append((sig, prior, weight, prior.precision * weight))
+    counted, notes = _opening_dedupe(rows, cfg)
+
+    contributions: list[Contribution] = []
+    window_ps: list[float] = []
+    alumni = False
+    for sig, prior, weight, raw in rows:
+        contribution = raw if sig.signal_id in counted else 0.0
         contributions.append(
             Contribution(
                 signal_id=sig.signal_id,
@@ -127,6 +197,7 @@ def score_group(
                 precision=prior.precision,
                 weight=weight,
                 contribution=contribution,
+                note=notes.get(sig.signal_id, ""),
             )
         )
         if prior.family == "relationship":

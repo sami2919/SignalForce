@@ -42,6 +42,18 @@ class HospitalityConfig(BaseModel):
     match_link_threshold: float
     # Manually flagged accolade groups (Michelin / JBF): group ids or names. Empty for the demo.
     accolades: tuple[str, ...] = ()
+    # Opening evidence is one underlying fact per venue: only the strongest of these counts.
+    opening_evidence_signals: tuple[str, ...] = (
+        "license_pending",
+        "license_issued",
+        "not_yet_inspected",
+    )
+    # At most this many venues' opening terms enter a group's p_window (strongest first).
+    max_opening_venues_per_group: int = 3
+    # Case-insensitive regexes over normalized group / venue / licensee names (contract
+    # and institutional food-service operators are not Magic's buyer).
+    disqualify_name_patterns: tuple[str, ...] = ()
+    disqualify_reason: str = "contract_foodservice"
 
 
 def load_config(path: Path = DEFAULT_CONFIG_PATH) -> HospitalityConfig:
