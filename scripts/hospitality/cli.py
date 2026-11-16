@@ -17,6 +17,7 @@ from scripts.hospitality.benchmark.baseline import run_baseline
 from scripts.hospitality.benchmark.compare import compare
 from scripts.hospitality.budget import BudgetExceeded, CallBudget
 from scripts.hospitality.config import HospitalityConfig, load_config
+from scripts.hospitality.contacts.waterfall import HunterClient, find_contacts
 from scripts.hospitality.discover.exa import ExaClient
 from scripts.hospitality.discover.lookalikes import lookalike_signals, seed_url
 from scripts.hospitality.discover.press import PRESS_QUERIES, extract_press, press_to_records
@@ -31,6 +32,7 @@ from scripts.hospitality.measure.recall import ground_truth_openings, recall_aud
 from scripts.hospitality.models import (
     BenchmarkResult,
     CaseReplay,
+    Contact,
     CurveRecord,
     CustomerLabel,
     EntityLink,
@@ -374,6 +376,39 @@ def score(now: datetime | None = None) -> dict[str, object]:
     }
 
 
+def contacts(top: int = 25) -> dict[str, object]:
+    """Find named contacts for the top prospect groups (team page, then Hunter); save them."""
+    for var in ("HUNTER_API_KEY", "FIRECRAWL_API_KEY", "ANTHROPIC_API_KEY"):
+        if not os.environ.get(var):  # fail fast, before touching the store or the network
+            raise SystemExit(f"{var} is not set; the contacts command needs it")
+    cfg = load_config()
+    store = DocStore()
+    venues = store.load("venues", Venue)
+    groups = {g.group_id: g for g in store.load("groups", Group)}
+    ranked = rank_prospects(store.load("scores", ScoredAccount))[:top]
+    budgets = {
+        "firecrawl": CallBudget("firecrawl", cfg.budgets["firecrawl"]),
+        "hunter": CallBudget("hunter", cfg.budgets["hunter"]),
+    }
+    firecrawl = FirecrawlClient(os.environ["FIRECRAWL_API_KEY"])
+    hunter = HunterClient(os.environ["HUNTER_API_KEY"], budgets["hunter"])
+    found: list[Contact] = []
+    for acct in ranked:
+        found.extend(
+            find_contacts(acct, venues, firecrawl=firecrawl, hunter=hunter, budgets=budgets)
+        )
+    store.save("contacts", found, key=lambda c: c.contact_id)  # type: ignore[attr-defined]
+    return {
+        "groups": len(ranked),
+        "groups_with_contacts": len({c.group_id for c in found}),
+        "contacts": len(found),
+        "with_email": sum(c.email is not None for c in found),
+        "firecrawl_calls": budgets["firecrawl"].used,
+        "hunter_calls": budgets["hunter"].used,
+        "names": [groups[a.group_id].name for a in ranked if a.group_id in groups][:5],
+    }
+
+
 def press(days: int = 120, today: date | None = None) -> dict[str, object]:
     """Search press for openings, extract facts, save signals/venues/evidence, merge, rescore."""
     if not os.environ.get("EXA_API_KEY"):  # fail fast, before touching the store or the network
@@ -698,6 +733,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     p_press.add_argument(
         "--days", type=int, default=120, help="Search articles from the last N days"
     )
+    p_contacts = sub.add_parser("contacts", help="Contacts for top prospects (team page, Hunter)")
+    p_contacts.add_argument("--top", type=int, default=25, help="Top N ranked prospects")
     sub.add_parser("lookalikes", help="Exa lookalikes of customer sites, matched to known venues")
     sub.add_parser("backtest", help="Case replay on known customers + fit AUC (indicative)")
     sub.add_parser("run-p0", help="Run the whole P0 chain, ingest through backtest")
@@ -756,6 +793,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"sample misses: {out['misses_sample']}")
     elif args.command == "press":
         for name, value in press(args.days).items():
+            print(f"{name}: {value}")
+    elif args.command == "contacts":
+        for name, value in contacts(args.top).items():
             print(f"{name}: {value}")
     elif args.command == "lookalikes":
         for name, value in lookalikes().items():

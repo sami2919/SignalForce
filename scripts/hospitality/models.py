@@ -280,3 +280,19 @@ class PressFacts(_Frozen):
     venues: tuple[PressVenue, ...]
     people: tuple[PressPerson, ...]
     hotel_partner: str | None
+
+
+class TeamPerson(_Frozen):
+    name: str
+    role: str
+
+
+class TeamFacts(_Frozen):
+    people: tuple[TeamPerson, ...]
+
+
+class TeamPage(_Frozen):
+    url: str
+    html: str
+    text: str
+    members: tuple[TeamPerson, ...]
