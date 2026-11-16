@@ -243,3 +243,13 @@ class BenchmarkResult(_Frozen):
     claude_run_jaccard: float
     truth_total: int
     notes: tuple[str, ...]
+
+
+class CaseReplay(_Frozen):
+    group_id: str
+    customer: str
+    anchor_date: date  # upper bound: the customer was live on or before this date
+    new_venue_id: str | None
+    first_signal_date: date | None
+    lead_days: int | None
+    signal_types: tuple[str, ...]

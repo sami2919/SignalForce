@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import math
 import os
 import sys
 from collections import Counter
@@ -21,9 +22,11 @@ from scripts.hospitality.labels import (
     labels_from_embeds,
     load_seed_labels,
 )
+from scripts.hospitality.measure.backtest import case_replay, find_venue, fit_auc
 from scripts.hospitality.measure.recall import ground_truth_openings, recall_audit
 from scripts.hospitality.models import (
     BenchmarkResult,
+    CaseReplay,
     CurveRecord,
     CustomerLabel,
     EntityLink,
@@ -388,6 +391,98 @@ def recall(weeks: int = 12, today: date | None = None) -> dict[str, object]:
     return {**report.model_dump(mode="json"), "misses_sample": list(report.misses[:10])}
 
 
+# Customer label name -> the new venue the research ties to it (docs/research/magic/02).
+CASE_HINTS: dict[str, str] = {
+    "The Noortwyck": "Oriana",
+    "Dinex Group": "La Tête d'Or",
+    "Momofuku": "Bar Kabawa",
+    "Rezdôra": "Massara",
+}
+
+
+def backtest() -> dict[str, object]:
+    """Case replay on dated customers with a known new venue, plus fit AUC. Indicative only.
+
+    Each case is replayed as of its anchor date (the customer was live on or before it), with
+    the venue's first inspection cleared and `historical=True`, so only signals that could have
+    existed then count. Customers with no date are counted but not replayed.
+    """
+    store = DocStore()
+    venues = store.load("venues", Venue)
+    groups = store.load("groups", Group)
+    licenses = store.load("licenses", LicenseRecord)
+    labels_ = store.load("customer_labels", CustomerLabel) or load_seed_labels(SEED_PATH)
+    customers = customer_groups(labels_, venues, groups)
+    hints = {gid: CASE_HINTS[c.name] for gid, c in customers.items() if c.name in CASE_HINTS}
+    pending_seen = first_seen_pending(store)
+    stored = store.load("signals", Signal)
+    replayed: list[Signal] = []
+    for gid, name in hints.items():
+        anchor = customers[gid].first_public_date
+        venue = find_venue(name, gid, venues)
+        if anchor is None or venue is None:
+            continue
+        pre = venue.model_copy(update={"first_inspection_date": None})
+        replayed.extend(license_signals([pre], licenses, pending_seen, anchor, historical=True))
+        replayed.extend(s for s in stored if s.entity_id == venue.venue_id)
+    group_of = {v.venue_id: v.group_id for v in venues}
+    # A label can match several namesake groups; keep one case per (customer, venue), preferring
+    # the group that actually owns the venue.
+    best: dict[tuple[str, str | None], CaseReplay] = {}
+    for case in case_replay(customers, venues, replayed, hints):
+        key = (case.customer, case.new_venue_id)
+        owns = group_of.get(case.new_venue_id or "") == case.group_id
+        if key not in best or (
+            owns and group_of.get(case.new_venue_id or "") != best[key].group_id
+        ):
+            best[key] = case
+    cases = list(best.values())
+    accounts = store.load("scores", ScoredAccount)
+    return {
+        "cases": cases,
+        "undated": sum(1 for c in customers.values() if c.first_public_date is None),
+        "fit_auc": fit_auc(accounts),
+        "fit_distinct": len({a.fit for a in accounts}),
+        "n_customers": sum(a.is_customer for a in accounts),
+        "n_others": sum(not a.is_customer for a in accounts),
+    }
+
+
+def _print_backtest(out: dict[str, object]) -> None:
+    cases: list[CaseReplay] = out["cases"]  # type: ignore[assignment]
+    print("INDICATIVE ONLY: tiny samples, not a lift claim.")
+    print(f"Case replay (n={len(cases)} dated customers with a known new venue):")
+    for c in cases:
+        venue = c.new_venue_id or "venue not found"
+        lead = f"{c.lead_days}d" if c.lead_days is not None else "no prior signal"
+        print(
+            f"  {c.customer[:28]:<28} anchor<={c.anchor_date} {venue}: lead={lead} "
+            f"[{', '.join(c.signal_types)}]"
+        )
+    print(f"Customers with no public date, not replayed: {out['undated']}")
+    n_c, n_o = out["n_customers"], out["n_others"]
+    auc_value: float = out["fit_auc"]  # type: ignore[assignment]
+    shown = "undefined" if math.isnan(auc_value) else f"{auc_value:.3f}"
+    print(f"Fit AUC: {shown} (customers n={n_c} vs others n={n_o}); static fit only, no timing.")
+    if out["fit_distinct"] <= 1:  # type: ignore[operator]
+        print("Fit is degenerate: every scored group has the same fit, so AUC is 0.5 by tie.")
+
+
+P0_STEPS: tuple[str, ...] = (
+    "ingest-sla",
+    "snapshot-pending",
+    "ingest-dohmh",
+    "resolve",
+    "window",
+    "websites",
+    "crawl",
+    "labels",
+    "score",
+    "recall",
+    "backtest",
+)
+
+
 def benchmark(cutoff_weeks: int = 8, today: date | None = None) -> BenchmarkResult:
     """Head-to-head: SignalForce ranking as of the cutoff vs plain Claude + web search.
 
@@ -495,6 +590,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     sub.add_parser("score", help="Score groups (noisy-OR) and print the top 25 prospects")
     p_recall = sub.add_parser("recall", help="Recall of license signals vs DOHMH first inspections")
     p_recall.add_argument("--weeks", type=int, default=12, help="Look-back window in weeks")
+    sub.add_parser("backtest", help="Case replay on known customers + fit AUC (indicative)")
+    sub.add_parser("run-p0", help="Run the whole P0 chain, ingest through backtest")
     p_bench = sub.add_parser(
         "benchmark", help="Head-to-head vs plain Claude + web search (spends real money)"
     )
@@ -548,6 +645,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"recall: {out['recall']:.3f}")
         print(f"median lead days: {out['median_lead_days']}")
         print(f"sample misses: {out['misses_sample']}")
+    elif args.command == "backtest":
+        _print_backtest(backtest())
+    elif args.command == "run-p0":
+        for step in P0_STEPS:
+            print(f"== {step} ==")
+            if main([step]):
+                raise SystemExit(f"run-p0 stopped: {step} failed")
     elif args.command == "benchmark":
         if not os.environ.get("ANTHROPIC_API_KEY"):  # fail fast, before any store or network use
             raise SystemExit("ANTHROPIC_API_KEY is not set; the benchmark command needs it")
