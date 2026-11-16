@@ -1,5 +1,5 @@
 import json
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -138,3 +138,62 @@ def test_recall_command_replays_signals_before_first_inspection(tmp_path, monkey
     assert (out["total"], out["caught"], out["median_lead_days"]) == (1, 1, 92.0)
     json.dumps(out)
     assert cli.main(["recall", "--weeks", "12"]) == 0
+
+
+def test_recall_command_catches_openings_licensed_only_by_a_now_inactive_license(
+    tmp_path, monkeypatch
+):
+    store = DocStore(f"sqlite:///{tmp_path}/m.db")
+    venues = [
+        make_venue(
+            "v:1",
+            first_inspection_date=date(2026, 10, 1),
+            license_description="Restaurant",
+            license_ids=("i1",),
+        ),
+        make_venue(  # inactive license issued after the first inspection: transfer, not opening
+            "v:2",
+            first_inspection_date=date(2026, 10, 2),
+            license_description="Restaurant",
+            license_ids=("i2",),
+        ),
+    ]
+    lics = [
+        make_license(
+            "i1", source="sla_inactive", received_date=None, original_issue_date=date(2026, 7, 1)
+        ),
+        make_license(
+            "i2", source="sla_inactive", received_date=None, original_issue_date=date(2026, 10, 20)
+        ),
+    ]
+    store.save("venues", venues, key=lambda v: v.venue_id)  # type: ignore[attr-defined]
+    store.save("licenses", lics, key=lambda r: r.record_id)  # type: ignore[attr-defined]
+    monkeypatch.setattr(cli, "DocStore", lambda: store)
+    out = cli.recall(weeks=12, today=date(2026, 10, 31))
+    assert (out["total"], out["caught"], out["median_lead_days"]) == (1, 1, 92.0)
+
+
+def test_live_score_does_not_signal_or_rank_a_lapsed_license_venue(tmp_path, monkeypatch):
+    from scripts.hospitality.models import Group
+
+    store = DocStore(f"sqlite:///{tmp_path}/s.db")
+    venue = make_venue(
+        "v:1", license_ids=("i1",), group_id="g:v:1", camis="9", license_description="Restaurant"
+    )
+    group = Group(
+        group_id="g:v:1",
+        name="Lapsed Bar",
+        venue_ids=("v:1",),
+        resolution="singleton",
+        evidence_ref="",
+    )
+    lic = make_license(
+        "i1", source="sla_inactive", received_date=None, original_issue_date=date(2026, 9, 1)
+    )
+    store.save("venues", [venue], key=lambda v: v.venue_id)  # type: ignore[attr-defined]
+    store.save("groups", [group], key=lambda g: g.group_id)  # type: ignore[attr-defined]
+    store.save("licenses", [lic], key=lambda r: r.record_id)  # type: ignore[attr-defined]
+    monkeypatch.setattr(cli, "DocStore", lambda: store)
+    out = cli.score(now=datetime(2026, 11, 16, tzinfo=UTC))
+    assert out["license_signals"] == {}
+    assert out["prospects"] == 0

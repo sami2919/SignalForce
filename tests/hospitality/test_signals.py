@@ -98,3 +98,56 @@ def test_not_yet_inspected_for_pending_only_venue() -> None:
         "license_pending",
         "not_yet_inspected",
     ]
+
+
+def _inactive(record_id: str, issued: date):
+    return make_license(
+        record_id, source="sla_inactive", received_date=None, original_issue_date=issued
+    )
+
+
+def test_historical_inactive_license_emits_license_issued_at_its_issue_date() -> None:
+    lic = _inactive("i1", date(2026, 9, 1))
+    venue = make_venue("v:1", license_ids=("i1",), camis="9")
+    sigs = license_signals([venue], [lic], {}, TODAY, historical=True)
+    assert _types(sigs) == ["license_issued"]  # lapsed licence is not "awaiting inspection"
+    [sig] = sigs
+    assert sig.observed_at == datetime(2026, 9, 1, tzinfo=UTC)
+    assert sig.source == "sla_inactive"
+    assert sig.evidence_ref == "i1"
+
+
+def test_historical_inactive_keeps_the_active_exclusions() -> None:
+    transfer = _inactive("i1", date(2026, 9, 1))  # first inspection precedes issue
+    old = _inactive("i2", date(2025, 10, 1))  # older than the 365-day lookback
+    future = _inactive("i3", date(2026, 12, 1))  # not yet issued as of the as-of date
+    v1 = make_venue("v:1", license_ids=("i1",), first_inspection_date=date(2025, 1, 1))
+    v2 = make_venue("v:2", license_ids=("i2",), camis="2")
+    v3 = make_venue("v:3", license_ids=("i3",), camis="3")
+    sigs = license_signals([v1, v2, v3], [transfer, old, future], {}, TODAY, historical=True)
+    assert sigs == []
+
+
+def test_historical_inactive_obeys_match_miss_rule() -> None:
+    linked = _inactive("i1", date(2026, 10, 1))
+    v1 = make_venue("v:1", license_ids=("i1",))
+    assert (
+        license_signals([v1], [linked], {}, TODAY, linked=frozenset({"i1"}), historical=True) == []
+    )
+
+
+def test_live_inactive_license_emits_no_opening_signal() -> None:
+    lic = _inactive("i1", date(2026, 9, 1))
+    venue = make_venue("v:1", license_ids=("i1",), camis="9")
+    assert license_signals([venue], [lic], {}, TODAY) == []
+    assert license_signals([venue], [lic], {}, TODAY, historical=False) == []
+
+
+def test_live_venue_with_active_and_inactive_licenses_signals_only_the_active() -> None:
+    active = make_license(
+        "a1", source="sla_active", received_date=None, original_issue_date=date(2026, 9, 1)
+    )
+    lapsed = _inactive("i1", date(2026, 9, 5))
+    venue = make_venue("v:1", license_ids=("a1", "i1"), camis="9")
+    sigs = license_signals([venue], [active, lapsed], {}, TODAY)
+    assert {s.evidence_ref for s in sigs} == {"a1"}

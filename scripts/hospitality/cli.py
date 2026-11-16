@@ -370,7 +370,8 @@ def recall(weeks: int = 12, today: date | None = None) -> dict[str, object]:
     """Replay license signals for venues first inspected in the last `weeks`; report recall.
 
     Each opening is replayed as of the day before its first inspection (no inspection yet, no
-    match-miss filter), so only signals that could have existed beforehand are counted.
+    match-miss filter), so only signals that could have existed beforehand are counted. As-of
+    replay is `historical`: now-inactive licenses count at their issue date, as they did then.
     """
     cfg = load_config()
     today = today or date.today()
@@ -382,7 +383,7 @@ def recall(weeks: int = 12, today: date | None = None) -> dict[str, object]:
     for v in openings:
         as_of = v.first_inspection_date - timedelta(days=1)  # type: ignore[operator]
         pre = v.model_copy(update={"first_inspection_date": None})
-        replayed.extend(license_signals([pre], licenses, {}, as_of))
+        replayed.extend(license_signals([pre], licenses, {}, as_of, historical=True))
     report = recall_audit(openings, replayed, start, today)
     return {**report.model_dump(mode="json"), "misses_sample": list(report.misses[:10])}
 
@@ -434,6 +435,7 @@ def benchmark(cutoff_weeks: int = 8, today: date | None = None) -> BenchmarkResu
         cutoff,
         linked=linked_to_inspected(venues, links),
         max_unmatched_age_days=cap,
+        historical=True,  # as-of replay: a now-lapsed license was live at the cutoff
     )
     stack = [s for s in store.load("signals", Signal) if s.observed_at <= now]
     labels = store.load("customer_labels", CustomerLabel) or load_seed_labels(SEED_PATH)

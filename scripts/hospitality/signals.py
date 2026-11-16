@@ -36,12 +36,20 @@ def license_signals(
     *,
     linked: frozenset[str] = frozenset(),
     max_unmatched_age_days: float | None = None,
+    historical: bool = False,
 ) -> list[Signal]:
     """Opening signals per venue.
 
     `linked` and `max_unmatched_age_days` apply the same match-miss rule as the window
     estimates (`likely_already_open`): a license linked to an already-inspected venue, or an
     issued license with no DOHMH record older than the cap, is not a not-yet-open venue.
+
+    `today` is the as-of date. `historical` says it is a past date (recall audit, benchmark
+    replay): then an `sla_inactive` license issued on or before it is treated as it was at that
+    time, active, and emits `license_issued` at its issue date under the same exclusions. Live
+    (default) a currently inactive license has lapsed, been surrendered or replaced, so it says
+    nothing about an upcoming opening and emits nothing. Inactive records never emit
+    `not_yet_inspected`: a lapsed license is not evidence of a site awaiting its first inspection.
     """
     by_id = {lic.record_id: lic for lic in licenses}
     cutoff = today - timedelta(days=ISSUED_LOOKBACK_DAYS)
@@ -65,9 +73,12 @@ def license_signals(
                             f"pending since {seen or lic.received_date}",
                         )
                     )
-            elif lic.source == "sla_active" and lic.original_issue_date is not None:
+            elif (
+                lic.source == "sla_active" or (historical and lic.source == "sla_inactive")
+            ) and lic.original_issue_date is not None:
                 issued = lic.original_issue_date
-                dated.append((issued, lic))
+                if lic.source == "sla_active":
+                    dated.append((issued, lic))
                 age = float((today - issued).days)
                 if (
                     cutoff <= issued <= today
@@ -80,7 +91,7 @@ def license_signals(
                             venue,
                             lic.record_id,
                             issued,
-                            "sla_active",
+                            lic.source,
                             f"issued {issued}",
                         )
                     )

@@ -256,3 +256,40 @@ def test_benchmark_replays_as_of_cutoff_without_touching_live_scores(
     assert result.truth_total == 1 and result.claude_hits == (1,)
     assert result.sf_hits == 1  # pending license predates the cutoff; inspection must not leak
     assert store.load("scores", ScoredAccount) == []  # live scores untouched
+
+
+def test_benchmark_replay_counts_inactive_license_issued_before_cutoff(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from scripts.hospitality.models import Group
+    from scripts.hospitality.store import DocStore
+    from tests.hospitality.factories import make_license
+
+    store = DocStore(f"sqlite:///{tmp_path}/b.db")
+    monkeypatch.setattr(cli, "DocStore", lambda: store)
+    monkeypatch.setattr(cli, "Anthropic", MagicMock)
+    lic = make_license(
+        "i1", source="sla_inactive", received_date=None, original_issue_date=date(2026, 8, 1)
+    )
+    venue = make_venue(
+        "v:1",
+        name="Zephyr Hall",
+        license_ids=("i1",),
+        group_id="g:v:1",
+        camis="9",
+        license_description="Restaurant",
+        first_inspection_date=date(2026, 10, 20),
+    )
+    group = Group(
+        group_id="g:v:1",
+        name="Zephyr Hall",
+        venue_ids=("v:1",),
+        resolution="singleton",
+        evidence_ref="",
+    )
+    store.save("venues", [venue], key=lambda v: v.venue_id)
+    store.save("groups", [group], key=lambda g: g.group_id)
+    store.save("licenses", [lic], key=lambda r: r.record_id)
+    monkeypatch.setattr(cli, "run_baseline", lambda *a, **k: [run_of(item("Zephyr Hall"))])
+    result = cli.benchmark(8, today=date(2026, 11, 16))
+    assert result.truth_total == 1 and result.sf_hits == 1
