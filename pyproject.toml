@@ -28,6 +28,7 @@ dependencies = [
     "uvicorn[standard]>=0.32",
     "httpx>=0.27",
     "selectolax>=0.3",
+    "rapidfuzz>=3",
     "svix>=1.24",
 ]
 
