@@ -62,3 +62,12 @@ disqualify_name_patterns:
   - '\bconcessions?\b'                   # stadium / arena / venue concession operators
   - '\b(sky|admirals|centurion) club\b'  # airline lounges
   - '\bairline lounge\b'
+# People who previously worked at these employers produce an alumni_edge (warm-intro) signal.
+alumni_employers:
+  - Eleven Madison Park
+  - Make It Nice
+  - Union Square Hospitality Group
+  - Major Food Group
+  - Momofuku
+  - The Corner Store
+  - Thomas Keller Restaurant Group

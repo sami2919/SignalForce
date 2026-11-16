@@ -54,6 +54,16 @@ class HospitalityConfig(BaseModel):
     # and institutional food-service operators are not Magic's buyer).
     disqualify_name_patterns: tuple[str, ...] = ()
     disqualify_reason: str = "contract_foodservice"
+    # Employers whose alumni are a warm-intro edge (Loyalist's founders / champions' pedigree).
+    alumni_employers: tuple[str, ...] = (
+        "Eleven Madison Park",
+        "Make It Nice",
+        "Union Square Hospitality Group",
+        "Major Food Group",
+        "Momofuku",
+        "The Corner Store",
+        "Thomas Keller Restaurant Group",
+    )
 
 
 def load_config(path: Path = DEFAULT_CONFIG_PATH) -> HospitalityConfig:

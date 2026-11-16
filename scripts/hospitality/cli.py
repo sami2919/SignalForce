@@ -15,13 +15,16 @@ from anthropic import Anthropic
 from scripts.firecrawl_client import FirecrawlClient
 from scripts.hospitality.benchmark.baseline import run_baseline
 from scripts.hospitality.benchmark.compare import compare
-from scripts.hospitality.budget import CallBudget
+from scripts.hospitality.budget import BudgetExceeded, CallBudget
 from scripts.hospitality.config import HospitalityConfig, load_config
+from scripts.hospitality.discover.exa import ExaClient
+from scripts.hospitality.discover.press import PRESS_QUERIES, extract_press, press_to_records
 from scripts.hospitality.labels import (
     customer_groups,
     labels_from_embeds,
     load_seed_labels,
 )
+from scripts.hospitality.llm import LLMRefusal
 from scripts.hospitality.measure.backtest import case_replay, find_venue, fit_auc
 from scripts.hospitality.measure.recall import ground_truth_openings, recall_audit
 from scripts.hospitality.models import (
@@ -31,6 +34,7 @@ from scripts.hospitality.models import (
     CustomerLabel,
     EntityLink,
     Group,
+    GroupEvidence,
     InspectionVenue,
     LicenseRecord,
     LicenseSource,
@@ -40,7 +44,7 @@ from scripts.hospitality.models import (
     Venue,
     WindowEstimate,
 )
-from scripts.hospitality.resolve.groups import form_groups
+from scripts.hospitality.resolve.groups import form_groups, merge_groups
 from scripts.hospitality.resolve.match import match_licenses
 from scripts.hospitality.resolve.venues import build_venues
 from scripts.hospitality.scoring import (
@@ -369,6 +373,83 @@ def score(now: datetime | None = None) -> dict[str, object]:
     }
 
 
+def press(days: int = 120, today: date | None = None) -> dict[str, object]:
+    """Search press for openings, extract facts, save signals/venues/evidence, merge, rescore."""
+    if not os.environ.get("EXA_API_KEY"):  # fail fast, before touching the store or the network
+        raise SystemExit("EXA_API_KEY is not set; the press command needs it")
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        raise SystemExit("ANTHROPIC_API_KEY is not set; the press command needs it")
+    cfg = load_config()
+    today = today or date.today()
+    store = DocStore()
+    venues = store.load("venues", Venue)
+    groups = store.load("groups", Group)
+    exa_budget = CallBudget("exa", cfg.budgets["exa"])
+    exa = ExaClient.from_env(exa_budget)
+    alumni = frozenset(cfg.alumni_employers)
+    signals: dict[str, Signal] = {}
+    new_venues: dict[str, Venue] = {}
+    evidence: list[GroupEvidence] = []
+    seen: set[str] = set()
+    stopped = ""
+    refused = 0
+    try:
+        for query in PRESS_QUERIES:
+            results = exa.search(query, start_published_date=today - timedelta(days=days))
+            for res in results:
+                if res.url in seen or not res.text:
+                    continue
+                seen.add(res.url)
+                try:
+                    facts = extract_press(res.text, res.url)
+                except LLMRefusal:
+                    refused += 1
+                    continue
+                sigs, created, ev = press_to_records(
+                    facts,
+                    res.url,
+                    res.published_date,
+                    [*venues, *new_venues.values()],
+                    groups,
+                    alumni,
+                )
+                signals.update({s.signal_id: s for s in sigs})
+                new_venues.update({v.venue_id: v for v in created})
+                evidence.extend(ev)
+    except BudgetExceeded as exc:  # keep what was found; report the stop, never hide it
+        stopped = str(exc)
+    new_groups = [
+        Group(group_id=v.group_id, name=v.name, venue_ids=(v.venue_id,), resolution="singleton")
+        for v in new_venues.values()
+    ]
+    store.save("signals", list(signals.values()), key=lambda s: s.signal_id)  # type: ignore[attr-defined]
+    store.save(
+        "group_evidence",
+        evidence,
+        key=lambda e: f"{e.evidence_ref}|{e.name}",  # type: ignore[attr-defined]
+    )
+    all_venues = [*venues, *new_venues.values()]
+    merged_venues, merged_groups = merge_groups(
+        all_venues, [*groups, *new_groups], store.load("group_evidence", GroupEvidence)
+    )
+    old = {v.venue_id: v for v in venues}
+    changed = [v for v in merged_venues if old.get(v.venue_id) != v]
+    store.save("venues", changed, key=lambda v: v.venue_id)  # type: ignore[attr-defined]
+    store.clear("groups")  # merged group ids differ from earlier ones; rewrite in full
+    store.save("groups", merged_groups, key=lambda g: g.group_id)  # type: ignore[attr-defined]
+    scored = score()
+    return {
+        "articles": len(seen),
+        "refused": refused,
+        "signals": len(signals),
+        "new_venues": len(new_venues),
+        "evidence": len(evidence),
+        "exa_calls": exa_budget.used,
+        "stopped": stopped,
+        "scored_groups": scored["scored_groups"],
+    }
+
+
 def recall(weeks: int = 12, today: date | None = None) -> dict[str, object]:
     """Replay license signals for venues first inspected in the last `weeks`; report recall.
 
@@ -590,6 +671,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     sub.add_parser("score", help="Score groups (noisy-OR) and print the top 25 prospects")
     p_recall = sub.add_parser("recall", help="Recall of license signals vs DOHMH first inspections")
     p_recall.add_argument("--weeks", type=int, default=12, help="Look-back window in weeks")
+    p_press = sub.add_parser("press", help="Press discovery: openings, people, group evidence")
+    p_press.add_argument(
+        "--days", type=int, default=120, help="Search articles from the last N days"
+    )
     sub.add_parser("backtest", help="Case replay on known customers + fit AUC (indicative)")
     sub.add_parser("run-p0", help="Run the whole P0 chain, ingest through backtest")
     p_bench = sub.add_parser(
@@ -645,6 +730,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"recall: {out['recall']:.3f}")
         print(f"median lead days: {out['median_lead_days']}")
         print(f"sample misses: {out['misses_sample']}")
+    elif args.command == "press":
+        for name, value in press(args.days).items():
+            print(f"{name}: {value}")
     elif args.command == "backtest":
         _print_backtest(backtest())
     elif args.command == "run-p0":

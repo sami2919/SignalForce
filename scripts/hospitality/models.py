@@ -260,3 +260,23 @@ class CaseReplay(_Frozen):
     first_signal_date: date | None
     lead_days: int | None
     signal_types: tuple[str, ...]
+
+
+class PressPerson(_Frozen):
+    name: str
+    role: str
+    prior_employers: tuple[str, ...]
+
+
+class PressVenue(_Frozen):
+    name: str
+    address_or_area: str
+    status: Literal["announced", "opening_soon", "opened"]
+    expected_open: str | None
+    group_name: str | None
+
+
+class PressFacts(_Frozen):
+    venues: tuple[PressVenue, ...]
+    people: tuple[PressPerson, ...]
+    hotel_partner: str | None
