@@ -369,3 +369,21 @@ class LineupEntry(_Frozen):
 
 class LineupFacts(_Frozen):
     entries: tuple[LineupEntry, ...]
+
+
+class EventScore(_Frozen):
+    event_id: str
+    expected_meetings: float
+    score_per_dollar: float  # 0.0 when the event's cost is unknown (never "infinitely efficient")
+    matched_people: int
+
+
+class MeetingTarget(_Frozen):
+    event_id: str
+    person: str
+    group_id: str | None
+    p_attend: float
+    priority: float
+    in_window: bool
+    is_customer: bool  # True: warm intro / co-host only, never a cold target
+    reason: str

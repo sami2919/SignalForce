@@ -29,6 +29,7 @@ from scripts.hospitality.discover.exa import ExaClient
 from scripts.hospitality.discover.lookalikes import lookalike_signals, seed_url
 from scripts.hospitality.discover.press import PRESS_QUERIES, extract_press, press_to_records
 from scripts.hospitality.events.extract import extract_appearances
+from scripts.hospitality.events.rank import meeting_list, rank_events
 from scripts.hospitality.events.registry import load_events
 from scripts.hospitality.labels import (
     customer_groups,
@@ -99,6 +100,7 @@ logger = logging.getLogger(__name__)
 
 SEED_PATH = Path(__file__).resolve().parents[2] / "examples/magic-loyalist/customers_seed.yaml"
 EVENTS_PATH = Path(__file__).resolve().parents[2] / "examples/magic-loyalist/events.yaml"
+OUT_DIR = Path(__file__).resolve().parents[2] / "out/magic"
 BENCHMARK_RUNS = 3
 BENCHMARK_MAX_SEARCHES = 20
 BENCHMARK_K = 50
@@ -457,6 +459,53 @@ def events_extract(path: Path = EVENTS_PATH) -> dict[str, object]:
     if stopped:
         out["stopped"] = stopped
     return out
+
+
+def events_rank(path: Path = EVENTS_PATH) -> dict[str, object]:
+    """Rank verified-date events by expected meetings per dollar; write meeting lists."""
+    store = DocStore()
+    events = load_events(path)  # unverified dates are excluded
+    appearances = store.load("event_appearances", EventAppearance)
+    venues = store.load("venues", Venue)
+    groups = store.load("groups", Group)
+    accounts = {a.group_id: a for a in store.load("scores", ScoredAccount)}
+    labels = store.load("customer_labels", CustomerLabel) or load_seed_labels(SEED_PATH)
+    customers = customer_groups(labels, venues, groups)
+    ranked = rank_events(events, appearances, accounts, venues, customers)
+    by_id = {e.event_id: e for e in events}
+    lines = ["# Event ranking and meeting lists", ""]
+    total = 0
+    for s in ranked:
+        ev = by_id[s.event_id]
+        targets = meeting_list(ev, appearances, accounts, venues, customers)
+        total += len(targets)
+        cost = f"${ev.cost_usd:,.0f}" if ev.cost_usd > 0 else "cost unknown"
+        lines += [
+            f"## {ev.name} ({ev.event_type}, {cost})",
+            (
+                f"expected meetings {s.expected_meetings:.4f}, "
+                f"per dollar {s.score_per_dollar:.6f}, matched people {s.matched_people}"
+            ),
+            "",
+            "### Prospects",
+        ]
+        lines += [
+            f"- {t.person} ({t.reason}); priority {t.priority:.2f}; "
+            f"{'in window' if t.in_window else 'not in window'}"
+            for t in targets
+            if not t.is_customer
+        ] or ["- none"]
+        lines += ["", "### Customers (warm intro / co-host, not cold targets)"]
+        lines += [f"- {t.person} ({t.reason})" for t in targets if t.is_customer] or ["- none"]
+        lines.append("")
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    (OUT_DIR / "meeting_lists.md").write_text("\n".join(lines), encoding="utf-8")
+    return {
+        "events": len(ranked),
+        "appearances": len(appearances),
+        "targets": total,
+        "top": [(by_id[s.event_id].name, round(s.expected_meetings, 4)) for s in ranked[:5]],
+    }
 
 
 DRAFT_ANGLES_PER_GROUP = 3
@@ -864,6 +913,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     p_contacts = sub.add_parser("contacts", help="Contacts for top prospects (team page, Hunter)")
     p_contacts.add_argument("--top", type=int, default=25, help="Top N ranked prospects")
     sub.add_parser("events-extract", help="Lineup appearances for registry events (public pages)")
+    sub.add_parser("events-rank", help="Rank events by expected meetings per dollar; meeting lists")
     p_clay_push = sub.add_parser("clay-push", help="Push top prospects to Clay (webhook)")
     p_clay_push.add_argument("--top", type=int, default=25, help="Top N ranked prospects")
     p_clay_import = sub.add_parser("clay-import", help="Import Clay's enriched CSV as contacts")
@@ -934,6 +984,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"{name}: {value}")
     elif args.command == "events-extract":
         for name, value in events_extract().items():
+            print(f"{name}: {value}")
+    elif args.command == "events-rank":
+        for name, value in events_rank().items():
             print(f"{name}: {value}")
     elif args.command == "clay-push":
         for name, value in clay_push(args.top).items():
