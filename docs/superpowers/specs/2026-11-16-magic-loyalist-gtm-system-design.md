@@ -462,6 +462,13 @@ on-premise-licensed NYC venues first inspected in the N weeks after the cutoff. 
 
 Report hits, median days of lead time, duplicates/errors, and run-to-run variance.
 
+**Fairness note.** Running Claude today about a past cutoff leaks hindsight: it can find press
+published after the cutoff. That biases the test *in Claude's favor*, so a SignalForce win is
+conservative; state this in the demo. SignalForce must use only data dated before the cutoff
+(original application dates from the active/inactive license datasets, not today's pending
+snapshot, since filings leave "pending" once licensed). After the meeting, run a forward test
+(both lists frozen today, scored as openings happen) as the clean version.
+
 ## 8. Demo scope (for the meeting)
 
 **Constraint (Sami, 2026-11-16):** the meeting is in 2–3 days, and tools run on free trial or
