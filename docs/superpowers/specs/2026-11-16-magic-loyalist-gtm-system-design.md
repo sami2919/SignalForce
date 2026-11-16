@@ -39,6 +39,9 @@ Background research: the "Customer 1,001" brief (in conversation; summarized in 
   mix automated and human steps, reply handling.
 - A lifecycle model from Target to Expanding/At-risk, where one signal feed drives
   stage-dependent playbooks.
+- Event intelligence for the field team: rank conferences, festivals and dinners by expected
+  qualified meetings per dollar, then build likely-attendee meeting lists for the chosen ones
+  (§6.12).
 - A learning loop: evals, recall measurement, Bayesian weight updates, message bandits and
   proposal generation.
 
@@ -332,7 +335,81 @@ guard thresholds.
 corrections. Each component has an accuracy floor it must hold to ship. Optional self-hosted
 Langfuse for agent trace browsing.
 
-### 6.12 Tools summary
+### 6.12 Events: ranking and meeting lists
+
+**Why.** Magic sells in person. Picking the right rooms and arriving with a list of who to meet
+is outbound for a field team. Sami's decision: **rank events first, then build meeting lists**
+for the chosen events.
+
+**Hypothesis to test.** Large trade shows (e.g. the NRA Show, May 22–25, 2027, Chicago) skew
+toward chains and suppliers. The ICP (chef-led groups of 2–6 upscale venues) is denser at:
+- curated hospitality conferences (The Welcome Conference, StarChefs);
+- James Beard events and award ceremonies;
+- food and wine festivals where chefs cook (NYC Wine & Food Festival etc.);
+- local operator groups (NYC Hospitality Alliance).
+
+Festival chef lineups and award lists are public, so they work as near-complete attendee lists for
+chefs.
+
+**Approaches.**
+1. **Public sources (chosen as the core).** Events go in a registry; the attendee data comes from
+   public pages.
+2. **Purchased event-intelligence data (add-on).** Vendors such as Luminik sell attendee data for
+   events like the NRA Show. Allowed only after it passes a 50-record accuracy test on this
+   vertical and its provenance is acceptable.
+3. **Sponsorship with badge scanning.** Real opt-in lists, but costly and mostly post-event.
+   Magic's business decision; Part 1's ranking supplies the numbers for it.
+
+**Data model additions.**
+- `Event`: name, series, dates, city, type (trade show, curated conference, festival, awards,
+  local meetup, Magic-hosted dinner), cost estimate, source.
+- `EventAppearance`: links Person → Event with a role (speaker, panelist, festival chef, award
+  nominee, exhibitor staff, sponsor, past-recap appearance), a source and an attendance
+  probability.
+- This builds on the `attended_event` edge already in the graph.
+
+**Method split.**
+
+| Job | Method |
+|---|---|
+| Discovering events (new series, local meetups, festivals) | Agent + Exa, budgeted; results proposed for the registry |
+| Recurring event calendar (annual series, expected dates) | Deterministic registry, re-checked each cycle |
+| Speaker / lineup / exhibitor / award pages → appearances | Single LLM call, fixed schema |
+| Matching appearances to Person/Group | Same entity resolution as §6.1 (rules → Splink → agent on residue) |
+| Attendance probability by role | Probabilistic; priors by role, updated from logged attendance |
+| Event score, list ranking | Probabilistic (formulas below) |
+| Pre-event outreach scheduling, suppression, de-dup with other sequences | Deterministic |
+
+**Part 1: event ranking.**
+```
+event_value = Σ_people P(attend) × account_priority × P(meeting | event_type)
+event_score = event_value / (ticket + travel + sponsorship cost)
+```
+- `account_priority` comes from §6.5, so people at in-window groups count more.
+- `P(attend)` priors by role. Speaker, festival chef and award nominee at the awards event start
+  near-certain; exhibitor staff are likely; a past-recap appearance only is lower.
+- `P(meeting | event_type)` starts as a prior. After each event, logged meetings update it. This
+  is a numeric parameter, so the loop **auto-applies** it (§6.11). The output answers the job
+  post's "what each channel and event produced".
+
+**Part 2: meeting lists for chosen events.**
+- Rank likely attendees by `P(attend) × account_priority × in-window now`.
+- Customers who are attending are flagged as warm intros or co-hosts, not targets.
+- Pre-event sequence 2–3 weeks out ("are you at X? 15 minutes there?") through §6.8. It respects
+  one-active-sequence-per-group and global suppression.
+- At-event: reps get a mobile-friendly list with each person's evidence and a one-tap touch log.
+  Post-event: logged touches feed the lifecycle and the loop.
+- The same ranking produces invite lists for Magic-hosted dinners.
+
+**Guardrails.**
+- No scraping of gated event apps (Swapcard, Whova, Brella) or LinkedIn event attendee lists.
+- Ignore "attendee list for sale" offers; they are a known scam pattern.
+- Purchased lists only via approach 2's test.
+
+**Demo scope addition.** NYC-relevant event registry for the next 12 months. Ranked events
+with their scores. A likely-attendee meeting list for the top event, matched to the graph.
+
+### 6.13 Tools summary
 
 | Need | Tool | Alternative and why not |
 |---|---|---|
@@ -369,7 +446,8 @@ Langfuse for agent trace browsing.
 5. Top ~25 ranked accounts, each with evidence trace and window estimate.
 6. Contacts for the top 10, and 3 drafted messages per angle through the judge (no sends).
 7. Recall audit run on the last N weeks of openings.
-8. Deliverability, sequencing, reply-handling and lifecycle designs documented, with the
+8. Event registry, ranked events, and a likely-attendee meeting list for the top event (§6.12).
+9. Deliverability, sequencing, reply-handling and lifecycle designs documented, with the
    sequencer and classifier running against fixtures and seed inboxes.
 
 ## 9. Left to the builder
