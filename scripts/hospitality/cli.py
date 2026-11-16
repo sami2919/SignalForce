@@ -62,6 +62,7 @@ from scripts.hospitality.models import (
     Venue,
     WindowEstimate,
 )
+from scripts.hospitality.report import build_report
 from scripts.hospitality.resolve.groups import form_groups, merge_groups
 from scripts.hospitality.resolve.match import match_licenses
 from scripts.hospitality.resolve.venues import build_venues
@@ -685,17 +686,22 @@ def lookalikes(now: datetime | None = None) -> dict[str, object]:
     }
 
 
-def recall(weeks: int = 12, today: date | None = None) -> dict[str, object]:
+def recall(
+    weeks: int = 12,
+    today: date | None = None,
+    store: DocStore | None = None,
+    cfg: HospitalityConfig | None = None,
+) -> dict[str, object]:
     """Replay license signals for venues first inspected in the last `weeks`; report recall.
 
     Each opening is replayed as of the day before its first inspection (no inspection yet, no
     match-miss filter), so only signals that could have existed beforehand are counted. As-of
     replay is `historical`: now-inactive licenses count at their issue date, as they did then.
     """
-    cfg = load_config()
+    cfg = cfg or load_config()
     today = today or date.today()
     start = today - timedelta(weeks=weeks)
-    store = DocStore()
+    store = store or DocStore()
     licenses = store.load("licenses", LicenseRecord)
     openings = ground_truth_openings(store.load("venues", Venue), start, today, cfg, licenses)
     replayed: list[Signal] = []
@@ -716,14 +722,14 @@ CASE_HINTS: dict[str, str] = {
 }
 
 
-def backtest() -> dict[str, object]:
+def backtest(store: DocStore | None = None) -> dict[str, object]:
     """Case replay on dated customers with a known new venue, plus fit AUC. Indicative only.
 
     Each case is replayed as of its anchor date (the customer was live on or before it), with
     the venue's first inspection cleared and `historical=True`, so only signals that could have
     existed then count. Customers with no date are counted but not replayed.
     """
-    store = DocStore()
+    store = store or DocStore()
     venues = store.load("venues", Venue)
     groups = store.load("groups", Group)
     licenses = store.load("licenses", LicenseRecord)
@@ -891,6 +897,11 @@ def _print_benchmark(r: BenchmarkResult) -> None:
         print(f"note: {note}")
 
 
+def report() -> Path:
+    """Assemble the demo report from the store; written only under `OUT_DIR` (gitignored)."""
+    return build_report(DocStore(), load_config(), OUT_DIR)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="scripts.hospitality.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -922,6 +933,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     p_draft.add_argument("--top", type=int, default=10, help="Top N ranked prospects")
     sub.add_parser("lookalikes", help="Exa lookalikes of customer sites, matched to known venues")
     sub.add_parser("backtest", help="Case replay on known customers + fit AUC (indicative)")
+    sub.add_parser("report", help="Assemble the demo report from the store (out/magic/)")
     sub.add_parser("run-p0", help="Run the whole P0 chain, ingest through backtest")
     p_bench = sub.add_parser(
         "benchmark", help="Head-to-head vs plain Claude + web search (spends real money)"
@@ -1002,6 +1014,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"{name}: {value}")
     elif args.command == "backtest":
         _print_backtest(backtest())
+    elif args.command == "report":
+        print(f"report: {report()}")
     elif args.command == "run-p0":
         for step in P0_STEPS:
             print(f"== {step} ==")
