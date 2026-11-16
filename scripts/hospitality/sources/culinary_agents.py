@@ -95,8 +95,15 @@ def company_search_url(location: str) -> str:
     return _search_url("/companies/search", params)
 
 
+def _disallow_all() -> RobotFileParser:
+    parser = RobotFileParser()
+    parser.parse(["User-agent: *", "Disallow: /"])
+    return parser
+
+
 class PoliteFetcher:
-    """Sync GET of one public page: robots.txt (fetched once per run), SSRF guard, body cap."""
+    """Sync GET of one public page: robots.txt (fetched once per run; unreadable = fetch
+    nothing), SSRF guard, body cap."""
 
     def __init__(
         self, client_factory: Callable[[], httpx.AsyncClient] = lambda: guarded_client()
@@ -155,10 +162,17 @@ class PoliteFetcher:
                 timeout=timeout,
                 follow_redirects=True,
             )
-            parser.parse(resp.text.splitlines() if resp.status_code == 200 else [])
         except httpx.HTTPError as exc:
-            logger.info("culinary agents robots.txt fetch failed; permissive: %s", exc)
-            parser.parse([])
+            logger.warning("culinary agents robots.txt fetch failed; fetching nothing: %s", exc)
+            return _disallow_all()
+        if resp.status_code != 200:
+            # Fail closed (M8): the source's terms restrict automated collection, and RFC 9309
+            # treats an unreachable robots.txt as disallow; a missing one is not a licence here.
+            logger.warning(
+                "culinary agents robots.txt status=%s; fetching nothing", resp.status_code
+            )
+            return _disallow_all()
+        parser.parse(resp.text.splitlines())
         return parser
 
 

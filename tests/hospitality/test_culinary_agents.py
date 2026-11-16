@@ -591,3 +591,24 @@ def test_job_board_names_never_match_by_token_subset(a: str, b: str) -> None:
     from scripts.hospitality.sources.culinary_agents import _same_name
 
     assert not _same_name(a, b)
+
+
+@pytest.mark.parametrize("robots", ["503", "404", "error"])
+def test_polite_fetcher_fails_closed_when_robots_cannot_be_read(robots: str) -> None:
+    """M8: the source's terms restrict automated collection, so an unreadable robots.txt
+    (5xx per RFC 9309, any non-200, or a network error) disallows every page."""
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.path)
+        if request.url.path == "/robots.txt":
+            if robots == "error":
+                raise httpx.ConnectError("down")
+            return httpx.Response(int(robots))
+        return httpx.Response(200, text="<html>ok</html>")
+
+    f = PoliteFetcher(
+        client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    )
+    assert f("https://culinaryagents.com/search/jobs?x=1") is None
+    assert seen == ["/robots.txt"]  # no page request goes out
