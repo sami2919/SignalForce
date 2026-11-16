@@ -32,6 +32,9 @@ SignalType = Literal[
 ]
 
 
+Angle = Literal["opening", "people_change", "platform_switch", "relationship", "private_events"]
+
+
 class _Frozen(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -296,3 +299,29 @@ class TeamPage(_Frozen):
     html: str
     text: str
     members: tuple[TeamPerson, ...]
+
+
+class DraftSentence(_Frozen):
+    text: str
+    evidence_ids: tuple[str, ...]  # signal_ids of stored evidence
+    is_claim: bool  # a factual claim about them; must cite evidence
+
+
+class Draft(_Frozen):
+    draft_id: str
+    group_id: str
+    contact_id: str | None
+    angle: Angle
+    subject: str
+    sentences: tuple[DraftSentence, ...]
+
+
+class Judgement(_Frozen):
+    score: float
+    hyper_specific: bool
+    factually_grounded: bool
+    non_obvious: bool
+    deletion_reason: str
+    what_would_make_me_reply: str
+    grounding_violations: tuple[str, ...]
+    passed: bool

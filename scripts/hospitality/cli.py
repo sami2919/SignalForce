@@ -24,7 +24,7 @@ from scripts.hospitality.contacts.clay import (
     merge_contact,
     push_to_clay,
 )
-from scripts.hospitality.contacts.waterfall import HunterClient, find_contacts
+from scripts.hospitality.contacts.waterfall import HunterClient, find_contacts, role_priority
 from scripts.hospitality.discover.exa import ExaClient
 from scripts.hospitality.discover.lookalikes import lookalike_signals, seed_url
 from scripts.hospitality.discover.press import PRESS_QUERIES, extract_press, press_to_records
@@ -36,16 +36,20 @@ from scripts.hospitality.labels import (
 from scripts.hospitality.llm import LLMRefusal
 from scripts.hospitality.measure.backtest import case_replay, find_venue, fit_auc
 from scripts.hospitality.measure.recall import ground_truth_openings, recall_audit
+from scripts.hospitality.messages.drafter import choose_angles, draft
+from scripts.hospitality.messages.judge import judge
 from scripts.hospitality.models import (
     BenchmarkResult,
     CaseReplay,
     Contact,
     CurveRecord,
     CustomerLabel,
+    Draft,
     EntityLink,
     Group,
     GroupEvidence,
     InspectionVenue,
+    Judgement,
     LicenseRecord,
     LicenseSource,
     ScoredAccount,
@@ -418,6 +422,49 @@ def contacts(top: int = 25) -> dict[str, object]:
     }
 
 
+DRAFT_ANGLES_PER_GROUP = 3
+
+
+def draft_command(top: int = 10) -> dict[str, object]:
+    """Draft (never send) up to three angles per top cold prospect; judge and save them."""
+    if not os.environ.get("ANTHROPIC_API_KEY"):  # fail fast, before touching the store
+        raise SystemExit("ANTHROPIC_API_KEY is not set; the draft command needs it")
+    store = DocStore()
+    group_of = {v.venue_id: v.group_id for v in store.load("venues", Venue)}
+    signals_by_group: dict[str, list[Signal]] = {}
+    for sig in [*store.load("license_signals", Signal), *store.load("signals", Signal)]:
+        signals_by_group.setdefault(group_of.get(sig.entity_id, sig.entity_id), []).append(sig)
+    contacts_by_group: dict[str, list[Contact]] = {}
+    for c in store.load("contacts", Contact):
+        contacts_by_group.setdefault(c.group_id, []).append(c)
+    ranked = rank_prospects(store.load("scores", ScoredAccount))[:top]
+    drafts: list[Draft] = []
+    judgements: dict[str, Judgement] = {}
+    for acct in ranked:
+        evidence = signals_by_group.get(acct.group_id, [])
+        people = sorted(
+            contacts_by_group.get(acct.group_id, []), key=lambda c: role_priority(c.role)
+        )
+        contact = people[0] if people else None
+        for angle in choose_angles(evidence)[:DRAFT_ANGLES_PER_GROUP]:
+            d = draft(acct, evidence, contact, angle)
+            drafts.append(d)
+            judgements[d.draft_id] = judge(d, evidence)
+    store.save("drafts", drafts, key=lambda d: d.draft_id)  # type: ignore[attr-defined]
+    ids = {id(j): k for k, j in judgements.items()}
+    store.save("judgements", list(judgements.values()), key=lambda j: ids[id(j)])
+    passed = sum(j.passed for j in judgements.values())
+    grounded = sum(not j.grounding_violations for j in judgements.values())
+    return {
+        "groups": len(ranked),
+        "drafts": len(drafts),
+        "passed": passed,
+        "grounded": grounded,
+        "pass rate": f"{passed / len(drafts):.0%}" if drafts else "n/a",
+        "grounding rate": f"{grounded / len(drafts):.0%}" if drafts else "n/a",
+    }
+
+
 def clay_push(top: int = 25) -> dict[str, object]:
     """Push the top cold prospects to the Clay table by webhook (customers never pushed)."""
     url = os.environ.get("CLAY_WEBHOOK_URL")
@@ -783,6 +830,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     p_clay_push.add_argument("--top", type=int, default=25, help="Top N ranked prospects")
     p_clay_import = sub.add_parser("clay-import", help="Import Clay's enriched CSV as contacts")
     p_clay_import.add_argument("csv", type=Path, help="Clay CSV export")
+    p_draft = sub.add_parser("draft", help="Evidence-linked drafts for top prospects (no sending)")
+    p_draft.add_argument("--top", type=int, default=10, help="Top N ranked prospects")
     sub.add_parser("lookalikes", help="Exa lookalikes of customer sites, matched to known venues")
     sub.add_parser("backtest", help="Case replay on known customers + fit AUC (indicative)")
     sub.add_parser("run-p0", help="Run the whole P0 chain, ingest through backtest")
@@ -850,6 +899,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"{name}: {value}")
     elif args.command == "clay-import":
         for name, value in clay_import(args.csv).items():
+            print(f"{name}: {value}")
+    elif args.command == "draft":
+        for name, value in draft_command(args.top).items():
             print(f"{name}: {value}")
     elif args.command == "lookalikes":
         for name, value in lookalikes().items():
