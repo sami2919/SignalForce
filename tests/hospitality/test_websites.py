@@ -104,3 +104,28 @@ def test_websites_command_fails_fast_without_key(monkeypatch, capsys) -> None:
     with pytest.raises(SystemExit) as exc:
         cli.main(["websites"])
     assert "GOOGLE_PLACES_API_KEY" in str(exc.value)
+
+
+def test_websites_command_uses_the_configured_match_thresholds(monkeypatch, tmp_path) -> None:
+    """M2: the Places acceptance thresholds come from config, not module constants."""
+    from scripts.hospitality.config import load_config
+    from scripts.hospitality.store import DocStore
+    from tests.hospitality.factories import make_estimate
+
+    seed = tmp_path / "seed.yaml"
+    seed.write_text("customers: []\ndismissed_embeds: []\n")
+    monkeypatch.setattr(cli, "SEED_PATH", seed)
+    store = DocStore(f"sqlite:///{tmp_path}/m.db")
+    store.save("venues", [make_venue("v:1", name="Oriana")], key=lambda v: v.venue_id)
+    store.save("estimates", [make_estimate("v:1")], key=lambda e: e.venue_id)
+    monkeypatch.setattr(cli, "DocStore", lambda: store)
+    monkeypatch.setenv("GOOGLE_PLACES_API_KEY", "k")
+    cfg = load_config().model_copy(update={"website_match_max_distance_m": 5000.0})
+    monkeypatch.setattr(cli, "load_config", lambda: cfg)
+
+    def far_place(self, text_query):  # type: ignore[no-untyped-def]
+        self.budget.spend()
+        return [make_place(lat=40.71)]  # ~1.1 km away: rejected at the 75 m default
+
+    monkeypatch.setattr(cli.PlacesClient, "search", far_place)
+    assert cli.websites()["websites_found"] == 1

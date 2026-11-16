@@ -119,3 +119,11 @@ def test_config_has_unmatched_censor_age_cap():
     from scripts.hospitality.config import load_config
 
     assert load_config().window_unmatched_censor_max_age_days == 90
+
+
+def test_max_opening_days_is_a_parameter():
+    """M2: the duration cap comes from config (`max_opening_days`), not only MAX_DAYS."""
+    v = make_venue("v:1", first_inspection_date=date(2026, 3, 1), license_ids=("a",))
+    lic = make_license("a", source="sla_active", original_issue_date=date(2025, 3, 1))  # 365d
+    assert len(opening_durations([v], [lic], TODAY)) == 1
+    assert opening_durations([v], [lic], TODAY, max_days=300) == []

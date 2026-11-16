@@ -8,7 +8,7 @@ from scripts.hospitality.models import EntityLink, LicenseRecord, Venue
 
 Curve = tuple[tuple[float, float], ...]
 
-MAX_DAYS = 730.0
+MAX_DAYS = 730.0  # default only; the pipeline passes cfg.max_opening_days
 _EPS = 1e-9
 
 
@@ -89,13 +89,14 @@ def opening_durations(
     today: date,
     links: Sequence[EntityLink] = (),
     max_unmatched_age_days: float | None = None,
+    max_days: float = MAX_DAYS,
 ) -> list[tuple[str, float, bool]]:
     """One (stratum, days, observed) per venue with an issued (active/inactive) license.
 
     Inspected venues use the latest license issued on or before the first inspection; a venue
     whose only licenses were issued AFTER its first inspection is a transfer/renewal, not a new
-    opening, and is excluded, as is anything over 730 days (data noise). Venues with no
-    inspection yet are censored at today - issue (same 730-day cap), unless
+    opening, and is excluded, as is anything over `max_days` (data noise). Venues with no
+    inspection yet are censored at today - issue (same cap), unless
     `likely_already_open` says the missing inspection is a match miss.
     """
     by_id = {lic.record_id: lic for lic in licenses}
@@ -125,7 +126,7 @@ def opening_durations(
             observed = False
             if likely_already_open(venue, days, linked, max_unmatched_age_days):
                 continue
-        if days < 0 or days > MAX_DAYS:
+        if days < 0 or days > max_days:
             continue
         out.append((stratum_of(lic), days, observed))
     return out

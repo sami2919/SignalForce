@@ -71,6 +71,15 @@ class HospitalityConfig(BaseModel):
     window_outside_half_life_days: float
     pending_to_issue_prior_days: int
     window_unmatched_censor_max_age_days: int
+    # Longest issue-to-first-inspection time that counts as an opening (the curve drops longer
+    # durations); a not_yet_inspected venue licensed longer ago than the cap is stale.
+    max_opening_days: float
+    not_yet_inspected_max_age_days: float
+    # license_issued fires only for licenses issued within this many days.
+    issued_lookback_days: int
+    # Google Places candidate acceptance for a venue's website.
+    website_match_max_distance_m: float
+    website_match_min_name_similarity: float
     fit_weights: dict[str, float]
     relationship_boost: float
     budgets: dict[str, int]

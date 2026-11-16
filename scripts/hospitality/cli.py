@@ -298,7 +298,9 @@ def window(today: date | None = None) -> dict[str, object]:
     licenses = store.load("licenses", LicenseRecord)
     links = store.load("links", EntityLink)
     cap = cfg.window_unmatched_censor_max_age_days
-    durations = opening_durations(venues, licenses, today, links, max_unmatched_age_days=cap)
+    durations = opening_durations(
+        venues, licenses, today, links, max_unmatched_age_days=cap, max_days=cfg.max_opening_days
+    )
     curves = build_curves(durations)
     counts: dict[str, int] = {"all": len(durations)}
     for stratum, _, _ in durations:
@@ -367,7 +369,14 @@ def websites(limit: int = 400, today: date | None = None) -> dict[str, int]:
     budget = CallBudget("places", min(limit, cfg.budgets["places"]))
     found: list[WebsiteLookup] = []
     try:
-        for lookup in iter_website_lookups(venues, PlacesClient(key, budget), priority, today):
+        for lookup in iter_website_lookups(
+            venues,
+            PlacesClient(key, budget),
+            priority,
+            today,
+            cfg.website_match_max_distance_m,
+            cfg.website_match_min_name_similarity,
+        ):
             found.append(lookup)  # noqa: PERF402 (kept one by one: partial on error)
     finally:  # paid for: keep every lookup made, even if an error ends the run
         store.save("websites", found, key=lambda w: w.venue_id)  # type: ignore[attr-defined]
@@ -530,6 +539,8 @@ def score(now: datetime | None = None) -> dict[str, object]:
         now.date(),
         linked=linked_to_inspected(venues, links),
         max_unmatched_age_days=cfg.window_unmatched_censor_max_age_days,
+        issued_lookback_days=cfg.issued_lookback_days,
+        not_yet_inspected_max_age_days=cfg.not_yet_inspected_max_age_days,
     )
     store.clear("license_signals")  # recomputed in full each run, so stale ones never linger
     store.save("license_signals", lic_signals, key=lambda s: s.signal_id)  # type: ignore[attr-defined]

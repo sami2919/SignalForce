@@ -23,6 +23,7 @@ SEARCH_ENDPOINT = "v1/places:searchText"
 FIELD_MASK = (
     "places.id,places.displayName,places.formattedAddress,places.websiteUri,places.location"
 )
+# Defaults only; the websites command passes cfg.website_match_max_distance_m / _min_name_similarity.
 MAX_DISTANCE_M = 75.0
 MIN_NAME_SIMILARITY = 0.6
 
@@ -61,16 +62,21 @@ class PlacesClient(BaseAPIClient):
         return matches
 
 
-def pick_place(venue: Venue, candidates: Sequence[PlaceMatch]) -> PlaceMatch | None:
-    """Nearest candidate within 75 m with name similarity >= 0.6, else None."""
+def pick_place(
+    venue: Venue,
+    candidates: Sequence[PlaceMatch],
+    max_distance_m: float = MAX_DISTANCE_M,
+    min_name_similarity: float = MIN_NAME_SIMILARITY,
+) -> PlaceMatch | None:
+    """Nearest candidate within `max_distance_m` with name similarity >= the minimum, else None."""
     if venue.lat is None or venue.lon is None:
         return None
     best: tuple[float, PlaceMatch] | None = None
     for c in candidates:
         dist = haversine_m(venue.lat, venue.lon, c.lat, c.lon)
         if (
-            dist > MAX_DISTANCE_M
-            or name_similarity(venue.name, c.display_name) < MIN_NAME_SIMILARITY
+            dist > max_distance_m
+            or name_similarity(venue.name, c.display_name) < min_name_similarity
         ):
             continue
         if best is None or dist < best[0]:
@@ -79,7 +85,12 @@ def pick_place(venue: Venue, candidates: Sequence[PlaceMatch]) -> PlaceMatch | N
 
 
 def iter_website_lookups(
-    venues: Sequence[Venue], client: PlacesClient, priority_ids: Sequence[str], today: date
+    venues: Sequence[Venue],
+    client: PlacesClient,
+    priority_ids: Sequence[str],
+    today: date,
+    max_distance_m: float = MAX_DISTANCE_M,
+    min_name_similarity: float = MIN_NAME_SIMILARITY,
 ) -> Iterator[WebsiteLookup]:
     """One `WebsiteLookup` (hit or miss) per priority venue looked up, in venue order.
 
@@ -95,7 +106,7 @@ def iter_website_lookups(
         except BudgetExceeded as exc:
             logger.warning("Stopping website lookups: %s", exc)
             return
-        match = pick_place(v, candidates)
+        match = pick_place(v, candidates, max_distance_m, min_name_similarity)
         yield WebsiteLookup(
             venue_id=v.venue_id, website=match.website if match else None, looked_up_on=today
         )

@@ -224,7 +224,7 @@ def test_websites_includes_seed_customer_venues(tmp_path, monkeypatch) -> None:
     store.save("venues", venues, key=lambda v: v.venue_id)  # type: ignore[attr-defined]
     looked_up: list[list[str]] = []
 
-    def fake_lookups(vs, client, priority, today):  # type: ignore[no-untyped-def]
+    def fake_lookups(vs, client, priority, today, *thresholds):  # type: ignore[no-untyped-def]
         looked_up.append(list(priority))
         return iter(())
 

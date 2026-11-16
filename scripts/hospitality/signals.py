@@ -6,7 +6,7 @@ from datetime import UTC, date, datetime, timedelta
 from scripts.hospitality.models import LicenseRecord, Signal, Venue
 from scripts.hospitality.window.survival import likely_already_open
 
-ISSUED_LOOKBACK_DAYS = 365
+ISSUED_LOOKBACK_DAYS = 365  # default only; the pipeline passes cfg.issued_lookback_days
 
 
 def _at(d: date) -> datetime:
@@ -37,6 +37,8 @@ def license_signals(
     linked: frozenset[str] = frozenset(),
     max_unmatched_age_days: float | None = None,
     historical: bool = False,
+    issued_lookback_days: int = ISSUED_LOOKBACK_DAYS,
+    not_yet_inspected_max_age_days: float | None = None,
 ) -> list[Signal]:
     """Opening signals per venue.
 
@@ -50,9 +52,13 @@ def license_signals(
     (default) a currently inactive license has lapsed, been surrendered or replaced, so it says
     nothing about an upcoming opening and emits nothing. Inactive records never emit
     `not_yet_inspected`: a lapsed license is not evidence of a site awaiting its first inspection.
+
+    `not_yet_inspected_max_age_days` drops `not_yet_inspected` when the venue's best license is
+    older than it: past the longest issue-to-inspection time the curve counts as an opening,
+    an uninspected site is stale, not about to open (M11).
     """
     by_id = {lic.record_id: lic for lic in licenses}
-    cutoff = today - timedelta(days=ISSUED_LOOKBACK_DAYS)
+    cutoff = today - timedelta(days=issued_lookback_days)
     out: list[Signal] = []
     for venue in venues:
         lics = [lic for lid in venue.license_ids if (lic := by_id.get(lid)) is not None]
@@ -100,7 +106,11 @@ def license_signals(
             actives = [(d, lic) for d, lic in dated if lic.source == "sla_active"]
             when, lic = max(actives or dated, key=lambda x: x[0])
             cap = max_unmatched_age_days if lic.source == "sla_active" else None
-            if not likely_already_open(venue, float((today - when).days), linked, cap):
+            age = float((today - when).days)
+            stale = not_yet_inspected_max_age_days is not None and (
+                age > not_yet_inspected_max_age_days
+            )
+            if not stale and not likely_already_open(venue, age, linked, cap):
                 out.append(
                     _signal(
                         "not_yet_inspected",

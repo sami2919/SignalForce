@@ -23,8 +23,18 @@ pending_to_issue_prior_days: 75
 # An issued license with no DOHMH record (not even one awaiting inspection) older than this is
 # treated as a match miss, not a still-unopened venue: censored out of the opening curve and
 # given no window estimate. ~ the observed-duration p25 (94d); the curve median is flat (282-292d)
-# for caps 0-120d. See .superpowers/sdd/2026-11-16-magic-loyalist-gtm-demo/task-9b-report.md.
+# for caps 0-120d (measured on the NYC store when the rule was set; re-check after a re-ingest).
 window_unmatched_censor_max_age_days: 90
+# Issue-to-first-inspection durations longer than this are not counted as openings by the curve
+# (live: 95% of observed openings inspect within ~690 days of issue). A venue still uninspected
+# past the same age is stale, so it emits no not_yet_inspected signal.
+max_opening_days: 730
+not_yet_inspected_max_age_days: 730
+# license_issued fires only for licenses issued within this many days of the scoring date.
+issued_lookback_days: 365
+# Google Places: accept the nearest candidate within this distance and at least this name match.
+website_match_max_distance_m: 75.0
+website_match_min_name_similarity: 0.6
 fit_weights: {multi_venue: 0.30, reservation_platform: 0.30, events_program: 0.15, accolade: 0.15, full_service_class: 0.10}
 relationship_boost: 0.5
 budgets: {culinary_agents: 40, places: 400, firecrawl: 300, exa: 120, hunter: 40, clay: 25, claude_calls: 600}

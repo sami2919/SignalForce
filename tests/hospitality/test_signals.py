@@ -151,3 +151,60 @@ def test_live_venue_with_active_and_inactive_licenses_signals_only_the_active() 
     venue = make_venue("v:1", license_ids=("a1", "i1"), camis="9")
     sigs = license_signals([venue], [active, lapsed], {}, TODAY)
     assert {s.evidence_ref for s in sigs} == {"a1"}
+
+
+def test_not_yet_inspected_older_than_the_age_cap_is_stale() -> None:
+    """M11: a site licensed long ago and still uninspected is not an upcoming opening.
+
+    The camis is set (a DOHMH record awaiting inspection), so the match-miss rule keeps it;
+    without an age cap a 2024 license got full window weight forever.
+    """
+    old = make_license("p-old", received_date=date(2024, 6, 1))  # ~900 days
+    recent = make_license("p-new", received_date=date(2025, 11, 1))  # ~380 days
+    venues = [
+        make_venue("v:old", camis="1", license_ids=("p-old",)),
+        make_venue("v:new", camis="2", license_ids=("p-new",)),
+    ]
+    sigs = license_signals(venues, [old, recent], {}, TODAY, not_yet_inspected_max_age_days=730)
+    nyi = {s.entity_id for s in sigs if s.signal_type == "not_yet_inspected"}
+    assert nyi == {"v:new"}
+
+
+def test_issued_lookback_is_a_parameter() -> None:
+    lic = make_license(
+        "a1", source="sla_active", received_date=None, original_issue_date=date(2026, 3, 1)
+    )
+    venue = make_venue("v:1", license_ids=("a1",), camis="1")
+    assert "license_issued" in _types(license_signals([venue], [lic], {}, TODAY))
+    short = license_signals([venue], [lic], {}, TODAY, issued_lookback_days=180)
+    assert "license_issued" not in _types(short)
+
+
+def test_live_score_applies_the_configured_caps(tmp_path, monkeypatch) -> None:
+    from scripts.hospitality import cli
+    from scripts.hospitality.config import load_config
+    from scripts.hospitality.models import Group, Signal
+    from scripts.hospitality.store import DocStore
+
+    seed = tmp_path / "seed.yaml"
+    seed.write_text("customers: []\ndismissed_embeds: []\n")
+    monkeypatch.setattr(cli, "SEED_PATH", seed)
+    store = DocStore(f"sqlite:///{tmp_path}/m.db")
+    store.save(
+        "licenses",
+        [make_license("p-old", received_date=date(2024, 6, 1))],
+        key=lambda r: r.record_id,  # type: ignore[attr-defined]
+    )
+    venue = make_venue("v:old", camis="1", license_ids=("p-old",))
+    store.save("venues", [venue], key=lambda v: v.venue_id)  # type: ignore[attr-defined]
+    store.save(
+        "groups",
+        [Group(group_id=venue.group_id, name="Old", venue_ids=("v:old",), resolution="singleton")],
+        key=lambda g: g.group_id,  # type: ignore[attr-defined]
+    )
+    monkeypatch.setattr(cli, "DocStore", lambda: store)
+    cfg = load_config()
+    assert cfg.not_yet_inspected_max_age_days == 730 and cfg.issued_lookback_days == 365
+    cli.score(datetime(2026, 11, 16, tzinfo=UTC))
+    kinds = {s.signal_type for s in store.load("license_signals", Signal)}
+    assert "not_yet_inspected" not in kinds
