@@ -30,14 +30,16 @@ source, every rule is holdout-tested before it drives outbound.
 
 ## Phase 5 — Messages that re-describe the pain
 - [ ] `email-writer` rewrite: PQS variant (situation + cost, every fact source-linked) and PVP variant (standalone value), mapped to awareness level and Four Forces; "proud to receive" bar
-- [ ] Judge: reject any draft containing a factual claim without an evidence ref
+- [ ] Judge: reject any draft containing a factual claim without an evidence ref. Use Blueprint's rubric: /10 score plus binary Hyper-Specific / Factually Grounded / Non-Obvious checks, plus a simulated-buyer "I'm deleting this because…" critique. Emit nothing for a segment rather than an ungrounded draft
+- [ ] Compound conditions: let a PQS be defined as A × B over joined sources (e.g. signal + derived metric), not only as stacked single signals
+- [ ] Reply backflow: re-rank signal weights from classified replies and outcomes (replaces static config weights once n is sufficient)
 
 ## Phase 6 — Discovery
 - [ ] Skill `switch-interview`: Mom-Test + Moesta script, pre-interview prediction sheet, saturation stopping rule (~80% predictions held ×3, no new codes), Four Forces map per interview
 
 ## Open questions for you
 1. Do you have real closed-won/lost data (any ICP) to build against, or should Phase 1–3 ship with a synthetic fixture first?
-2. Which ICP is the beachhead to prove this on?
+2. Which ICP is the beachhead to prove this on? Crawford's method works best in a regulated vertical with hard public records; our shipped examples are horizontal infra with mostly soft signals (see doc §5 item 12)
 3. Order: I'd do Phase 0 → 3 first (the predictive holdout is the single highest-leverage gap), then 5, then 1/2 polish, 4, 6.
 
 ## Review

@@ -47,7 +47,76 @@ Every serious school converges on the same move:
    for the long tail.
 9. **Every claim has a source; every send has a gate.** The bar is a message you'd be proud to receive.
 
-## 3. What the evidence does and does not support
+## 3. What the primary sources show (read 2026-11-16)
+
+Read in full: Crawford's Revenue Brew interview (Aug 2026), his On the Edge "About" page, three
+Blueprint-generated playbooks (LoanPro, Hint, Quorum), a third-party analysis by Allston Labs, and
+the Hennink & Kaiser paper.
+
+### Confirmed in Crawford's own words
+- **Dossiers first, then rewind time.** "The very first place to begin is to create these things
+  called account dossiers: everything in the CRM, everything [customers have] ever said, and
+  everything they've ever done inside of your app." Then compare closed-lost, closed-won and "the
+  customers that are just doing bangers", "rewind time to when they came to us", and holdout-test
+  whether public data would have identified them. (Revenue Brew)
+- **The inversion.** "Start from the customer's pain, find the data that proves the pain, let the
+  data write the message. The list is the message." The same idea runs through his churn and health
+  work: start from the outcome, work backwards to the predictive signals. (On the Edge)
+- **PQS** mirrors "that prospect's situation back to them based on the situation your last
+  customer's in." His example: a pool-cleaning company that just added its first technician, with
+  Google reviews mentioning scheduling trouble.
+- **PVP** is "a message that is independently valuable to the person receiving it." He calls it
+  "a much better message" than a PQS.
+- **AI's main job is exclusion.** "AI's job is more to figure out what accounts in your [TAM] you
+  should never talk to." Score and sort the whole market, then spend human effort on the top 10%.
+  This is enumerate-then-disqualify in his words.
+- **Empathy is amplified, not replaced.** AI removes mundane work so sellers can get back on the
+  phone and in person. Considered purchases still need a human relationship.
+- **Where it works best (his own limit):** vertical SaaS, ideally in heavily regulated industries
+  with rich public data (licenses per state, Google reviews, government records). Horizontal
+  companies "have to pick a vertical."
+
+### What the playbooks show about the craft
+- **Hard data over soft signals.** Blueprint says it outright: *stop* "I see you're hiring
+  compliance people" ("everyone sees this"), *start* with a government record number, date and
+  address. **Job postings, the highest-weighted signal in several SignalForce configs, are the
+  example Crawford uses of a soft signal.**
+- **Anatomy of an 8.5–9.4/10 PQS (LoanPro):** two public datasets joined into one *compound*
+  condition (FDIC consent order × 25%+ loan growth; merger filing × CFPB complaint rate), a
+  *derived* metric the buyer probably hasn't computed (complaints per 1,000 loan accounts,
+  efficiency ratio trend), about three sentences, no product mention, no meeting ask, and a closing
+  diagnostic question ("What's the timeline on the consent order milestones?").
+- **The judge is harsh, and that's the point.** Every message is scored /10 on three binary
+  checks: *Hyper-Specific*, *Factually Grounded*, *Non-Obvious*. A simulated buyer then writes "I'm
+  deleting this because…" and "What would make me reply". On the Hint playbook the PVPs scored
+  3.8–6.2 and failed *Factually Grounded* for unverifiable stats ("heat map data", "industry average
+  4.2 months"). The PQS section reads "No messages generated for this category." The system would
+  rather ship nothing than ship an ungrounded claim.
+- **Feasibility is flagged.** Quorum PVPs that need the prospect's internal throughput data are
+  labelled as such instead of passed off as cold-sendable.
+- **Caveat:** these are auto-generated sample playbooks (LoanPro's uses placeholder names such as
+  "Regional Community Bank"). They show the method, not results.
+
+### Corrections and claims to discount
+- **Two PVP definitions are in circulation.** Allston Labs' "PVP gate" ("could I say this without
+  reading the recipient's file?") is a *specificity* test, which is really the PQS bar. Crawford's
+  definition is stricter: *independently valuable*. Use Crawford's.
+- **FIND (Focus / Investigate / Narrate / Deploy)** is attributed to Crawford by Allston Labs only.
+  I didn't find it in his own pages. Treat it as unverified attribution. The ordering discipline it
+  describes (investigate before deploying) is sound either way.
+- **"List quality drives 4–8x reply spread, copy 1.5–3x"** is an Allston Labs claim with no data
+  or source. Allston sells a competing service. Directionally plausible, not evidence.
+- **Allston's useful warnings:** "signals that are detectable but not painful" (technographics
+  are the usual offender), and running a PQS once with no reply data fed back into signal weights.
+  Both are real gaps in SignalForce (see §5).
+- **Commercial context:** Crawford sells a $50/month newsletter and a $2,500/year program with
+  tools and courses. Weigh his claims as practitioner opinion from a seller.
+- **Saturation, verified:** Hennink & Kaiser, *Soc Sci Med* 292 (2022) 114523: 23 articles (17
+  empirical, 6 modelling). Empirical studies saturated within **9–17 interviews or 4–8 focus
+  groups**, "particularly those with relatively homogenous study populations and narrowly defined
+  objectives". Multi-country, meta-theme and meaning-saturation studies needed more.
+
+## 4. What the evidence does and does not support
 
 - **Supported:** the principle itself, seller-centric messaging failing, narrow beachheads,
   problem-based targeting, holdout validation. These rest on decades of independent theory.
@@ -63,7 +132,7 @@ Every serious school converges on the same move:
   contract and tort claims, so public data is not permission.
 - The Henry Ford "faster horse" quote is apocryphal. Don't cite it as Ford.
 
-## 4. SignalForce audited against these principles
+## 5. SignalForce audited against these principles
 
 ### Where it is already strong
 - **Provenance.** Signal events carry source, scan run and evidence; the verify layer extracts and
@@ -100,8 +169,20 @@ Every serious school converges on the same move:
    is whatever matched the keywords. There's no complete-universe source per vertical.
 9. **Status quo is invisible.** "In-house builds" is listed as the primary competitor, yet no
    signal, message or proof addresses the Four Forces (anxiety, habit) that keep in-house in place.
+10. **Soft signals carry the most weight.** Hiring and library adoption are weighted 3.0 in the
+    inference-infra config. Blueprint names job postings as *the* example of a soft signal anyone
+    can see. Signals are also scored one at a time and stacked. Blueprint's best plays are
+    *compound conditions* (A × B) that are rare and specific.
+11. **No reply data flows back into weights.** The reply webhook and cohort analysis exist, but
+    weights are static config. Nothing re-ranks a signal by what it produced.
+12. **The vertical question is open.** Crawford's method works best where pain leaves hard
+    public records (licences, enforcement actions, complaints). SignalForce's shipped examples are
+    horizontal dev and AI infrastructure, where public data is mostly soft (repos, jobs, papers).
+    The hard records there would be things like public incident and status-page history, CVEs
+    against a stack, deprecations hitting a dependency, or cloud-cost disclosures. Either find
+    those or pick a regulated vertical as the beachhead.
 
-## 5. Direction
+## 6. Direction
 
 Invert the pipeline. Today: **keywords → signals → score → message**. First principles:
 **customers who bought → why, then (behavior) → where that pain is visible publicly → rule →
@@ -112,4 +193,5 @@ the sourcing layer for *validated* pain signals rather than the starting point. 
 
 - Hennink & Kaiser (2022), *Soc Sci Med* 292:114523; Guest, Bunce & Johnson (2006), *Field Methods*
 - hiQ v. LinkedIn consent judgment: [Proskauer](https://newmedialaw.proskauer.com/2022/12/08/hiq-and-linkedin-reach-proposed-settlement-in-landmark-scraping-case/), [ZwillGen](https://www.zwillgen.com/alternative-data/hiq-v-linkedin-wrapped-up-web-scraping-lessons-learned/)
-- Crawford / Blueprint: [Transaction Ep. 55](https://thetransactionpod.com/episodes/inverting-your-go-to-market-strategy-thinking-with-jordan-crawford-ep-55), [On the Edge](https://edge.blueprintgtm.com/about), [Pavilion profile](https://www.joinpavilion.com/blog/the-man-who-mastered-ai-gtm-meet-jordan-crawford), Blueprint public playbooks (LoanPro: FDIC/OCC/CFPB data; Hint: EPA violation records)
+- Read in full: [Revenue Brew interview](https://www.revenuebrew.com/stories/jordan-crawford-outbound-sales), [On the Edge: About](https://edge.blueprintgtm.com/about), Blueprint playbooks for [LoanPro](https://playbooks.blueprintgtm.com/loanpro-io), [Hint](https://playbooks.blueprintgtm.com/hint-com) and [Quorum](https://playbooks.blueprintgtm.com/quorumsoftware-com), [Allston Labs on Blueprint GTM](https://allstonlabs.com/library/frameworks/blueprint-gtm) (third party, competing vendor), [Hennink & Kaiser 2022 PDF](https://faisalmustafa.github.io/SLR-Book/resources/papers/hennink2022.pdf)
+- Search results only: [Transaction Ep. 55](https://thetransactionpod.com/episodes/inverting-your-go-to-market-strategy-thinking-with-jordan-crawford-ep-55), [On the Edge](https://edge.blueprintgtm.com/about), [Pavilion profile](https://www.joinpavilion.com/blog/the-man-who-mastered-ai-gtm-meet-jordan-crawford), Blueprint public playbooks (LoanPro: FDIC/OCC/CFPB data; Hint: EPA violation records)
