@@ -321,3 +321,30 @@ def test_export_lists_venues_lacking_a_website_in_priority_order(
     assert rows[2]["camis"] == "22" and rows[2]["website"] == ""
     assert cli.main(["websites-export-misses"]) == 0
     assert "website_misses.csv" in capsys.readouterr().out
+
+
+def test_queue_follows_prospect_rank_after_customers(store, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from tests.hospitality.factories import make_scored
+
+    cust = make_venue("v:cust", group_id="g:c")
+    top = make_venue("v:top", group_id="g:top")  # best prospect, no window estimate of its own
+    top2 = make_venue("v:top2", group_id="g:top")
+    low = make_venue("v:low", group_id="g:low")
+    soon = make_venue("v:soon", group_id="g:unscored")  # soonest opening, no score
+    dq = make_venue("v:dq", group_id="g:dq")
+    put_venues(store, cust, top, top2, low, soon, dq)
+    put_estimates(store, ("v:soon", date(2026, 11, 20)), ("v:low", date(2026, 12, 1)),
+                  ("v:top2", date(2027, 5, 1)), ("v:dq", date(2026, 11, 18)))  # fmt: skip
+    store.save(
+        "scores",
+        [make_scored("g:top", priority=0.4), make_scored("g:low", priority=0.1),
+         make_scored("g:dq", priority=0.0, disqualified_reason="contract_foodservice"),
+         make_scored("g:c", priority=0.3, is_customer=True)],
+        key=lambda s: s.group_id,  # type: ignore[attr-defined]
+    )  # fmt: skip
+    monkeypatch.setattr(cli, "current_customers", lambda *a, **k: {"g:c": object()})
+    venues = store.load("venues", cli.Venue)
+    order = cli._website_priority(store, venues, store.load("estimates", cli.WindowEstimate))
+    assert order[:4] == ["v:cust", "v:top2", "v:top", "v:low"]
+    assert order.index("v:soon") > order.index("v:low")
+    assert "v:dq" not in order

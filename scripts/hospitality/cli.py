@@ -348,12 +348,35 @@ def _spreadsheet_safe(value: str) -> str:
 def _website_priority(
     store: DocStore, venues: Sequence[Venue], estimates: Sequence[WindowEstimate]
 ) -> list[str]:
-    """Venue ids worth a website, in order: seed-customer venues first, then soonest opening."""
+    """Venue ids worth a website, in order.
+
+    Seed-customer venues first (for embed detection), then every venue of the ranked cold
+    prospects, best priority first (soonest opening within a group), then the remaining
+    venues with a window estimate, soonest opening first. Disqualified groups are skipped.
+    """
     by_id = {v.venue_id for v in venues}
     seed_groups = current_customers(store, SEED_PATH, venues=venues)
     customer_ids = [v.venue_id for v in venues if v.group_id in seed_groups]
-    ranked = sorted(estimates, key=lambda e: e.estimated_open)
-    ordered = [*customer_ids, *(e.venue_id for e in ranked)]
+    opens = {e.venue_id: e.estimated_open for e in estimates}
+    scores = {s.group_id: s for s in store.load("scores", ScoredAccount)}
+    dropped = {g for g, s in scores.items() if s.disqualified_reason}
+    prospect = {
+        g: s.priority
+        for g, s in scores.items()
+        if not s.disqualified_reason and not s.is_customer and g not in seed_groups
+    }
+    far = date.max
+    ranked_prospects = sorted(
+        (v for v in venues if v.group_id in prospect),
+        key=lambda v: (-prospect[v.group_id], opens.get(v.venue_id, far), v.venue_id),
+    )
+    by_open = sorted(estimates, key=lambda e: e.estimated_open)
+    group_of = {v.venue_id: v.group_id for v in venues}
+    ordered = [
+        *customer_ids,
+        *(v.venue_id for v in ranked_prospects),
+        *(e.venue_id for e in by_open if group_of.get(e.venue_id) not in dropped),
+    ]
     return list(dict.fromkeys(vid for vid in ordered if vid in by_id))
 
 
