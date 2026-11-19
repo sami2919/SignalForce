@@ -13,6 +13,7 @@ from scripts.hospitality import llm
 from scripts.hospitality.config import load_config
 from scripts.hospitality.labels import matches_seed_name
 from scripts.hospitality.models import BaselineItem, BaselineRun, Venue
+from scripts.hospitality.resolve.normalize import borough_of_zip
 
 logger = logging.getLogger(__name__)
 
@@ -39,13 +40,6 @@ _BOROUGH_WORDS: dict[str, str] = {
     "bronx": "bronx",
     "staten island": "staten island",
 }
-_ZIP_BOROUGH_PREFIX: tuple[tuple[tuple[str, ...], str], ...] = (
-    (("100", "101", "102"), "manhattan"),
-    (("103",), "staten island"),
-    (("104",), "bronx"),
-    (("112",), "brooklyn"),
-    (("110", "111", "113", "114", "116"), "queens"),
-)
 
 
 class BaselineList(BaseModel):
@@ -110,13 +104,6 @@ def run_baseline(
     return out
 
 
-def _borough_of_zip(zip_code: str) -> str | None:
-    for prefixes, borough in _ZIP_BOROUGH_PREFIX:
-        if zip_code.startswith(prefixes):
-            return borough
-    return None
-
-
 def _location_agrees(location: str, venue: Venue) -> bool:
     """A ZIP in the location must equal the venue's; else a borough must match its ZIP's.
 
@@ -128,7 +115,7 @@ def _location_agrees(location: str, venue: Venue) -> bool:
     lowered = location.lower()
     boroughs = {b for word, b in _BOROUGH_WORDS.items() if word in lowered}
     if boroughs:
-        return _borough_of_zip(venue.zip_code) in boroughs
+        return borough_of_zip(venue.zip_code) in boroughs
     return True
 
 

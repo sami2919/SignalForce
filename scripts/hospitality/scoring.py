@@ -2,6 +2,7 @@
 
 import math
 import re
+import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, date, datetime
 from typing import Any
@@ -19,7 +20,7 @@ from scripts.hospitality.models import (
     Venue,
     WindowEstimate,
 )
-from scripts.hospitality.resolve.normalize import normalize_name
+from scripts.hospitality.resolve.normalize import borough_of_zip, normalize_name
 from scripts.hospitality.stack.fingerprints import EVENTS, RESERVATION
 
 _SECONDS_PER_DAY = 86400.0
@@ -102,11 +103,47 @@ def fit_score(
         "multi_venue": len(members) >= 2 or len(group.venue_ids) >= 2,
         "reservation_platform": bool(RESERVATION & platforms),
         "events_program": bool(EVENTS & platforms),
-        "accolade": group.group_id in cfg.accolades
-        or group.name.casefold() in {a.casefold() for a in cfg.accolades},
+        "accolade": _has_accolade(group, members, cfg.accolades),
         "full_service_class": any(v.license_description == "Restaurant" for v in members),
     }
     return min(1.0, sum(w for k, w in cfg.fit_weights.items() if checks.get(k, False)))
+
+
+_ACCOLADE_BOROUGH = re.compile(
+    r"^(?P<name>.*?)\s*\((?P<borough>Manhattan|Brooklyn|Queens|Bronx|Staten Island)\)$",
+    re.IGNORECASE,
+)
+
+
+def _accolade_key(name: str) -> str:
+    """Accent-folded normalized name ("Shmoné" and "SHMONE" agree)."""
+    folded = unicodedata.normalize("NFKD", name)
+    return normalize_name("".join(c for c in folded if not unicodedata.combining(c)))
+
+
+def _has_accolade(group: Group, members: Sequence[Venue], accolades: Sequence[str]) -> bool:
+    """A listed group id, or a member venue (or the group) with exactly a listed name.
+
+    Exact after normalization, never fuzzy: short restaurant names have namesakes one letter
+    apart ("Sushi Sho" vs "SUSHI SHOP"). An entry may name its borough, "Name (Manhattan)",
+    and then only a venue whose ZIP is in that borough matches.
+    """
+    if group.group_id in accolades:
+        return True
+    for entry in accolades:
+        m = _ACCOLADE_BOROUGH.match(entry)
+        name, borough = (m["name"], m["borough"].lower()) if m else (entry, None)
+        key = _accolade_key(name)
+        if not key:
+            continue
+        for v in members:
+            if _accolade_key(v.name) == key and (
+                borough is None or borough_of_zip(v.zip_code) == borough
+            ):
+                return True
+        if borough is None and _accolade_key(group.name) == key:
+            return True
+    return False
 
 
 def _opening_dedupe(

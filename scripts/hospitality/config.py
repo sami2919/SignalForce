@@ -171,7 +171,7 @@ class HospitalityConfig(BaseModel):
     # A website lookup that found nothing is retried only after this many days (a venue that
     # has not opened often has no listing yet); a found website is never looked up again.
     website_miss_retry_days: int
-    # Manually flagged accolade groups (Michelin / JBF): group ids or names. Empty for the demo.
+    # Accolade names (Michelin, JBF) or group ids; names match group and venue names strictly.
     accolades: tuple[str, ...] = ()
     # Opening evidence is one underlying fact per venue: only the strongest of these counts.
     opening_evidence_signals: tuple[str, ...] = (

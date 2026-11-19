@@ -170,3 +170,21 @@ def registrable_domain(url: str) -> str | None:
     if len(labels) >= 3 and len(labels[-1]) == 2 and labels[-2] in _SLD_LABELS:
         return ".".join(labels[-3:])
     return ".".join(labels[-2:])
+
+
+# NYC ZIP prefix -> borough (lowercase).
+ZIP_BOROUGH_PREFIX: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("100", "101", "102"), "manhattan"),
+    (("103",), "staten island"),
+    (("104",), "bronx"),
+    (("112",), "brooklyn"),
+    (("110", "111", "113", "114", "116"), "queens"),
+)
+
+
+def borough_of_zip(zip_code: str) -> str | None:
+    """NYC borough (lowercase) for a ZIP code, or None outside the five boroughs."""
+    for prefixes, borough in ZIP_BOROUGH_PREFIX:
+        if zip_code.startswith(prefixes):
+            return borough
+    return None

@@ -348,3 +348,36 @@ def test_old_job_post_decays_on_when_it_was_posted_not_when_we_saw_it(cfg) -> No
     assert w == pytest.approx(0.5 ** (300 / prior.half_life_days))
     fresh = make_signal("role_hire", observed_at=now)
     assert window_weight(fresh, prior, None, now, cfg) == 1.0
+
+
+def test_accolade_matches_a_member_venue_name_strictly(cfg) -> None:
+    cfg2 = cfg.model_copy(update={"accolades": ("Atomix", "Le Bernardin")})
+    starred = Group(group_id="g:1", name="NAEUM LLC", venue_ids=("v:1",), resolution="singleton")
+    namesake = Group(group_id="g:2", name="ATOMIX FOODS CORP", venue_ids=("v:2",),
+                     resolution="singleton")  # fmt: skip
+    venues = [make_venue("v:1", name="ATOMIX", group_id="g:1"),
+              make_venue("v:2", name="ATOMIX DELI & GROCERY", group_id="g:2")]  # fmt: skip
+    assert fit_score(starred, venues, [], cfg2) == pytest.approx(0.15)
+    assert fit_score(namesake, venues, [], cfg2) == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize(
+    ("venue_name", "zip_code", "expected"),
+    [
+        ("SUSHI SHO", "10017", 0.15),  # the starred restaurant, in its borough
+        ("SUSHI SHOP", "10019", 0.0),  # a namesake one letter longer
+        ("SOHO SUSHI", "10012", 0.0),  # same words reordered
+        ("SUSHI SHO", "11211", 0.0),  # right name, wrong borough
+        ("SHMONE", "10011", 0.15),  # accent dropped in the public record
+        ("THE BRIDGES", "11201", 0.0),  # Brooklyn namesake of a Manhattan entry
+    ],
+)
+def test_accolade_needs_the_exact_name_in_the_listed_borough(
+    cfg, venue_name, zip_code, expected
+) -> None:  # type: ignore[no-untyped-def]
+    cfg2 = cfg.model_copy(
+        update={"accolades": ("Sushi Sho (Manhattan)", "Shmoné (Manhattan)", "Bridges (Manhattan)")}
+    )
+    group = Group(group_id="g:1", name="SOME LLC", venue_ids=("v:1",), resolution="singleton")
+    venues = [make_venue("v:1", name=venue_name, zip_code=zip_code, group_id="g:1")]
+    assert fit_score(group, venues, [], cfg2) == pytest.approx(expected)
