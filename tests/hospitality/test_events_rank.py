@@ -128,7 +128,7 @@ def test_customers_and_disqualified_add_no_expected_meetings() -> None:
     assert s.expected_meetings == 0.0
 
 
-def test_customers_sort_after_prospects_and_are_flagged() -> None:
+def test_existing_customers_are_left_off_the_meeting_list() -> None:
     accounts = {
         "g:1": make_scored("g:1", 0.2, p_window=0.7),
         "g:3": make_scored("g:3", 0.95, is_customer=True),
@@ -139,10 +139,9 @@ def test_customers_sort_after_prospects_and_are_flagged() -> None:
         app("Unk", "Nowhere", "past_recap"),
     ]
     targets = meeting_list(event(), apps, accounts, VENUES, {})
-    assert [t.person for t in targets] == ["Low", "Unk", "Cust"]
-    cust = targets[-1]
-    assert cust.is_customer and cust.reason == "warm intro / co-host"
-    assert not targets[0].is_customer and targets[0].in_window
+    assert [t.person for t in targets] == ["Low", "Unk"]
+    assert not any(t.is_customer for t in targets)
+    assert targets[0].in_window
     assert targets[0].p_attend == 0.6 and targets[0].priority == 0.2
     assert targets[1].group_id is None and targets[1].priority == 0.05
 
@@ -158,7 +157,7 @@ def test_seed_labelled_group_without_score_is_never_cold() -> None:
         )
     }
     targets = meeting_list(event(), [app("Bo", "Ember Hall")], {}, VENUES, customers=labels)
-    assert [(t.person, t.is_customer) for t in targets] == [("Bo", True)]
+    assert targets == []  # a seed-labelled customer is never a meeting target
     [s] = rank_events([event()], [app("Bo", "Ember Hall")], {}, VENUES, customers=labels)
     assert s.expected_meetings == 0.0
 

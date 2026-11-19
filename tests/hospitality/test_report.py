@@ -278,10 +278,10 @@ def test_customers_never_in_cold_table_and_disqualified_listed_apart(tmp_path, e
     assert "Moth Bistro" not in ranked and "Orbit Catering" not in ranked
     assert "Orbit Catering" in rest and "contract_foodservice" in rest
     s6 = sections(text)[6]
-    assert "Moth Bistro" in s6 and "warm intro" in s6
+    assert "Moth Bistro" in s6 and "Existing Loyalist customers" in s6
+    assert "warm intro" not in text.lower()
     s10 = sections(text)[10]
-    prospects, _, warm = s10.partition("warm intro")
-    assert "Moth Owner" not in prospects and "Moth Owner" in warm
+    assert "Moth Owner" not in s10
 
 
 def test_missing_inputs_say_not_run(tmp_path) -> None:

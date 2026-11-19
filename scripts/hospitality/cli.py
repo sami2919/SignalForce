@@ -856,8 +856,6 @@ def events_rank(path: Path = EVENTS_PATH) -> dict[str, object]:
             for t in targets
             if not t.is_customer
         ] or ["- none"]
-        lines += ["", "### Customers (warm intro / co-host, not cold targets)"]
-        lines += [f"- {t.person} ({t.reason})" for t in targets if t.is_customer] or ["- none"]
         lines.append("")
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     (OUT_DIR / "meeting_lists.md").write_text("\n".join(lines), encoding="utf-8")

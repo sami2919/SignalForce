@@ -1,8 +1,7 @@
 """Rank events by expected qualified meetings per dollar and build per-event meeting lists.
 
-Customers (seed label or detected Loyalist embed) never count as cold targets: they add nothing
-to an event's expected meetings and appear in a meeting list only as `is_customer=True`
-(warm intro / co-host), after every prospect. Disqualified groups are not targets at all.
+Existing Loyalist customers (seed label or detected embed) and disqualified groups are never
+targets: they add nothing to an event's expected meetings and are left off every meeting list.
 """
 
 from collections.abc import Sequence
@@ -19,14 +18,12 @@ from scripts.hospitality.models import (
 )
 from scripts.hospitality.resolve.normalize import name_similarity, strict_name_match
 
-CUSTOMER_REASON = "warm intro / co-host"
-
 
 def match_appearance(app: EventAppearance, venues: Sequence[Venue]) -> str | None:
     """group_id of the best strictly matching venue, else None.
 
     Strict (near-exact on distinctive tokens): the match decides whether the person is a
-    customer's warm intro or a cold target, so a subset namesake ("FOOD" for "Major Food
+    known customer (left off) or a cold target, so a subset namesake ("FOOD" for "Major Food
     Group") must never win. Ties go to the higher similarity, then the smaller venue_id.
     """
     best: tuple[float, str, str] | None = None
@@ -118,9 +115,8 @@ def meeting_list(
     *,
     priors: EventsConfig,
 ) -> list[MeetingTarget]:
-    """Who to meet at `event`: prospects by p_attend * priority, then customers (warm intro)."""
+    """Who to meet at `event`: cold prospects by p_attend * priority; customers left off."""
     prospects: list[MeetingTarget] = []
-    warm: list[MeetingTarget] = []
     for a in appearances:
         if a.event_id != event.event_id:
             continue
@@ -128,19 +124,7 @@ def meeting_list(
         acct = accounts.get(group_id) if group_id else None
         p_attend = priors.attend_prior[a.role]
         if _is_customer(group_id, accounts, customers):
-            warm.append(
-                MeetingTarget(
-                    event_id=event.event_id,
-                    person=a.person,
-                    group_id=group_id,
-                    p_attend=p_attend,
-                    priority=acct.priority if acct else 0.0,
-                    in_window=False,
-                    is_customer=True,
-                    reason=CUSTOMER_REASON,
-                )
-            )
-            continue
+            continue  # already a Loyalist customer: never a meeting target
         if acct is not None and acct.disqualified_reason is not None:
             continue
         prospects.append(
@@ -159,4 +143,4 @@ def meeting_list(
     def key(t: MeetingTarget) -> tuple[float, str]:
         return (-t.p_attend * t.priority, t.person)
 
-    return sorted(prospects, key=key) + sorted(warm, key=key)
+    return sorted(prospects, key=key)

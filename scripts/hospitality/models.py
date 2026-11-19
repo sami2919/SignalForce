@@ -479,5 +479,5 @@ class MeetingTarget(_Frozen):
     p_attend: float
     priority: float
     in_window: bool
-    is_customer: bool  # True: warm intro / co-host only, never a cold target
+    is_customer: bool  # always False in a meeting list: existing customers are left off
     reason: str

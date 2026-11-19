@@ -340,7 +340,12 @@ def _backtests(store: DocStore) -> list[str]:
 
 
 def _customer_section(customers: dict[str, CustomerLabel], names: dict[str, str]) -> list[str]:
-    lines = ["### Customers (warm intro / expansion, never cold targets)", ""]
+    lines = [
+        "### Existing Loyalist customers (excluded from every prospect and meeting list)",
+        "",
+        "Shown so the detection can be checked; none of these is a target of any kind.",
+        "",
+    ]
     if not customers:
         return [*lines, "No customer groups were identified in the store.", ""]
     for gid, label in sorted(customers.items(), key=lambda kv: names.get(kv[0], kv[0])):
@@ -635,8 +640,6 @@ def _events(
             for t in targets
             if not t.is_customer
         ] or ["- none"]
-        lines += ["", "Customers (warm intro / co-host, not cold targets):"]
-        lines += [f"- {t.person} ({t.reason})" for t in targets if t.is_customer] or ["- none"]
         lines.append("")
     return lines
 
