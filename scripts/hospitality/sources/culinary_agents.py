@@ -20,7 +20,7 @@ import logging
 import re
 import time
 import unicodedata
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, date, datetime, timedelta
 from urllib.parse import quote_plus, urljoin, urlsplit
 from urllib.robotparser import RobotFileParser
@@ -431,17 +431,63 @@ def fetch_nyc(
 # ---- matching and signals -------------------------------------------------------------------
 
 
-def classify_title(title: str, cfg: CulinaryAgentsConfig) -> SignalType | None:
-    """`new_gm` for a General Manager, `role_hire` for guest-facing leadership, else None."""
+def _fold_title(title: str) -> str:
     folded = unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode()
-    text = " ".join(re.sub(r"[’'`]", " ", folded.lower()).split())
+    return " ".join(re.sub(r"[’'`]", " ", folded.lower()).split())
+
+
+def classify_title(title: str, cfg: CulinaryAgentsConfig) -> SignalType | None:
+    """The people signal a senior title emits (section 7 table), else None.
+
+    First match wins, in order: `new_chef`, `new_gm`, `events_role_hire`, `guest_role_hire`,
+    then the leftover senior titles as `role_hire`. Line-level and fine-dining service titles
+    emit nothing here (they feed `hiring_burst` and the `fine_dining_service` fit).
+    """
+    text = _fold_title(title)
     if any(word in re.split(r"\W+", text) for word in cfg.exclude_title_words):
         return None
-    if any(re.search(p, text) for p in cfg.gm_titles):
-        return "new_gm"
-    if any(re.search(p, text) for p in cfg.leadership_titles):
-        return "role_hire"
+    lists: tuple[tuple[SignalType, tuple[str, ...]], ...] = (
+        ("new_chef", cfg.chef_titles),
+        ("new_gm", cfg.gm_titles),
+        ("events_role_hire", cfg.events_titles),
+        ("guest_role_hire", cfg.guest_titles),
+        ("role_hire", cfg.leadership_titles),
+    )
+    for kind, patterns in lists:
+        if any(re.search(p, text) for p in patterns):
+            return kind
     return None
+
+
+def is_service_title(title: str, cfg: CulinaryAgentsConfig) -> bool:
+    """A fine-dining service role (sommelier, wine/beverage director, captain, service manager)."""
+    text = _fold_title(title)
+    return any(re.search(p, text) for p in cfg.service_titles)
+
+
+def is_open_call(title: str, cfg: CulinaryAgentsConfig) -> bool:
+    text = _fold_title(title)
+    return any(re.search(p, text) for p in cfg.open_call_titles)
+
+
+def is_private_listing(job: CAJob) -> bool:
+    """A "Private Listing" posting hides its employer, so it can never be matched."""
+    return " ".join(job.company.lower().split()) == "private listing"
+
+
+def drop_private_listings(jobs: Sequence[CAJob]) -> tuple[list[CAJob], int]:
+    """(jobs with an employer, how many private listings were skipped)."""
+    kept = [j for j in jobs if not is_private_listing(j)]
+    return kept, len(jobs) - len(kept)
+
+
+def job_key(job: CAJob) -> str:
+    """The seen-store key of a job: its numeric id, else its URL."""
+    return f"job:{job.job_id or job.url}"
+
+
+def company_key(company: CACompany) -> str:
+    return f"entity:{entity_id(company.url) or company.url}"
 
 
 def _key(name: str) -> str:
@@ -518,16 +564,25 @@ def to_signals(
     groups: Sequence[Group],
     today: date,
     cfg: CulinaryAgentsConfig | None = None,
+    first_seen: Mapping[str, date] | None = None,
 ) -> tuple[list[Signal], list[GroupEvidence]]:
-    """Signals and group evidence for fetched jobs and companies, matched to known venues."""
+    """Signals and group evidence for fetched jobs and companies, matched to known venues.
+
+    `first_seen` (seen-store key -> the day the item was first seen) dates a signal whose card
+    gives no posting date, so it decays from when it appeared, not from today.
+    """
     cfg = cfg or CulinaryAgentsConfig()
+    first_seen = first_seen or {}
     resolver = _Resolver(venues)
     signals: dict[str, Signal] = {}
     observed = _observed(today)
 
     def add(kind: SignalType, vid: str, url: str, extra: str, detail: str, when: date | None):
+        """`extra` disambiguates two signals on one URL; a `hiring_burst` id ignores the URL
+        (one burst per venue, however it was found)."""
+        ident = _short(vid, "burst") if kind == "hiring_burst" else _short(url, extra)
         sig = Signal(
-            signal_id=f"{kind}:{vid}:{_short(url, extra)}",
+            signal_id=f"{kind}:{vid}:{ident}",
             signal_type=kind,
             entity_id=vid,
             observed_at=observed,
@@ -539,23 +594,32 @@ def to_signals(
         signals.setdefault(sig.signal_id, sig)
 
     members: list[tuple[str, str, str, str]] = []  # (group, company name, venue id, ref url)
-    for job in jobs:
+    by_venue: dict[str, list[tuple[CAJob, date]]] = {}  # matched jobs, for hiring_burst
+    for job in drop_private_listings(jobs)[0]:
         vid = resolver.venue_id(job.company, (job.location,) if job.location else (), None)
         if vid is None:
             continue
         if job.group and job.company_url:
             members.append((job.group, job.company, vid, job.company_url))
+        when = job.posted or first_seen.get(job_key(job))
+        by_venue.setdefault(vid, []).append((job, when or today))
+        posted = f", posted {when.isoformat()}" if when else ""
         kind = classify_title(job.title, cfg)
         if kind is not None:
-            posted = f", posted {job.posted.isoformat()}" if job.posted else ""
             add(
-                kind,
+                kind, vid, job.url, job.title, f"{job.company} is hiring: {job.title}{posted}", when
+            )
+        if is_service_title(job.title, cfg):
+            add(
+                "fine_dining_service",
                 vid,
                 job.url,
                 job.title,
-                f"{job.company} is hiring: {job.title}{posted}",
-                job.posted,
+                f"{job.company} is hiring fine-dining service staff: {job.title}{posted}",
+                when,
             )
+    for vid, items in by_venue.items():
+        _hiring_burst(vid, items, today, cfg, add)
     for company in companies:
         vid = resolver.venue_id(company.name, company.locations, company.website)
         if vid is None:
@@ -569,9 +633,36 @@ def to_signals(
                 company.url,
                 "",
                 f"{company.name} is listed as opening soon on Culinary Agents",
-                None,
+                first_seen.get(company_key(company)),
             )
     return list(signals.values()), _group_evidence(members, groups)
+
+
+def _hiring_burst(
+    vid: str,
+    items: Sequence[tuple[CAJob, date]],
+    today: date,
+    cfg: CulinaryAgentsConfig,
+    add: Callable[[SignalType, str, str, str, str, date | None], None],
+) -> None:
+    """One `hiring_burst` per venue: an "Open Call" posting, or `burst_min_roles` distinct
+    roles (any level) from the employer within `burst_window_days`."""
+    since = today - timedelta(days=cfg.burst_window_days)
+    recent = [(job, when) for job, when in items if when >= since]
+    open_calls = [(job, when) for job, when in recent if is_open_call(job.title, cfg)]
+    roles = {_fold_title(job.title) for job, _ in recent}
+    if not open_calls and len(roles) < cfg.burst_min_roles:
+        return
+    evidence = open_calls or recent
+    first = min(when for _, when in evidence)
+    ref = min(job.url for job, _ in evidence)
+    company = evidence[0][0].company
+    why = (
+        f"an open call ({evidence[0][0].title})"
+        if open_calls
+        else f"{len(roles)} distinct roles in {cfg.burst_window_days} days"
+    )
+    add("hiring_burst", vid, ref, "", f"{company} is staffing up: {why}", first)
 
 
 def _group_evidence(

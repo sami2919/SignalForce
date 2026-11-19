@@ -227,6 +227,9 @@ def test_choose_angles_maps_signal_families() -> None:
         "platform_switch",
     ]
     assert choose_angles([make_signal("lookalike")]) == []
+    for kind in ("new_chef", "guest_role_hire", "events_role_hire"):
+        assert choose_angles([make_signal(kind)]) == ["people_change"], kind
+    assert choose_angles([make_signal("fine_dining_service")]) == []  # fit evidence only
 
 
 def test_draft_uses_structured_with_voice_rules_and_never_drafts_for_customers() -> None:

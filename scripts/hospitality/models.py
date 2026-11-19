@@ -25,12 +25,17 @@ SignalType = Literal[
     "private_events",
     "tripleseat_resy",
     "hotel_partnership",
-    "role_hire",
+    "role_hire",  # leftover senior hires; older stored signals keep loading as this type
     "new_gm",
     "platform_switch",
     "alumni_edge",
     "lookalike",
     "opening_soon",
+    "new_chef",  # kitchen leadership hire (Culinary Agents)
+    "guest_role_hire",  # owner of the guest list / bookings (Culinary Agents)
+    "events_role_hire",  # events / private dining hire (Culinary Agents)
+    "hiring_burst",  # a whole venue staffing at once: opening evidence (Culinary Agents)
+    "fine_dining_service",  # fit evidence only (sommelier, captain...): never window evidence
 ]
 
 
@@ -141,6 +146,8 @@ class CAJob(_Frozen):
     posted: date | None  # derived from "Posted N days ago" relative to the fetch date
     url: str  # job URL without tracking parameters
     opening_soon: bool = False  # the card came from a search filtered to opening-soon employers
+    job_id: str | None = None  # the numeric id in /jobs/<id>-<slug>
+    sponsored: bool = False  # a paid placement mixed into the results
 
 
 class CACompany(_Frozen):

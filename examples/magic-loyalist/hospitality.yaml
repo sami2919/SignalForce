@@ -10,8 +10,17 @@ priors:   # precision = P(group in a buying window | signal); starting guesses t
   tripleseat_resy:   {precision: 0.25, half_life_days: null, family: stack}
   private_events:    {precision: 0.15, half_life_days: 120, family: events}
   hotel_partnership: {precision: 0.20, half_life_days: 180, family: opening}
-  role_hire:         {precision: 0.15, half_life_days: 90, family: people}
+  role_hire:         {precision: 0.15, half_life_days: 90, family: people}   # leftover senior hires
   new_gm:            {precision: 0.15, half_life_days: 90, family: people}
+  # Culinary Agents title types (starting guesses; Magic's won deals would calibrate them).
+  new_chef:          {precision: 0.20, half_life_days: 90, family: people}
+  guest_role_hire:   {precision: 0.20, half_life_days: 90, family: people}
+  events_role_hire:  {precision: 0.15, half_life_days: 90, family: people}
+  # Five or more distinct roles from one employer in 30 days, or an "Open Call": an opening.
+  # Opening evidence, so it folds with licence signals on the same venue.
+  hiring_burst:      {precision: 0.25, half_life_days: null, family: opening}
+  # Fit evidence only (sommelier, captain, ...): feeds fit_weights.fine_dining_service.
+  fine_dining_service: {precision: 0.0, half_life_days: null, family: fit}
   platform_switch:   {precision: 0.05, half_life_days: 90, family: stack}
   opening_soon:      {precision: 0.30, half_life_days: null, family: opening}
   lookalike:         {precision: 0.10, half_life_days: null, family: discovery}
@@ -76,7 +85,8 @@ report_recall_weeks: 12
 # Google Places: accept the nearest candidate within this distance and at least this name match.
 website_match_max_distance_m: 75.0
 website_match_min_name_similarity: 0.6
-fit_weights: {multi_venue: 0.30, reservation_platform: 0.30, events_program: 0.15, accolade: 0.15, full_service_class: 0.10}
+# Sum 1.10; fit is capped at 1.0, so only a group meeting every criterion reaches the cap.
+fit_weights: {multi_venue: 0.30, reservation_platform: 0.30, events_program: 0.15, accolade: 0.15, full_service_class: 0.10, fine_dining_service: 0.10}
 relationship_boost: 0.5
 budgets: {culinary_agents: 40, places: 400, firecrawl: 300, exa: 120, hunter: 40, clay: 25, claude_calls: 600}
 models: {extract: claude-opus-5-5, draft: claude-opus-5-5, judge: claude-opus-5-5, baseline: claude-opus-5-5}
@@ -195,7 +205,7 @@ accolades:
   - "bōm (Manhattan)"
 # Opening evidence is one fact per venue (venue about to open): only the strongest of these
 # signals counts toward p_window; the rest stay in the trace at contribution 0.
-opening_evidence_signals: [license_pending, license_issued, not_yet_inspected, opening_soon]
+opening_evidence_signals: [license_pending, license_issued, not_yet_inspected, opening_soon, hiring_burst]
 # At most this many venues' opening terms enter a group's p_window (strongest first), so a
 # group with dozens of licenses cannot saturate on license count alone.
 max_opening_venues_per_group: 3
@@ -261,13 +271,35 @@ culinary_agents:
   locations: ["New York, NY"]   # 3 pages each; other strings (e.g. "Brooklyn, NY") are untested
   delay_seconds: 2.0
   max_company_pages: 10
-  # Senior roles only (regex over the lowercased title); cooks, servers, dishwashers emit nothing.
-  gm_titles: ['\bgeneral manager\b', '^gm$']
-  leadership_titles:
-    - '\bdirector of (operations|hospitality|food (and|&) beverage)\b'
-    - '\b(events?|private dining|private events?|catering) (manager|director|coordinator)\b'
-    - '\b(pre-?opening|opening) (team|manager|gm|general manager)\b'
+  # Title regexes over the folded, lowercased title, one list per signal type, checked in this
+  # order (first match wins). Line-level roles (cook, server, runner, dishwasher, porter,
+  # polisher, barback) emit nothing on their own; they count only toward hiring_burst.
+  chef_titles:      # new_chef
+    - '\b(executive|head|corporate|opening) chef\b'
+    - '\bchef de cuisine\b'
+    - '\bculinary director\b'
+    - '\bdirector of culinary\b'
+  gm_titles: ['\bgeneral manager\b', '^gm$', '\bopening gm\b', '\bdirector of operations\b']   # new_gm
+  events_titles:    # events_role_hire
+    - '\b(events?|private dining|private events?|catering) (sales )?(manager|director|coordinator|sales)\b'
+    - '\bdirector of (private )?(events?|dining|catering)\b'
+  guest_titles:     # guest_role_hire: owns the guest list and bookings
+    - '\bguest (relations|experience) (manager|director)\b'
+    - '\breservations? (manager|director|supervisor)\b'
+    - '\breservationists?\b'
     - '\bmaitre d\b'
-    - '\bguest (relations|experience) manager\b'
-    - '\breservations? manager\b'
+    - '\bhost manager\b'
+    - '\bdirector of (sales|partnerships)\b'
+    - '\b(marketing (manager|director)|director of marketing)\b'
+    - '\bcrm\b'
+    - '\bloyalty\b'
+    - '\bguest data\b'
+  leadership_titles:   # role_hire: the senior titles left over
+    - '\bdirector of (hospitality|food (and|&) beverage)\b'
+    - '\b(pre-?opening|opening) (team|manager)\b'
   exclude_title_words: [assistant, associate, intern, trainee]
+  # fine_dining_service fit criterion (not a window signal); exclude_title_words does not apply.
+  service_titles: ['\bsommeliers?\b', '\b(wine|beverage) director\b', '\bdirector of (wine|beverage)\b', '\bcaptains?\b', '\bservice manager\b']
+  open_call_titles: ['\bopen call\b']   # an "Open Call" posting is a hiring_burst
+  burst_min_roles: 5      # or this many distinct roles from one employer ...
+  burst_window_days: 30   # ... within this many days

@@ -109,13 +109,15 @@ def test_parse_company_page() -> None:
     [
         ("General Manager", "new_gm"),
         ("GM", "new_gm"),
-        ("Director of Operations", "role_hire"),
-        ("Private Dining Manager", "role_hire"),
-        ("Events Manager", "role_hire"),
+        ("Opening GM", "new_gm"),
+        ("Director of Operations", "new_gm"),
+        ("Private Dining Manager", "events_role_hire"),
+        ("Events Manager", "events_role_hire"),
         ("Pre-Opening Team Member", "role_hire"),
-        ("Maître d’", "role_hire"),
-        ("Reservations Manager", "role_hire"),
-        ("Guest Relations Manager", "role_hire"),
+        ("Director of Food & Beverage", "role_hire"),
+        ("Maître d’", "guest_role_hire"),
+        ("Reservations Manager", "guest_role_hire"),
+        ("Guest Relations Manager", "guest_role_hire"),
         ("Assistant General Manager", None),
         ("Line Cook", None),
         ("Server", None),
@@ -183,7 +185,9 @@ def test_gm_posting_emits_new_gm_on_matched_venue() -> None:
 
 def test_leadership_posting_emits_role_hire() -> None:
     sigs, _ = run([_job("Verdigris", "Events Manager")], [], [VERDIGRIS])
-    assert [s.signal_type for s in sigs] == ["role_hire"]
+    assert [s.signal_type for s in sigs] == ["events_role_hire"]
+    sigs, _ = run([_job("Verdigris", "Director of Hospitality")], [], [VERDIGRIS])
+    assert [s.signal_type for s in sigs] == ["role_hire"]  # the leftover senior titles
 
 
 def test_line_level_and_assistant_roles_emit_nothing() -> None:
@@ -624,3 +628,197 @@ def test_fixtures_are_synthetic_not_captured_pages() -> None:
         html = page.read_text()
         assert "amazonaws.com" not in html, page.name  # no hot-linked source assets
         assert "SYNTHETIC FIXTURE" in html, page.name
+
+
+# ---- section 7: title types, hiring burst, fine-dining fit ----
+
+
+@pytest.mark.parametrize(
+    ("title", "expected"),
+    [
+        # new_chef
+        ("Executive Chef", "new_chef"),
+        ("Head Chef", "new_chef"),
+        ("Chef de Cuisine", "new_chef"),
+        ("Culinary Director", "new_chef"),
+        ("Corporate Chef", "new_chef"),
+        ("Opening Chef", "new_chef"),
+        # new_gm
+        ("General Manager", "new_gm"),
+        ("Opening General Manager", "new_gm"),
+        ("Director of Operations", "new_gm"),
+        # guest_role_hire
+        ("Guest Experience Manager", "guest_role_hire"),
+        ("Guest Relations Manager", "guest_role_hire"),
+        ("Reservationist", "guest_role_hire"),
+        ("Reservations Manager", "guest_role_hire"),
+        ("Maitre D'", "guest_role_hire"),
+        ("Host Manager", "guest_role_hire"),
+        ("Director of Sales", "guest_role_hire"),
+        ("Director of Sales and Partnerships", "guest_role_hire"),
+        ("Marketing Manager", "guest_role_hire"),
+        ("Marketing Director", "guest_role_hire"),
+        ("CRM Manager", "guest_role_hire"),
+        ("Loyalty Program Lead", "guest_role_hire"),
+        ("Guest Data Analyst", "guest_role_hire"),
+        # events_role_hire
+        ("Events Manager", "events_role_hire"),
+        ("Private Dining Director", "events_role_hire"),
+        ("Private Events Sales Manager", "events_role_hire"),
+        ("Catering Sales", "events_role_hire"),
+        ("Director of Events", "events_role_hire"),
+        # senior lists still honour exclude_title_words
+        ("Assistant General Manager", None),
+        ("Executive Chef Intern", None),
+        ("Associate Marketing Manager", None),
+        # line-level roles emit nothing on their own
+        ("Line Cook", None),
+        ("Prep Cook", None),
+        ("Server", None),
+        ("Food Runner", None),
+        ("Dishwasher", None),
+        ("Porter", None),
+        ("Polisher", None),
+        ("Barback", None),
+        ("Sous Chef", None),
+        ("Executive Sous Chef", None),
+        # fine-dining service titles are fit evidence, not a people signal
+        ("Sommelier", None),
+        ("Captain", None),
+        ("Service Manager", None),
+        ("Beverage Director", None),
+    ],
+)
+def test_classify_title_section_7_table(title: str, expected: str | None) -> None:
+    assert classify_title(title, CFG) == expected
+
+
+@pytest.mark.parametrize(
+    ("title", "expected"),
+    [
+        ("Sommelier", True),
+        ("Head Sommelier", True),
+        ("Wine Director", True),
+        ("Beverage Director", True),
+        ("Captain", True),
+        ("Service Manager", True),
+        ("Server", False),
+        ("Line Cook", False),
+        ("General Manager", False),
+        ("Director of Food & Beverage", False),
+    ],
+)
+def test_is_service_title(title: str, expected: bool) -> None:
+    assert ca.is_service_title(title, CFG) is expected
+
+
+def test_new_title_types_emit_their_signals() -> None:
+    js = [
+        _job("Verdigris", "Executive Chef"),
+        _job("Verdigris", "Reservations Manager"),
+        _job("Verdigris", "Private Events Manager"),
+    ]
+    sigs, _ = run(js, [], [VERDIGRIS])
+    assert sorted(s.signal_type for s in sigs) == [
+        "events_role_hire",
+        "guest_role_hire",
+        "new_chef",
+    ]
+
+
+def test_service_title_emits_fit_evidence_signal() -> None:
+    sigs, _ = run([_job("Verdigris", "Sommelier")], [], [VERDIGRIS])
+    assert [s.signal_type for s in sigs] == ["fine_dining_service"]
+    assert "Sommelier" in sigs[0].detail
+
+
+def test_private_listing_is_skipped_and_counted() -> None:
+    js = [
+        _job("Private Listing", "General Manager", location="New York, NY"),
+        _job("Verdigris", "General Manager"),
+    ]
+    kept, skipped = ca.drop_private_listings(js)
+    assert [j.company for j in kept] == ["Verdigris"] and skipped == 1
+    private_venue = make_venue("v:p", name="Private Listing", address="1 X ST")
+    sigs, _ = run(js, [], [VERDIGRIS, private_venue])
+    assert {s.entity_id for s in sigs} == {"v:verdigris"}  # never matched to a venue
+
+
+def _roles(company: str, titles: list[str], **kw) -> list[CAJob]:
+    return [
+        _job(company, t, url=f"https://culinaryagents.com/jobs/{i}-x", **kw)
+        for i, t in enumerate(titles, start=100)
+    ]
+
+
+def test_hiring_burst_fires_at_five_distinct_roles() -> None:
+    five = _roles("Verdigris", ["Line Cook", "Server", "Host", "Porter", "Barback"])
+    sigs, _ = run(five, [], [VERDIGRIS])
+    burst = [s for s in sigs if s.signal_type == "hiring_burst"]
+    assert len(burst) == 1 and burst[0].entity_id == "v:verdigris"
+    assert "5 distinct roles" in burst[0].detail
+    assert burst[0].source == "culinary_agents"
+
+
+def test_hiring_burst_needs_five_distinct_roles_within_the_window() -> None:
+    four = _roles("Verdigris", ["Line Cook", "Server", "Host", "Porter", "Line Cook"])
+    assert not [s for s in run(four, [], [VERDIGRIS])[0] if s.signal_type == "hiring_burst"]
+    old = _roles(
+        "Verdigris", ["Line Cook", "Server", "Host", "Porter"], posted=date(2026, 11, 14)
+    ) + [_job("Verdigris", "Barback", posted=date(2026, 9, 1), url="https://x/jobs/9-b")]
+    assert not [s for s in run(old, [], [VERDIGRIS])[0] if s.signal_type == "hiring_burst"]
+
+
+def test_open_call_posting_is_a_hiring_burst() -> None:
+    sigs, _ = run([_job("Verdigris", "Open Call - All Positions")], [], [VERDIGRIS])
+    assert [s.signal_type for s in sigs] == ["hiring_burst"]
+    assert "open call" in sigs[0].detail.lower()
+
+
+def test_hiring_burst_folds_with_a_licence_signal_on_the_same_venue() -> None:
+    lic = make_signal("license_pending", "v:verdigris")
+    burst, _ = run([_job("Verdigris", "Open Call")], [], [VERDIGRIS])
+    both = _score([VERDIGRIS], [lic, *burst])
+    only_lic = _score([VERDIGRIS], [lic])
+    assert both.p_window == pytest.approx(only_lic.p_window)
+    by_type = {c.signal_type: c for c in both.contributions}
+    assert by_type["hiring_burst"].contribution == 0.0
+    assert "folded" in by_type["hiring_burst"].note
+    alone = _score([VERDIGRIS], list(burst))
+    assert alone.p_window == pytest.approx(0.25)
+
+
+def test_fine_dining_service_adds_fit_not_window() -> None:
+    gm, _ = run([_job("Verdigris", "General Manager")], [], [VERDIGRIS])
+    som, _ = run([_job("Verdigris", "Sommelier")], [], [VERDIGRIS])
+    base = _score([VERDIGRIS], gm)
+    with_service = _score([VERDIGRIS], [*gm, *som])
+    assert with_service.p_window == pytest.approx(base.p_window)
+    assert with_service.fit == pytest.approx(base.fit + 0.10)
+    by_type = {c.signal_type: c for c in with_service.contributions}
+    assert by_type["fine_dining_service"].contribution == 0.0
+    assert "fit" in by_type["fine_dining_service"].note
+
+
+def test_new_priors_and_types_load_and_old_role_hire_still_loads() -> None:
+    cfg = load_config()
+    expected = {
+        "new_chef": (0.20, "people"),
+        "new_gm": (0.15, "people"),
+        "guest_role_hire": (0.20, "people"),
+        "events_role_hire": (0.15, "people"),
+        "hiring_burst": (0.25, "opening"),
+        "role_hire": (0.15, "people"),
+    }
+    for kind, (precision, family) in expected.items():
+        assert cfg.priors[kind].precision == pytest.approx(precision), kind
+        assert cfg.priors[kind].family == family, kind
+    assert cfg.priors["fine_dining_service"].precision == 0.0
+    assert "hiring_burst" in cfg.opening_evidence_signals
+    assert cfg.fit_weights["fine_dining_service"] == pytest.approx(0.10)
+    for kind in ("role_hire", "new_chef", "hiring_burst", "fine_dining_service"):
+        assert Signal.model_validate(make_signal(kind).model_dump()).signal_type == kind
+    old = CAJob.model_validate(
+        {k: v for k, v in _job("Verdigris", "GM").model_dump().items() if k not in ("job_id",)}
+    )
+    assert old.sponsored is False

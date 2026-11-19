@@ -10,7 +10,8 @@ DEFAULT_CONFIG_PATH = (
     Path(__file__).resolve().parents[2] / "examples/magic-loyalist/hospitality.yaml"
 )
 
-SignalFamily = Literal["opening", "stack", "people", "relationship", "events", "discovery"]
+# "fit" signals feed a fit criterion (fit_score), never p_window.
+SignalFamily = Literal["opening", "stack", "people", "relationship", "events", "discovery", "fit"]
 
 
 class SignalPrior(BaseModel):
@@ -32,18 +33,59 @@ class CulinaryAgentsConfig(BaseModel):
     delay_seconds: float = 2.0
     # Opening-soon company profile pages fetched for a website (domain matching), at most.
     max_company_pages: int = 10
-    # Senior roles that emit `new_gm` / `role_hire`; line-level roles emit nothing.
-    gm_titles: tuple[str, ...] = (r"\bgeneral manager\b", r"^gm$")
-    leadership_titles: tuple[str, ...] = (
-        r"\bdirector of (operations|hospitality|food (and|&) beverage)\b",
-        r"\b(events?|private dining|private events?|catering) (manager|director|coordinator)\b",
-        r"\b(pre-?opening|opening) (team|manager|gm|general manager)\b",
+    # Title regexes over the folded, lowercased title, one list per signal type (section 7 of
+    # the logged-in plan). Checked in this order; the first list that matches wins.
+    chef_titles: tuple[str, ...] = (
+        r"\b(executive|head|corporate|opening) chef\b",
+        r"\bchef de cuisine\b",
+        r"\bculinary director\b",
+        r"\bdirector of culinary\b",
+    )
+    gm_titles: tuple[str, ...] = (
+        r"\bgeneral manager\b",
+        r"^gm$",
+        r"\bopening gm\b",
+        r"\bdirector of operations\b",
+    )
+    events_titles: tuple[str, ...] = (
+        (
+            r"\b(events?|private dining|private events?|catering) (sales )?"
+            r"(manager|director|coordinator|sales)\b"
+        ),
+        r"\bdirector of (private )?(events?|dining|catering)\b",
+    )
+    guest_titles: tuple[str, ...] = (
+        r"\bguest (relations|experience) (manager|director)\b",
+        r"\breservations? (manager|director|supervisor)\b",
+        r"\breservationists?\b",
         r"\bmaitre d\b",
-        r"\bguest (relations|experience) manager\b",
-        r"\breservations? manager\b",
+        r"\bhost manager\b",
+        r"\bdirector of (sales|partnerships)\b",
+        r"\b(marketing (manager|director)|director of marketing)\b",
+        r"\bcrm\b",
+        r"\bloyalty\b",
+        r"\bguest data\b",
+    )
+    # Senior roles left over for the older `role_hire` type.
+    leadership_titles: tuple[str, ...] = (
+        r"\bdirector of (hospitality|food (and|&) beverage)\b",
+        r"\b(pre-?opening|opening) (team|manager)\b",
     )
     # A title containing any of these words is never senior-leadership evidence.
     exclude_title_words: tuple[str, ...] = ("assistant", "associate", "intern", "trainee")
+    # Fine-dining service roles: evidence for the `fine_dining_service` fit criterion only.
+    service_titles: tuple[str, ...] = (
+        r"\bsommeliers?\b",
+        r"\b(wine|beverage) director\b",
+        r"\bdirector of (wine|beverage)\b",
+        r"\bcaptains?\b",
+        r"\bservice manager\b",
+    )
+    # A posting like this is a whole venue staffing at once (`hiring_burst`).
+    open_call_titles: tuple[str, ...] = (r"\bopen call\b",)
+    # `hiring_burst` also fires at this many distinct roles from one employer in the window.
+    burst_min_roles: int = 5
+    burst_window_days: int = 30
 
 
 class PremisesRule(BaseModel):
@@ -179,6 +221,7 @@ class HospitalityConfig(BaseModel):
         "license_issued",
         "not_yet_inspected",
         "opening_soon",
+        "hiring_burst",
     )
     # At most this many venues' opening terms enter a group's p_window (strongest first).
     max_opening_venues_per_group: int = 3

@@ -94,8 +94,13 @@ def fit_score(
     venues: Sequence[Venue],
     observations: Sequence[StackObservation],
     cfg: HospitalityConfig,
+    signals: Sequence[Signal] = (),
 ) -> float:
-    """Sum of configured fit weights for the criteria the group satisfies (0..1)."""
+    """Sum of configured fit weights for the criteria the group satisfies (0..1).
+
+    `signals` are the group's own signals; a `fine_dining_service` one (a sommelier, captain or
+    service-manager posting at a member venue's employer) satisfies that criterion.
+    """
     members = [v for v in venues if v.group_id == group.group_id]
     latest = _latest_by_venue(observations)
     platforms = {p for v in members if (o := latest.get(v.venue_id)) for p in o.platforms}
@@ -105,6 +110,7 @@ def fit_score(
         "events_program": bool(EVENTS & platforms),
         "accolade": _has_accolade(group, members, cfg.accolades),
         "full_service_class": any(v.license_description == "Restaurant" for v in members),
+        "fine_dining_service": any(s.signal_type == "fine_dining_service" for s in signals),
     }
     return min(1.0, sum(w for k, w in cfg.fit_weights.items() if checks.get(k, False)))
 
@@ -263,7 +269,7 @@ def _tie_facts(
     openings: list[date] = []
     latest: date | None = None
     for sig, prior, _weight, raw in rows:
-        if sig.signal_id not in counted or raw <= 0 or prior.family == "relationship":
+        if sig.signal_id not in counted or raw <= 0 or prior.family in ("relationship", "fit"):
             continue
         seen = _aware(signal_time(sig)).date()
         latest = seen if latest is None or seen > latest else latest
@@ -304,7 +310,9 @@ def score_group(
     window_ps: list[float] = []
     alumni = False
     for sig, prior, weight, raw in rows:
-        contribution = raw if sig.signal_id in counted else 0.0
+        fit_only = prior.family == "fit"
+        contribution = raw if sig.signal_id in counted and not fit_only else 0.0
+        note = f"fit evidence ({sig.signal_type}), not window evidence" if fit_only else ""
         contributions.append(
             Contribution(
                 signal_id=sig.signal_id,
@@ -312,15 +320,17 @@ def score_group(
                 precision=prior.precision,
                 weight=weight,
                 contribution=contribution,
-                note=notes.get(sig.signal_id, ""),
+                note=notes.get(sig.signal_id, note),
             )
         )
+        if fit_only:
+            continue
         if prior.family == "relationship":
             alumni = alumni or sig.signal_type == "alumni_edge"
         else:
             window_ps.append(contribution)
     p_window = noisy_or(window_ps)
-    fit = fit_score(group, venues, observations, cfg)
+    fit = fit_score(group, venues, observations, cfg, [sig for sig, *_ in rows])
     relationship = 1.0 + cfg.relationship_boost if alumni else 1.0
     priority = 0.0 if disqualified_reason else p_window * (0.5 + 0.5 * fit) * relationship
     opening_date, gap, latest = _tie_facts(rows, counted, estimates, venues, now)
