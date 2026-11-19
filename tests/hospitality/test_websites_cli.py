@@ -348,3 +348,23 @@ def test_queue_follows_prospect_rank_after_customers(store, monkeypatch) -> None
     assert order[:4] == ["v:cust", "v:top2", "v:top", "v:low"]
     assert order.index("v:soon") > order.index("v:low")
     assert "v:dq" not in order
+
+
+def test_queue_breaks_ties_the_way_the_report_ranks(store, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from tests.hospitality.factories import make_scored
+
+    old = make_venue("v:old", group_id="g:old")  # long overdue: far from today
+    near = make_venue("v:near", group_id="g:near")  # opens in 9 days: nearest today
+    put_venues(store, old, near)
+    put_estimates(store, ("v:old", date(2026, 1, 1)), ("v:near", date(2026, 11, 25)))
+    store.save(
+        "scores",
+        [make_scored("g:old", priority=0.2, opening_date=date(2026, 1, 1), opening_gap_days=319),
+         make_scored("g:near", priority=0.2, opening_date=date(2026, 11, 25), opening_gap_days=9)],
+        key=lambda s: s.group_id,  # type: ignore[attr-defined]
+    )  # fmt: skip
+    monkeypatch.setattr(cli, "current_customers", lambda *a, **k: {})
+    order = cli._website_priority(
+        store, store.load("venues", cli.Venue), store.load("estimates", cli.WindowEstimate)
+    )
+    assert order[:2] == ["v:near", "v:old"]
