@@ -120,6 +120,9 @@ from scripts.hospitality.sources.culinary_agents import (
     to_signals,
     walk_nyc,
 )
+from scripts.hospitality.sources.culinary_agents import (
+    SOURCE as CA_SOURCE,
+)
 from scripts.hospitality.sources.dohmh import (
     fetch_first_inspections,
     fetch_never_inspected,
@@ -1264,8 +1267,12 @@ def _culinary_agents_logged_in(
     signals, evidence = to_signals(
         all_jobs, all_companies, venues, groups, today, cfg.culinary_agents, first_seen
     )
-    store.save("signals", signals, key=lambda s: s.signal_id)  # type: ignore[attr-defined]
-    store.save("group_evidence", evidence, key=_evidence_key)  # type: ignore[arg-type]
+    # Recomputed in full from every stored job and company, so this run's signals and job-board
+    # evidence replace the earlier ones: a signal whose type or venue changed never lingers.
+    kept = [s for s in store.load("signals", Signal) if s.source != CA_SOURCE]
+    store.replace("signals", [*kept, *signals], key=lambda s: s.signal_id)  # type: ignore[attr-defined]
+    other = [e for e in store.load("group_evidence", GroupEvidence) if e.resolution != "job_board"]
+    store.replace("group_evidence", [*other, *evidence], key=_evidence_key)  # type: ignore[arg-type]
     _regroup(store, cfg, venues, store.load("licenses", LicenseRecord))
     scored = score()
     stopped = walk.stopped

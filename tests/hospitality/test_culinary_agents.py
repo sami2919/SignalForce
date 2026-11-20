@@ -9,7 +9,7 @@ import pytest
 from scripts.hospitality import cli
 from scripts.hospitality.budget import CallBudget
 from scripts.hospitality.config import CulinaryAgentsConfig, load_config
-from scripts.hospitality.models import CAJob, CASeen, Group, Signal, Venue
+from scripts.hospitality.models import CAJob, CASeen, Group, GroupEvidence, Signal, Venue
 from scripts.hospitality.resolve.groups import merge_groups
 from scripts.hospitality.scoring import rank_prospects, score_group
 from scripts.hospitality.sources import culinary_agents as ca
@@ -1729,3 +1729,31 @@ def test_staffing_change_prior_is_people_family_and_not_folded_with_licences() -
 def test_extract_ujs_html_skips_comments_with_quotes_in_them() -> None:
     js = "// the page's cards\n/* it's \"here\" */\nr = \"<p>one<\\/p>\";\n$('#a').append(r);"
     assert ca.extract_ujs_html(js) == "<p>one</p>"
+
+
+def test_cli_logged_in_run_replaces_its_earlier_signals_and_job_board_evidence(
+    monkeypatch, tmp_path
+) -> None:
+    store = _auth_store(monkeypatch, tmp_path)
+    stale = make_signal("hiring_burst", "v:verdigris").model_copy(
+        update={"signal_id": "hiring_burst:v:verdigris:old", "source": "culinary_agents"}
+    )
+    other = make_signal("license_pending", "v:verdigris").model_copy(
+        update={"signal_id": "license_pending:v:verdigris:keep", "source": "sla"}
+    )
+    store.save("signals", [stale, other], key=lambda s: s.signal_id)
+    old_board = GroupEvidence(
+        venue_ids=("v:quillon", "v:verdigris"),
+        name="Gone Group",
+        resolution="job_board",
+        evidence_ref="https://culinaryagents.com/entities/1",
+    )
+    press = old_board.model_copy(update={"name": "Press Group", "resolution": "press"})
+    store.save("group_evidence", [old_board, press], key=cli._evidence_key)
+    cli.culinary_agents(session_fetch=FakeSession(), today=TODAY, sleep=lambda s: None)
+    ids = {s.signal_id for s in store.load("signals", Signal)}
+    assert "hiring_burst:v:verdigris:old" not in ids  # recomputed, so the stale one is gone
+    assert "license_pending:v:verdigris:keep" in ids  # other sources are untouched
+    assert any(i.startswith("new_gm:v:verdigris") for i in ids)
+    names = {e.name for e in store.load("group_evidence", GroupEvidence)}
+    assert "Gone Group" not in names and "Press Group" in names
