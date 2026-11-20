@@ -31,9 +31,7 @@ class BlockedAddress(httpx.TransportError):
 
 _NAT64 = ipaddress.ip_network("64:ff9b::/96")
 _SIIT = ipaddress.ip_network("::ffff:0:0:0/96")
-_ALWAYS_BLOCKED = tuple(
-    ipaddress.ip_network(n) for n in ("::/96", "64:ff9b:1::/48", "fec0::/10")
-)
+_ALWAYS_BLOCKED = tuple(ipaddress.ip_network(n) for n in ("::/96", "64:ff9b:1::/48", "fec0::/10"))
 
 
 def _embedded_ipv4(address: ipaddress.IPv6Address) -> ipaddress.IPv4Address | None:
@@ -202,7 +200,13 @@ async def get_capped(
                     max_bytes=max_bytes,
                 )
             parts.append(chunk)
-        headers = [(k, v) for k, v in streamed.headers.multi_items() if k.lower() not in _WIRE_HEADERS]
+        # Raw bytes, not decoded str: a header value with non-ASCII bytes (a site
+        # sent an emoji) would fail to re-encode as ASCII and crash the whole read.
+        headers = [
+            (k, v)
+            for k, v in streamed.headers.raw
+            if k.decode("latin-1").lower() not in _WIRE_HEADERS
+        ]
         return httpx.Response(
             status_code=streamed.status_code,
             headers=headers,

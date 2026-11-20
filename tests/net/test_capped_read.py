@@ -190,7 +190,9 @@ async def test_a_pre_read_compressed_response_is_still_returned_decoded():
     page = b"already in memory " * 50
 
     def handler(request):
-        return httpx.Response(200, headers={"content-encoding": "gzip"}, content=gzip.compress(page))
+        return httpx.Response(
+            200, headers={"content-encoding": "gzip"}, content=gzip.compress(page)
+        )
 
     async with _client(handler) as client:
         resp = await get_capped(client, "https://site.example/", max_bytes=CAP)
@@ -224,12 +226,28 @@ _CORRUPT_BODIES = {
 @pytest.mark.parametrize("encoding,body", list(_CORRUPT_BODIES.values()), ids=list(_CORRUPT_BODIES))
 async def test_a_corrupt_compressed_body_is_a_decoding_error_not_a_zlib_error(encoding, body):
     def handler(request):
-        return httpx.Response(
-            200, headers={"content-encoding": encoding}, stream=_Chunks([body])
-        )
+        return httpx.Response(200, headers={"content-encoding": encoding}, stream=_Chunks([body]))
 
     async with _client(handler) as client:
         with pytest.raises(httpx.DecodingError) as excinfo:
             await get_capped(client, "https://hostile.example/", max_bytes=CAP)
     assert not isinstance(excinfo.value, zlib.error)
     assert body[:8].decode("latin-1") not in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+async def test_a_non_ascii_header_value_does_not_crash_the_read():
+    # A live site sent a header with an emoji; rebuilding the response from
+    # str headers re-encoded it as ASCII and crashed the whole websites run.
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers=[(b"x-powered-by", "fast ⚡ site".encode()), (b"content-type", b"text/plain")],
+            content=b"User-agent: *\nAllow: /\n",
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        resp = await get_capped(client, "https://example.com/robots.txt", max_bytes=CAP)
+    assert resp.status_code == 200
+    assert resp.text.startswith("User-agent")
+    assert resp.headers.raw[0] == (b"x-powered-by", "fast ⚡ site".encode())
