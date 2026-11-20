@@ -296,6 +296,8 @@ culinary_agents:
     - '\bdirector of (private )?(events?|dining|catering)\b'
   guest_titles:     # guest_role_hire: owns the guest list and bookings
     - '\bguest (relations|experience) (manager|director)\b'
+    - '\bguest relations coordinator\b'
+    - '\b(dining room|restaurant) manager\b'
     - '\breservations? (manager|director|supervisor)\b'
     - '\breservationists?\b'
     - '\bmaitre d\b'
@@ -310,7 +312,7 @@ culinary_agents:
     - '\b(pre-?opening|opening) (team|manager)\b'
   exclude_title_words: [assistant, associate, intern, trainee]
   # fine_dining_service fit criterion (not a window signal); exclude_title_words does not apply.
-  service_titles: ['\bsommeliers?\b', '\b(wine|beverage) director\b', '\bdirector of (wine|beverage)\b', '\bcaptains?\b', '\bservice manager\b']
+  service_titles: ['\bsommeliers?\b', '\b(wine|beverage) director\b', '\bdirector of (wine|beverage)\b', '\bcaptains?\b', '\bservice manager\b', '\bpastry chef\b']
   open_call_titles: ['\bopen call\b']   # an "Open Call" posting is a hiring_burst
   burst_min_roles: 5      # or this many distinct roles from one employer ...
   burst_window_days: 30   # ... within this many days

@@ -71,6 +71,8 @@ class CulinaryAgentsConfig(BaseModel):
     )
     guest_titles: tuple[str, ...] = (
         r"\bguest (relations|experience) (manager|director)\b",
+        r"\bguest relations coordinator\b",
+        r"\b(dining room|restaurant) manager\b",
         r"\breservations? (manager|director|supervisor)\b",
         r"\breservationists?\b",
         r"\bmaitre d\b",
@@ -95,6 +97,7 @@ class CulinaryAgentsConfig(BaseModel):
         r"\bdirector of (wine|beverage)\b",
         r"\bcaptains?\b",
         r"\bservice manager\b",
+        r"\bpastry chef\b",
     )
     # A posting like this is a whole venue staffing at once (`hiring_burst`).
     open_call_titles: tuple[str, ...] = (r"\bopen call\b",)

@@ -1,6 +1,6 @@
 import logging
 import re
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -1420,3 +1420,151 @@ def test_cli_articles_need_only_the_public_source_enabled(monkeypatch) -> None:
     monkeypatch.setattr(cli, "load_config", lambda: load_config())
     with pytest.raises(SystemExit, match="agreement"):
         cli.culinary_agents(fetch=_article_pages([]), today=TODAY, articles=True)
+
+
+# ---- live page-2 shape: variable-assigned UJS HTML, unwrapped cards, no silent end ----
+
+
+def test_extract_ujs_html_reads_html_assigned_to_a_variable_and_appended_by_name() -> None:
+    js = (
+        "(function() {\n  var result;\n"
+        '  result = "<p>one<\\/p>";\n'
+        "  $('#js-jobs-result').append(result);\n"
+        "  if (!true) {\n    result = \"\";\n    $('#js-jobs-result').append(result);\n  }\n"
+        "  $('#js-jobs-result-replace').html(result);\n"
+        "}).call(this);"
+    )
+    # the same HTML injected into a second target is one copy, not two
+    assert ca.extract_ujs_html(js) == "<p>one</p>"
+
+
+def test_extract_ujs_html_keeps_literal_and_variable_injections_in_order() -> None:
+    js = '$("#a").append("<p>one</p>");\nx = \'<p>two</p>\';\n$("#b").append(x);'
+    assert ca.extract_ujs_html(js) == "<p>one</p><p>two</p>"
+    assert ca.extract_ujs_html("$('#a').append(undefinedName);") == ""
+
+
+def test_live_shape_xhr_fixture_parses_unwrapped_cards() -> None:
+    parsed = parse_job_search(ca.extract_ujs_html(read("job_search_xhr_var.js.txt")), TODAY)
+    by = {j.company: j for j in parsed}
+    assert len(parsed) == 4
+    assert [j.job_id for j in parsed] == ["9300001", "9300002", "9300003", "9300004"]
+    assert by["Thornfield Tavern"].sponsored and by["Thornfield Tavern"].posted is None
+    assert sum(j.sponsored for j in parsed) == 1
+    mirelle = by["Mirelle’s Kitchen"]  # non-ASCII survives the variable's JS-string decode
+    assert mirelle.group == "Lanternwood Hospitality"
+    assert mirelle.location == "34 Sample Avenue, New York, NY"
+    assert mirelle.company_url == "https://culinaryagents.com/entities/9400002"
+    assert mirelle.posted == TODAY - timedelta(days=1)
+    assert by["Chef's Counter at Quillby"].group is None  # four rows: no group row
+    assert by["Bramblecote"].posted == TODAY - timedelta(days=7)
+
+
+def test_wrapped_cards_are_not_double_counted() -> None:
+    wrapped = read("job_search_logged_in.html")
+    assert len(parse_job_search(wrapped, TODAY)) == 3
+    unwrapped = ca.extract_ujs_html(read("job_search_xhr_var.js.txt"))
+    both = parse_job_search(wrapped + unwrapped, TODAY)
+    assert len(both) == 7 and len({j.url for j in both}) == 7
+
+
+def _xhr_walk(xhr_bodies: list[str]) -> list[ca.SearchPage]:
+    bodies = iter(xhr_bodies)
+
+    def session(url: str, xhr: bool) -> str:
+        return next(bodies) if xhr else read("job_search_logged_in.html")
+
+    return list(
+        ca.iter_search_pages(
+            "jobs",
+            "New York, NY",
+            session,
+            CallBudget("ca", 10),
+            opening_soon=False,
+            cfg=AUTH_CFG,
+            today=TODAY,
+        )
+    )
+
+
+def test_page_two_in_the_live_shape_is_read_and_the_walk_continues() -> None:
+    pages = _xhr_walk([read("job_search_xhr_var.js.txt"), read("job_search_xhr_empty.js.txt")])
+    assert [p.page for p in pages] == [1, 2]
+    assert len(pages[1].jobs) == 4
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        # card markup in a shape the extractor cannot read (built by a function call)
+        '$(\'#js-jobs-result\').append(build("<a class=\\"ca-single-job-card\\"><\\/a>"));',
+        # card markup that is extracted but has no readable card in it
+        (
+            '$(\'#js-jobs-result\').append("<div class=\\"card new-job-card\\">'
+            '<a class=\\"ca-single-job-card\\"><\\/a><\\/div>");'
+        ),
+    ],
+)
+def test_job_card_markup_with_zero_cards_is_an_unrecognised_stop(body: str) -> None:
+    with pytest.raises(ca.SessionStopped, match="unrecognised"):
+        _xhr_walk([body])
+
+
+def test_company_card_markup_with_zero_cards_is_an_unrecognised_stop() -> None:
+    def session(url: str, xhr: bool) -> str:
+        if not xhr:
+            return read("company_search_opening_soon.html")
+        return '$(\'#js-entities-result\').append(build("<div class=\\"company-card\\">"));'
+
+    with pytest.raises(ca.SessionStopped, match="unrecognised"):
+        list(
+            ca.iter_search_pages(
+                "companies",
+                "New York, NY",
+                session,
+                CallBudget("ca", 10),
+                opening_soon=True,
+                cfg=AUTH_CFG,
+                today=TODAY,
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    ("title", "expected"),
+    [
+        ("Guest Relations Coordinator", "guest_role_hire"),
+        ("Dining Room Manager", "guest_role_hire"),
+        ("Restaurant Manager", "guest_role_hire"),
+        ("Assistant Restaurant Manager", None),
+        ("Bar Manager", None),
+        ("Guest Experience Ambassador (Host/Hostess)", None),
+        ("Host", None),
+        ("Executive Pastry Chef", None),  # fine-dining fit evidence, not new_chef
+        ("Pastry Chef", None),
+        ("Executive Chef", "new_chef"),
+    ],
+)
+def test_classify_title_live_titles(title: str, expected: str | None) -> None:
+    assert classify_title(title, CFG) == expected
+
+
+@pytest.mark.parametrize(
+    ("title", "expected"),
+    [
+        ("Executive Pastry Chef", True),
+        ("Pastry Chef", True),
+        ("Pastry Sous Chef", False),
+        ("Executive Chef", False),
+        ("Bar Manager", False),
+    ],
+)
+def test_pastry_chefs_are_fine_dining_service_titles(title: str, expected: bool) -> None:
+    assert ca.is_service_title(title, CFG) is expected
+
+
+def test_example_config_title_lists_match_the_code_defaults() -> None:
+    example = load_config().culinary_agents
+    default = CulinaryAgentsConfig()
+    for field in ("chef_titles", "gm_titles", "events_titles", "guest_titles", "service_titles"):
+        assert getattr(example, field) == getattr(default, field), field

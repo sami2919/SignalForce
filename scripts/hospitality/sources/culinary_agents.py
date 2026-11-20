@@ -423,15 +423,23 @@ def _job_from_card(card: LexborNode, today: date, opening_soon: bool) -> CAJob |
     )
 
 
+def _inside_job_card(node: LexborNode) -> bool:
+    parent = node.parent
+    while parent is not None:
+        if parent.tag == "div" and "new-job-card" in (parent.attributes.get("class") or "").split():
+            return True
+        parent = parent.parent
+    return False
+
+
 def parse_job_search(html: str, today: date, *, opening_soon: bool = False) -> list[CAJob]:
     """Job cards on a search page; an unreadable card is logged and skipped, never fatal."""
     if not html.strip():
         return []
     out: list[CAJob] = []
     for node in LexborHTMLParser(html).css("div.new-job-card"):
-        classes = (node.attributes.get("class") or "").split()
-        if "card" in classes:  # the inner wrapper of the same card
-            continue
+        if _inside_job_card(node):  # the inner div of a wrapped card (page 1); XHR pages
+            continue  # send the inner div alone, so it is the outermost card there
         try:
             job = _job_from_card(node, today, opening_soon)
         except Exception:
@@ -444,11 +452,23 @@ def parse_job_search(html: str, today: date, *, opening_soon: bool = False) -> l
     return out
 
 
-# A jQuery call whose single argument is one JS string literal: $("#x").append("...").
-_UJS_CALL = re.compile(
-    r"""\.(?:append|prepend|html|replaceWith)\(\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')\s*\)""",
+_JS_LITERAL = r""""(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'"""
+_JS_NAME = r"[A-Za-z_$][\w$]*"
+# One left-to-right scan of a UJS response. Every string literal is consumed as a token, so
+# nothing inside one is ever read as code. Tokens: `name = "...";`, a jQuery injection whose
+# argument is a literal or a variable (`$("#x").append("...")`, `.append(result)`), any
+# other literal (skipped).
+_UJS_TOKEN = re.compile(
+    rf"(?<![\w$.])(?P<name>{_JS_NAME})\s*=\s*(?P<value>{_JS_LITERAL})\s*;"
+    rf"|\.(?:append|prepend|html|replaceWith)\(\s*(?:(?P<arg>{_JS_LITERAL})|(?P<var>{_JS_NAME}))\s*\)"
+    rf"|{_JS_LITERAL}",
     re.DOTALL,
 )
+# Card markup in a raw response: a page that has it but yields no card is unrecognised.
+_CARD_MARKUP = {
+    "jobs": re.compile(r"ca-single-job-card\b"),
+    "companies": re.compile(r"company-card\b"),
+}
 _JS_ESCAPE = re.compile(r'\\x([0-9a-fA-F]{2})|\\(.)|"', re.DOTALL)
 
 
@@ -468,22 +488,40 @@ def _js_string(body: str) -> str:
     return json.loads(f'"{_JS_ESCAPE.sub(to_json, body)}"', strict=False)
 
 
+def _decode_literal(literal: str) -> str | None:
+    try:
+        return _js_string(literal[1:-1])
+    except ValueError:
+        logger.warning("culinary agents: undecodable UJS string skipped")
+        return None
+
+
 def extract_ujs_html(js_text: str) -> str:
-    """The HTML a Rails UJS response injects: every `.append("...")` / `.html("...")` string,
-    decoded and joined. Raw HTML passes through unchanged; anything else gives "".
+    """The HTML a Rails UJS response injects, decoded and joined in order: `.append("...")` /
+    `.html("...")` literals, and HTML assigned to a variable then injected by name
+    (`result = "..."; $("#x").append(result);`, the live page-2 shape). The same HTML injected
+    into a second target counts once; empty injections add nothing. Raw HTML passes through
+    unchanged; anything else gives "".
 
     The only function that knows the XHR response shape, so it is the one to change if the
-    live response differs from the synthetic fixtures.
+    live response changes again.
     """
     if js_text.lstrip().startswith("<"):
         return js_text
+    variables: dict[str, str | None] = {}
     parts: list[str] = []
-    for m in _UJS_CALL.finditer(js_text):
-        body = m.group(1) if m.group(1) is not None else m.group(2)
-        try:
-            parts.append(_js_string(body))
-        except ValueError:
-            logger.warning("culinary agents: undecodable UJS string skipped")
+    for m in _UJS_TOKEN.finditer(js_text):
+        if m.group("name") is not None:
+            variables[m.group("name")] = _decode_literal(m.group("value"))
+            continue
+        if m.group("arg") is not None:
+            html = _decode_literal(m.group("arg"))
+        elif m.group("var") is not None:
+            html = variables.get(m.group("var"))
+        else:
+            continue  # a literal outside any assignment or injection
+        if html and html not in parts:
+            parts.append(html)
     return "".join(parts)
 
 
@@ -719,6 +757,11 @@ def iter_search_pages(
             sponsored_so_far += sum(j.sponsored for j in jobs)
             found = SearchPage(page=page, jobs=jobs)
         if not found.jobs and not found.companies:
+            if _CARD_MARKUP[kind].search(text):  # cards were sent but none could be read
+                raise SessionStopped(
+                    f"unrecognised response on {kind} page {page}: card markup but no readable"
+                    " cards"
+                )
             if page == 1:
                 raise SessionStopped(f"empty page ({kind} page 1 has no cards)")
             return
