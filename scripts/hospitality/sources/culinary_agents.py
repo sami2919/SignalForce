@@ -1114,6 +1114,28 @@ def _candidates(
 
 
 _ZIP = re.compile(r"\b(\d{5})(?:-\d{4})?\s*$")
+_COUNTRY = re.compile(r",?\s*(?:united states(?: of america)?|usa)\.?\s*$", re.IGNORECASE)
+# The five boroughs: a borough name, or "New York, NY" (Manhattan's postal city).
+_NYC_PLACE = re.compile(
+    r"\b(?:manhattan|brooklyn|queens|bronx|staten island)\b|\bnew york,\s*ny\b", re.IGNORECASE
+)
+# NYC ZIPs: Manhattan 100-102, Staten Island 103, Bronx 104, Queens 110 (11004-11005 only),
+# 111/113/114/116, Brooklyn 112. Other 110xx and 115xx are Nassau County.
+_NYC_ZIP_PREFIXES = frozenset(
+    {"100", "101", "102", "103", "104", "111", "112", "113", "114", "116"}
+)
+_NYC_ZIPS = frozenset({"11004", "11005"})
+# Decoration after the name on a card: "Name : tagline", "Name - NYC", "Name (Area)", "Name by X".
+_DECORATION = re.compile(r"\s*[:(]|\s+[-–—]\s*|\s+by\s+", re.IGNORECASE)
+
+
+class JobBoardVenues(BaseModel):
+    """New job-board venues, and the companies skipped for an address outside the five boroughs."""
+
+    model_config = ConfigDict(frozen=True)
+
+    venues: tuple[Venue, ...] = ()
+    out_of_area: tuple[str, ...] = ()
 
 
 def is_job_board_venue(venue_id: str) -> bool:
@@ -1121,22 +1143,62 @@ def is_job_board_venue(venue_id: str) -> bool:
     return venue_id.startswith(JOB_BOARD_VENUE_PREFIX)
 
 
+def _street(address: str) -> str:
+    """The normalized street address (number and street) of the first address segment."""
+    return normalize_address(address.split(",")[0])
+
+
 def _street_number(address: str) -> str | None:
-    tokens = normalize_address(address.split(",")[0]).split()
+    tokens = _street(address).split()
     return tokens[0] if tokens and tokens[0].isdigit() else None
 
 
-def job_board_venues(companies: Sequence[CACompany], venues: Sequence[Venue]) -> list[Venue]:
+def card_zip(address: str) -> str:
+    """The ZIP at the end of a card address, through a trailing ", United States" / ", USA"."""
+    found = _ZIP.search(_COUNTRY.sub("", address).strip())
+    return found.group(1) if found else ""
+
+
+def is_nyc_address(address: str) -> bool:
+    """In the five boroughs: a NYC ZIP, or a borough or "New York, NY" in the address."""
+    zip_code = card_zip(address)
+    if zip_code and (zip_code[:3] in _NYC_ZIP_PREFIXES or zip_code in _NYC_ZIPS):
+        return True
+    return bool(_NYC_PLACE.search(address))
+
+
+def _leading_name(card_name: str, venue_name: str) -> bool:
+    """The venue's name leads the card name once decoration after `:`, `-`, `(` or `by` goes."""
+    core = normalize_name(_DECORATION.split(card_name, maxsplit=1)[0]).split()
+    lead = normalize_name(venue_name).split()
+    return bool(lead) and core[: len(lead)] == lead
+
+
+def _is_existing_site(name: str, address: str, venue: Venue) -> bool:
+    """The card is this existing venue: the same strict name and street number (strict name
+    alone when the card has no number), or the same street address with the venue's name
+    leading the card name."""
+    number = _street_number(address)
+    if _same_name(name, venue.name) and (number is None or _street_number(venue.address) == number):
+        return True
+    return (
+        number is not None
+        and _street(address) == _street(venue.address)
+        and _leading_name(name, venue.name)
+    )
+
+
+def job_board_venues(companies: Sequence[CACompany], venues: Sequence[Venue]) -> JobBoardVenues:
     """New venues (`v:ca:<entity id>`) for opening-soon companies that match no known venue.
 
     Built from the company card: name, address, ZIP and the profile's website when one was
-    fetched; each in its own group until job-board group evidence joins it to one. A company
-    that matches one or several venues gets none, and neither does one whose strict name and
-    street number (strict name alone when the card gives no street number) an existing venue
-    already has: a differently spelled address is the same site, never a second venue.
+    fetched; each in its own group until job-board group evidence joins it to one. None is made
+    for a company that matches one or several venues, that an existing venue already is (see
+    `_is_existing_site`), or whose address is outside the five boroughs (skipped and counted).
     """
     known = {v.venue_id for v in venues}
     out: dict[str, Venue] = {}
+    away: list[str] = []
     for company in companies:
         ident = entity_id(company.url)
         vid = f"{JOB_BOARD_VENUE_PREFIX}{ident}"
@@ -1145,19 +1207,16 @@ def job_board_venues(companies: Sequence[CACompany], venues: Sequence[Venue]) ->
         if _candidates(company.name, company.locations, company.website, venues):
             continue  # a match (or an ambiguous one): never a new venue
         address = company.locations[0] if company.locations else ""
-        number = _street_number(address)
-        if any(
-            _same_name(company.name, v.name)
-            and (number is None or _street_number(v.address) == number)
-            for v in venues
-        ):
+        if not is_nyc_address(address):
+            away.append(company.name)
             continue
-        zip_match = _ZIP.search(address)
+        if any(_is_existing_site(company.name, address, v) for v in venues):
+            continue
         out[vid] = Venue(
             venue_id=vid,
             name=company.name,
             address=address,
-            zip_code=zip_match.group(1) if zip_match else "",
+            zip_code=card_zip(address),
             lat=None,
             lon=None,
             camis=None,
@@ -1168,7 +1227,7 @@ def job_board_venues(companies: Sequence[CACompany], venues: Sequence[Venue]) ->
             website=company.website,
             group_id=f"g:{vid}",
         )
-    return list(out.values())
+    return JobBoardVenues(venues=tuple(out.values()), out_of_area=tuple(away))
 
 
 def _short(*parts: str) -> str:

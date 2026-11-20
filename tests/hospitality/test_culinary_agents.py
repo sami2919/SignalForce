@@ -1770,7 +1770,7 @@ def test_unmatched_opening_soon_company_becomes_a_job_board_venue() -> None:
         opening_soon=True,
         website="https://barsolano.example",
     )
-    made = ca.job_board_venues([solano], [VERDIGRIS])
+    made = ca.job_board_venues([solano], [VERDIGRIS]).venues
     assert len(made) == 1
     v = made[0]
     assert v.venue_id == "v:ca:9200002" and ca.is_job_board_venue(v.venue_id)
@@ -1786,7 +1786,7 @@ def test_matched_or_not_opening_soon_companies_create_no_venue() -> None:
     matched = _co("Verdigris", locations=("13 Example Street, New York, NY",), opening_soon=True)
     hiring_only = _co("Quillby", url="https://culinaryagents.com/entities/7", opening_soon=False)
     no_entity = _co("Nameless", url="https://culinaryagents.com/companies/x", opening_soon=True)
-    assert ca.job_board_venues([matched, hiring_only, no_entity], [VERDIGRIS]) == []
+    assert ca.job_board_venues([matched, hiring_only, no_entity], [VERDIGRIS]).venues == ()
 
 
 def test_job_board_venue_dedupes_by_strict_name_and_street_number() -> None:
@@ -1798,10 +1798,12 @@ def test_job_board_venue_dedupes_by_strict_name_and_street_number() -> None:
         locations=("372 Model Street, New York, NY",),
         opening_soon=True,
     )
-    assert ca.job_board_venues([solano], [existing]) == []
+    assert ca.job_board_venues([solano], [existing]).venues == ()
     # a different street number is another site of the brand: a new venue
     elsewhere = make_venue("v:9", name="Bar Solano", address="10 OTHER ST")
-    assert [v.venue_id for v in ca.job_board_venues([solano], [elsewhere])] == ["v:ca:9200002"]
+    assert [v.venue_id for v in ca.job_board_venues([solano], [elsewhere]).venues] == [
+        "v:ca:9200002"
+    ]
 
 
 def test_job_board_venues_are_idempotent_across_runs() -> None:
@@ -1811,8 +1813,8 @@ def test_job_board_venues_are_idempotent_across_runs() -> None:
         locations=("372 Model Street, New York, NY",),
         opening_soon=True,
     )
-    first = ca.job_board_venues([solano], [VERDIGRIS])
-    assert ca.job_board_venues([solano], [VERDIGRIS, *first]) == []
+    first = ca.job_board_venues([solano], [VERDIGRIS]).venues
+    assert ca.job_board_venues([solano], [VERDIGRIS, *first]).venues == ()
 
 
 def test_job_board_group_link_joins_a_new_venue_to_its_group() -> None:
@@ -1823,7 +1825,7 @@ def test_job_board_group_link_joins_a_new_venue_to_its_group() -> None:
         opening_soon=True,
         group="Casaverde",
     )
-    made = ca.job_board_venues([solano], [VERDIGRIS])
+    made = ca.job_board_venues([solano], [VERDIGRIS]).venues
     sister = _job("Verdigris", "Server", group="Casaverde")
     _, evidence = run([sister], [solano], [VERDIGRIS, *made])
     assert [set(e.venue_ids) for e in evidence] == [{"v:verdigris", "v:ca:9200002"}]
@@ -1845,3 +1847,122 @@ def test_cli_unmatched_opening_soon_company_enters_the_ranking(monkeypatch, tmp_
     assert "Bar Solano" in top
     kinds = {(s.entity_id, s.signal_type) for s in store.load("signals", Signal)}
     assert ("v:ca:9200002", "opening_soon") in kinds
+
+
+# ---- job-board venue fixes: decorated duplicates, NYC only, ZIP parsing ----
+
+BUKHARA = make_venue("v:bukhara", name="BUKHARA GRILL", address="120 EAST   39 STREET")
+
+
+def _card(name: str, address: str, ident: int = 881036, **kw):
+    return _co(
+        name,
+        url=f"https://culinaryagents.com/entities/{ident}",
+        locations=(address,),
+        opening_soon=True,
+        **kw,
+    )
+
+
+def test_decorated_card_name_is_the_existing_venue_at_the_same_street_address() -> None:
+    card = _card(
+        "Bukhara Grill : Indian Spice Rave & Catering (By Raja Jhanjee) - NYC",
+        "120 E 39th St, New York, NY 10016, United States",
+    )
+    assert ca.job_board_venues([card], [BUKHARA]).venues == ()
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Bukhara Grill - Midtown",
+        "Bukhara Grill (Murray Hill)",
+        "Bukhara Grill by Raja Jhanjee",
+        "Bukhara Grill: Indian Spice",
+    ],
+)
+def test_each_decoration_separator_is_stripped(name: str) -> None:
+    card = _card(name, "120 E 39th St, New York, NY 10016")
+    assert ca.job_board_venues([card], [BUKHARA]).venues == ()
+
+
+def test_leading_name_needs_the_same_street_address() -> None:
+    other_street = _card("Bukhara Grill - Uptown", "120 W 58th St, New York, NY 10019")
+    assert [v.name for v in ca.job_board_venues([other_street], [BUKHARA]).venues] == [
+        "Bukhara Grill - Uptown"
+    ]
+    # the existing name must lead the card name, not merely appear in it
+    not_leading = _card("Royal Bukhara Grill", "120 E 39th St, New York, NY 10016")
+    assert len(ca.job_board_venues([not_leading], [BUKHARA]).venues) == 1
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "120 E Putnam Ave, Greenwich, CT 06830",
+        "1300 Peninsula Boulevard, Hewlett, NY",
+        "Greenwich, CT",
+    ],
+)
+def test_out_of_area_companies_are_skipped_and_counted(address: str) -> None:
+    out = ca.job_board_venues([_card("Sage + Sound Table", address)], [VERDIGRIS])
+    assert out.venues == () and out.out_of_area == ("Sage + Sound Table",)
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "88 Ninth Avenue, New York, NY 10011",
+        "Brooklyn, NY",
+        "29 Ryerson Street, Brooklyn, NY",
+        "West Village, Manhattan, New York, NY",
+        "100 Example Ave, Bronx, NY",
+        "5 Sample Rd, Staten Island, NY",
+        "30-01 Example Blvd, Queens, NY",
+        "12 Example St, 11201",  # a NYC ZIP alone is enough
+        "New York, NY",
+    ],
+)
+def test_five_borough_addresses_make_job_board_venues(address: str) -> None:
+    out = ca.job_board_venues([_card("Quillmoor", address)], [VERDIGRIS])
+    assert len(out.venues) == 1 and out.out_of_area == ()
+
+
+@pytest.mark.parametrize(
+    ("address", "zip_code"),
+    [
+        ("1 W 67th St, New York, NY 10023, United States", "10023"),
+        ("120 E 39th St, New York, NY 10016, United States", "10016"),
+        ("120 E 39th St, New York, NY 10016, USA", "10016"),
+        ("120 E 39th St, New York, NY 10016-1234", "10016"),
+        ("301 South End Avenue, New York, NY", ""),
+    ],
+)
+def test_zip_is_parsed_through_a_trailing_country(address: str, zip_code: str) -> None:
+    (venue,) = ca.job_board_venues([_card("Quillmoor", address)], [VERDIGRIS]).venues
+    assert venue.zip_code == zip_code and venue.address == address
+
+
+def test_placeholder_projects_and_company_names_are_kept() -> None:
+    cards = [
+        _card("New Project by Chef Example Person", "West Village, Manhattan, New York, NY", 1),
+        _card("Example Street Hospitality", "61 Example Street, New York, NY", 2),
+    ]
+    assert len(ca.job_board_venues(cards, [VERDIGRIS]).venues) == 2
+
+
+def test_cli_rerun_deletes_job_board_venues_the_rules_now_reject(monkeypatch, tmp_path) -> None:
+    store = _auth_store(monkeypatch, tmp_path)
+    monkeypatch.setattr(cli, "OUT_DIR", tmp_path / "out")
+    stale = make_venue("v:ca:5555", name="Out Of Town", address="9 Example Rd, Greenwich, CT")
+    store.save("venues", [*store.load("venues", Venue), stale], key=lambda v: v.venue_id)
+    store.save(
+        "ca_companies",
+        [_card("Out Of Town", "9 Example Rd, Greenwich, CT", 5555)],
+        key=ca.company_key,
+    )
+    out = cli.culinary_agents(session_fetch=FakeSession(), today=TODAY, sleep=lambda s: None)
+    ids = {v.venue_id for v in store.load("venues", Venue)}
+    assert "v:ca:5555" not in ids  # rejected by the NYC rule now: deleted, not kept
+    assert "v:ca:9200002" in ids  # Bar Solano (New York, NY) is still created
+    assert out["job_board_out_of_area"] == 1

@@ -115,6 +115,7 @@ from scripts.hospitality.sources.culinary_agents import (
     article_urls,
     company_key,
     fetch_nyc,
+    is_job_board_venue,
     job_board_venues,
     job_key,
     read_page,
@@ -1115,8 +1116,8 @@ def culinary_agents(
     groups = store.load("groups", Group)
     budget = CallBudget("culinary_agents", cfg.budgets.get("culinary_agents", 40))
     jobs, companies = fetch_nyc(cfg.culinary_agents, budget, fetch or PoliteFetcher(), today, sleep)
-    made = job_board_venues(companies, venues)  # unmatched opening-soon companies
-    venues = [*venues, *made]
+    board = job_board_venues(companies, venues)  # unmatched opening-soon companies (added)
+    venues = [*venues, *board.venues]
     signals, evidence = to_signals(jobs, companies, venues, groups, today, cfg.culinary_agents)
     store.save("signals", signals, key=lambda s: s.signal_id)  # type: ignore[attr-defined]
     store.save("group_evidence", evidence, key=_evidence_key)  # type: ignore[arg-type]
@@ -1127,7 +1128,8 @@ def culinary_agents(
         "pages": budget.used,
         "jobs": len(jobs),
         "companies": len(companies),
-        "job_board_venues": len(made),
+        "job_board_venues": len(board.venues),
+        "job_board_out_of_area": len(board.out_of_area),
         "signals": len(signals),
         "evidence": len(evidence),
         "stopped": f"culinary_agents page budget spent ({budget.limit}); results may be partial"
@@ -1271,8 +1273,11 @@ def _culinary_agents_logged_in(
     )
     first_seen = {**{k: s.first_seen for k, s in seen.items()}}
     first_seen |= {s.key: s.first_seen for s in walk.seen}
-    made = job_board_venues(all_companies, venues)  # unmatched opening-soon companies
-    venues = [*venues, *made]
+    # Job-board venues are derived from every stored company, so they are rebuilt each run:
+    # one the rules now reject is deleted, not kept.
+    base = [v for v in venues if not is_job_board_venue(v.venue_id)]
+    board = job_board_venues(all_companies, base)  # unmatched opening-soon companies
+    venues = [*base, *board.venues]
     signals, evidence = to_signals(
         all_jobs, all_companies, venues, groups, today, cfg.culinary_agents, first_seen
     )
@@ -1300,7 +1305,8 @@ def _culinary_agents_logged_in(
         "early_exit": ", ".join(walk.early_exit),
         "stopped": stopped,
         "stopped_page": stopped_page,
-        "job_board_venues": len(made),
+        "job_board_venues": len(board.venues),
+        "job_board_out_of_area": len(board.out_of_area),
         "signals": len(signals),
         "evidence": len(evidence),
         "scored_groups": scored["scored_groups"],
