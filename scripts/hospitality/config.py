@@ -291,6 +291,6 @@ class HospitalityConfig(BaseModel):
 
 def load_config(path: Path = DEFAULT_CONFIG_PATH) -> HospitalityConfig:
     """Load and validate the hospitality YAML config."""
-    with Path(path).open() as fh:
+    with Path(path).open(encoding="utf-8") as fh:
         raw = yaml.safe_load(fh)
     return HospitalityConfig.model_validate(raw)

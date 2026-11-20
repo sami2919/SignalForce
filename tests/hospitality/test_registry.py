@@ -139,3 +139,23 @@ def test_i4_name_with_punctuation_matches_a_suffix_spelling_variant(store: DocSt
     client = FakeClient({"NICK & DOMS PIZZERIA, INC.": [row]})
     [rec] = lookup_companies(["NICK & DOMS PIZZERIA INC"], client, CallBudget("r", 10), store)
     assert rec.found and rec.dos_id == "333"
+
+
+def test_config_is_read_as_utf8_on_every_platform(monkeypatch) -> None:
+    # Windows defaults to cp1252, which cannot read accented names in the config (Shmoné).
+    import pathlib
+
+    from scripts.hospitality.config import load_config
+
+    seen: list[str | None] = []
+    real_open = pathlib.Path.open
+
+    def spy(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        if self.suffix in {".yaml", ".yml"}:
+            seen.append(kwargs.get("encoding"))
+        return real_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(pathlib.Path, "open", spy)
+    cfg = load_config()
+    assert seen and all(e == "utf-8" for e in seen)
+    assert any("Shmon" in a for a in cfg.accolades)
