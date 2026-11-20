@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from datetime import date
 
 from scripts.hospitality.models import EntityLink, LicenseRecord, Venue
+from scripts.hospitality.sources.sla import is_renewal
 
 Curve = tuple[tuple[float, float], ...]
 
@@ -109,6 +110,7 @@ def opening_durations(
             if (lic := by_id.get(lid)) is not None
             and lic.source in ("sla_active", "sla_inactive")
             and lic.original_issue_date is not None
+            and not is_renewal(lic)
         ]
         if not issued:
             continue

@@ -127,3 +127,13 @@ def test_max_opening_days_is_a_parameter():
     lic = make_license("a", source="sla_active", original_issue_date=date(2025, 3, 1))  # 365d
     assert len(opening_durations([v], [lic], TODAY)) == 1
     assert opening_durations([v], [lic], TODAY, max_days=300) == []
+
+
+def test_renewed_licence_is_not_an_opening_duration():
+    renewal = make_license(
+        "sla_active:0340-22-109336", source="sla_active", received_date=None,
+        original_issue_date=date(2026, 2, 9),
+    )  # fmt: skip
+    venue = make_venue("v:1", license_ids=(renewal.record_id,),
+                       first_inspection_date=date(2026, 6, 1))  # fmt: skip
+    assert opening_durations([venue], [renewal], TODAY) == []

@@ -128,3 +128,18 @@ def test_estimate_all_skips_license_linked_to_inspected_venue(cfg):
         links=[_link("a", "9"), _link("p", "9")],
     )
     assert [e.venue_id for e in out] == ["v:lic:c"]
+
+
+def test_renewed_licence_gives_no_opening_estimate(cfg):
+    from scripts.hospitality.window.estimate import estimate_all
+
+    curve = {"all": kaplan_meier([100.0, 200.0, 300.0], [True, True, True])}
+
+    def run(rid: str):
+        lic = make_license(rid, source="sla_active", received_date=None,
+                           original_issue_date=date(2026, 9, 3))  # fmt: skip
+        venue = make_venue("v:1", license_ids=(rid,), camis="9")
+        return estimate_all([venue], [lic], curve, cfg, date(2026, 11, 16))
+
+    assert len(run("sla_active:0340-26-119590")) == 1
+    assert run("sla_active:0340-21-119590") == []

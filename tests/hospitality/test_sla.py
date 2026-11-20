@@ -99,3 +99,25 @@ def test_cli_ingest_sla_saves_each_source(monkeypatch: pytest.MonkeyPatch, tmp_p
     )
     assert cli.main(["ingest-sla"]) == 0
     assert len(store.load("licenses", LicenseRecord)) == 3
+
+
+def test_renewal_is_an_active_licence_whose_number_is_years_older_than_its_issue_date() -> None:
+    # The SLA resets `originalissuedate` on every renewal; the year in the licence number
+    # (0340-22-...) keeps the year the licence was first applied for. Sushi Noz, open since
+    # 2018, shows 0340-22-109336 "issued" 2026-02-09.
+    from datetime import date
+
+    from scripts.hospitality.sources.sla import is_renewal
+    from tests.hospitality.factories import make_license
+
+    def active(rid: str, issued: date):
+        return make_license(rid, source="sla_active", received_date=None,
+                            original_issue_date=issued)  # fmt: skip
+
+    assert is_renewal(active("sla_active:0340-22-109336", date(2026, 2, 9)))
+    assert is_renewal(active("sla_active:0370-24-127602", date(2026, 9, 15)))
+    assert not is_renewal(active("sla_active:0340-26-140251", date(2026, 4, 16)))
+    assert not is_renewal(active("sla_active:0340-25-131355", date(2026, 1, 5)))
+    # Unparseable numbers and pending applications are never called renewals.
+    assert not is_renewal(active("sla_active:1", date(2026, 2, 9)))
+    assert not is_renewal(make_license("sla_pending:NA-0340-22-1", received_date=date(2026, 1, 1)))

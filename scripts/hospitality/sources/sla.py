@@ -1,6 +1,7 @@
 """NY State Liquor Authority license ingest (pending, active, inactive datasets)."""
 
 import logging
+import re
 from datetime import date
 from typing import Any
 
@@ -36,6 +37,25 @@ def _first(row: dict[str, Any], logical: str) -> Any:
 
 def _date(value: Any) -> date | None:
     return date.fromisoformat(str(value)[:10]) if value else None
+
+
+_NUMBER_YEAR = re.compile(r"^\d{4}-(\d{2})-\d+$")
+
+
+def is_renewal(lic: LicenseRecord) -> bool:
+    """True for an issued licence that is a renewal, not a new licence.
+
+    The SLA resets `originalissuedate` every time a licence renews, but the licence number
+    (0340-22-109336) keeps the two-digit year it was first applied for. A licence "issued"
+    more than a year after that year is an existing venue renewing, not a venue opening.
+    Unparseable numbers and pending applications (NA-...) are never called renewals.
+    """
+    if lic.source == "sla_pending" or lic.original_issue_date is None:
+        return False
+    match = _NUMBER_YEAR.match(lic.record_id.split(":", 1)[-1])
+    if match is None:
+        return False
+    return lic.original_issue_date.year - (2000 + int(match.group(1))) > 1
 
 
 def parse_license_row(row: dict[str, Any], source: LicenseSource) -> LicenseRecord | None:

@@ -208,3 +208,14 @@ def test_live_score_applies_the_configured_caps(tmp_path, monkeypatch) -> None:
     cli.score(datetime(2026, 11, 16, tzinfo=UTC))
     kinds = {s.signal_type for s in store.load("license_signals", Signal)}
     assert "not_yet_inspected" not in kinds
+
+
+def test_renewed_licence_fires_no_opening_signal() -> None:
+    renewal = make_license(
+        "sla_active:0340-22-109336", source="sla_active", received_date=None,
+        original_issue_date=date(2026, 9, 1),
+    )  # fmt: skip
+    venue = make_venue("v:1", license_ids=(renewal.record_id,), camis="9")
+    assert license_signals([venue], [renewal], {}, TODAY) == []
+    inspected_later = venue.model_copy(update={"first_inspection_date": date(2026, 10, 1)})
+    assert license_signals([inspected_later], [renewal], {}, TODAY) == []

@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
 
 from scripts.hospitality.models import LicenseRecord, Signal, Venue
+from scripts.hospitality.sources.sla import is_renewal
 from scripts.hospitality.window.survival import likely_already_open
 
 ISSUED_LOOKBACK_DAYS = 365  # default only; the pipeline passes cfg.issued_lookback_days
@@ -80,8 +81,10 @@ def license_signals(
                         )
                     )
             elif (
-                lic.source == "sla_active" or (historical and lic.source == "sla_inactive")
-            ) and lic.original_issue_date is not None:
+                (lic.source == "sla_active" or (historical and lic.source == "sla_inactive"))
+                and lic.original_issue_date is not None
+                and not is_renewal(lic)
+            ):
                 issued = lic.original_issue_date
                 if lic.source == "sla_active":
                     dated.append((issued, lic))

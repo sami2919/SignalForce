@@ -5,6 +5,7 @@ from datetime import date, timedelta
 
 from scripts.hospitality.config import HospitalityConfig
 from scripts.hospitality.models import EntityLink, LicenseRecord, Venue, WindowEstimate
+from scripts.hospitality.sources.sla import is_renewal
 from scripts.hospitality.window.survival import (
     Curve,
     likely_already_open,
@@ -106,7 +107,11 @@ def estimate_all(
         if venue.first_inspection_date is not None:
             continue
         lics = [lic for lid in venue.license_ids if (lic := by_id.get(lid)) is not None]
-        active = [lic for lic in lics if lic.source == "sla_active" and lic.original_issue_date]
+        active = [
+            lic
+            for lic in lics
+            if lic.source == "sla_active" and lic.original_issue_date and not is_renewal(lic)
+        ]
         pending = [lic for lic in lics if lic.source == "sla_pending" and lic.received_date]
         if active:
             chosen = max(active, key=lambda x: x.original_issue_date)  # type: ignore[arg-type,return-value]
