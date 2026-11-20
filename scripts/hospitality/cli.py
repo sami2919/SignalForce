@@ -16,6 +16,7 @@ from urllib.parse import urlsplit
 
 import requests
 from anthropic import Anthropic
+from dotenv import load_dotenv
 
 from scripts.api_client import APIError
 from scripts.firecrawl_client import FirecrawlClient
@@ -1709,6 +1710,7 @@ def report() -> Path:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    load_dotenv()  # API keys (EXA/FIRECRAWL/...) may live in .env (gitignored); load before use
     parser = argparse.ArgumentParser(prog="scripts.hospitality.cli")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("ingest-sla", help="Ingest NY SLA licenses for NYC via Socrata")

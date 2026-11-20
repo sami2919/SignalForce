@@ -117,3 +117,11 @@ def test_registry_counts_companies_per_named_person(store) -> None:
     client = Found()
     cli.registry(top=1, client=client)
     assert any("dos_process_name" in c for c in client.calls)
+
+
+def test_cli_loads_env_file_before_running_a_command(monkeypatch) -> None:
+    calls: list[bool] = []
+    monkeypatch.setattr(cli, "load_dotenv", lambda *a, **k: calls.append(True))
+    with pytest.raises(SystemExit):
+        cli.main(["no-such-command"])
+    assert calls == [True]
