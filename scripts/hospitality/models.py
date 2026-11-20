@@ -163,6 +163,19 @@ class CACompany(_Frozen):
     website: str | None
 
 
+class CASeen(_Frozen):
+    """A Culinary Agents job or company seen by the logged-in reader (DocStore kind `ca_seen`).
+
+    `key` is `job:<id>` or `entity:<id>`. `first_seen` is the signal date when the card gives no
+    posting date; `profile_fetched_on` stops a company profile being re-fetched every day.
+    """
+
+    key: str
+    first_seen: date
+    last_seen: date
+    profile_fetched_on: date | None = None
+
+
 class EntityLink(_Frozen):
     left_id: str
     right_id: str

@@ -12,20 +12,38 @@ page-budgeted fetcher, and every page spends `CallBudget` before the request goe
 Parsing is deterministic and tolerant: a card that cannot be read is logged and skipped. Matching
 a company to the venue universe is deterministic too: a company that matches zero or several
 venues emits nothing (it is logged as an unmatched candidate), never a guess.
+
+Logged-in mode (`culinary_agents.authenticated`, off by default). The user chose to run it with
+their own account knowing the agreement (section 7) bans robots and scrapers without written
+permission and limits accounts to personal use; the risk is a banned account or a legal letter.
+It walks the paginated XHR search (`iter_search_pages`, 20 items a page, `offset` / `page` /
+`sj_offset` as captured) with the session cookie from CULINARY_AGENTS_COOKIE, read only from the
+environment, never logged, stored or put in an error. Same footprint rules as the public reader:
+robots.txt (fails closed), `/users` refused, the budget spent before every request, a fixed
+delay, one account, one IP, an honest User-Agent. Deliberately absent: secondary accounts,
+proxies, TLS impersonation and randomised timing. 401/403/429, a sign-in redirect or an empty page
+stops the run (never a retry) and keeps what was read. `--backfill` walks every page once; the
+daily run stops a search after `daily_stop_after_known` already-seen organic items (`ca_seen`).
+
+Scheduling (where the cookie lives; a fixed time, no jitter), e.g. a crontab line:
+
+    15 6 * * * cd /path/to/SignalForce && .venv/bin/python -m scripts.hospitality.cli culinary-agents
 """
 
 import asyncio
 import hashlib
+import json
 import logging
 import re
 import time
 import unicodedata
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from datetime import UTC, date, datetime, timedelta
 from urllib.parse import quote_plus, urljoin, urlsplit
 from urllib.robotparser import RobotFileParser
 
 import httpx
+from pydantic import BaseModel, ConfigDict
 from selectolax.lexbor import LexborHTMLParser, LexborNode
 
 from scripts.hospitality.budget import BudgetExceeded, CallBudget
@@ -33,6 +51,7 @@ from scripts.hospitality.config import CulinaryAgentsConfig
 from scripts.hospitality.models import (
     CACompany,
     CAJob,
+    CASeen,
     Group,
     GroupEvidence,
     Signal,
@@ -59,8 +78,35 @@ _GENERIC_GROUP = frozenset({"", "group", "restaurant group", "hospitality group"
 _POSTED = re.compile(r"posted (\d+) (day|week|month)s? ago", re.IGNORECASE)
 _PHONE = re.compile(r"^[\d\s().+-]{7,}$")
 _ENTITY_ID = re.compile(r"/entities/(\d+)")
+_JOB_ID = re.compile(r"/jobs/(\d+)")
+_POSTED_ABS = re.compile(
+    r"posted (?:on )?([a-z]{3,9}\.? \d{1,2},? \d{4}|\d{1,2}/\d{1,2}/\d{4})", re.IGNORECASE
+)
+_CSRF = re.compile(
+    r"<meta[^>]+name=[\"']csrf-token[\"'][^>]+content=[\"']([^\"']+)[\"']", re.IGNORECASE
+)
+PAGE_SIZE = 20  # items per page of the logged-in XHR search
+XHR_ACCEPT = (
+    "text/javascript, application/javascript, application/ecmascript, "
+    "application/x-ecmascript, */*; q=0.01"
+)
+COOKIE_ENV = "CULINARY_AGENTS_COOKIE"
+SESSION_EXPIRED = "session expired — refresh CULINARY_AGENTS_COOKIE"
 
 Fetch = Callable[[str], str | None]
+# Logged-in fetch: (url, xhr) -> body text; raises SessionStopped instead of returning None.
+SessionFetch = Callable[[str, bool], str]
+
+
+class SessionStopped(RuntimeError):
+    """The logged-in walk must stop, never retry: 401/403/429, a sign-in redirect, an empty or
+    unrecognised page, a refused URL or a network error. `auth` marks a dead session. The reason
+    never contains the cookie (pinned by tests)."""
+
+    def __init__(self, reason: str, *, auth: bool = False) -> None:
+        super().__init__(reason)
+        self.reason = reason
+        self.auth = auth
 
 
 # ---- URLs and the fetcher -------------------------------------------------------------------
@@ -95,6 +141,41 @@ def company_search_url(location: str) -> str:
     return _search_url("/companies/search", params)
 
 
+def session_search_url(
+    kind: str,
+    location: str,
+    page: int,
+    sj_offset: int,
+    cfg: CulinaryAgentsConfig,
+    *,
+    opening_soon: bool = False,
+) -> str:
+    """A logged-in search page, with the parameters exactly as captured from the site.
+
+    Page 1 is the server-rendered page (no offset); later pages add `offset=(page-1)*20`,
+    `page` and, for jobs, `sj_offset` (sponsored jobs shown so far).
+    """
+    paging = [("offset", str((page - 1) * PAGE_SIZE)), ("page", str(page))] if page > 1 else []
+    if kind == "companies":
+        params = [
+            *paging,
+            ("search[location]", location),
+            ("search[open_status][]", "opening_soon"),
+        ]
+        return _search_url("/companies/search", params)
+    params = [
+        *paging,
+        ("search[country]", "US"),
+        ("search[location]", location),
+        *(("search[segment_ids][]", sid) for sid in cfg.segment_ids),
+    ]
+    if opening_soon:
+        params.append(("search[entity_status][]", "opening_soon"))
+    if page > 1:
+        params.append(("sj_offset", str(sj_offset)))
+    return _search_url("/search/jobs", params)
+
+
 def _disallow_all() -> RobotFileParser:
     parser = RobotFileParser()
     parser.parse(["User-agent: *", "Disallow: /"])
@@ -102,20 +183,108 @@ def _disallow_all() -> RobotFileParser:
 
 
 class PoliteFetcher:
-    """Sync GET of one public page: robots.txt (fetched once per run; unreadable = fetch
-    nothing), SSRF guard, body cap."""
+    """Sync GET of one culinaryagents.com page: robots.txt (fetched once per run; unreadable =
+    fetch nothing), SSRF guard, body cap.
+
+    With `cookie` (the operator's own session, from CULINARY_AGENTS_COOKIE) `page()` reads
+    logged-in pages: the cookie goes only to page requests on the site (never robots.txt), XHR
+    requests carry the CSRF token read from page 1 of this session (kept in memory only), and
+    every failure raises `SessionStopped` instead of retrying. The cookie is never logged and
+    never appears in an exception.
+    """
 
     def __init__(
-        self, client_factory: Callable[[], httpx.AsyncClient] = lambda: guarded_client()
+        self,
+        client_factory: Callable[[], httpx.AsyncClient] = lambda: guarded_client(),
+        cookie: str | None = None,
     ) -> None:
         self._factory = client_factory
         self._robots: RobotFileParser | None = None
+        self._cookie = cookie or None
+        self._csrf: str | None = None
 
     def __call__(self, url: str) -> str | None:
         if not is_fetchable(url):
             logger.warning("culinary agents: refusing to fetch %s", url)
             return None
         return asyncio.run(self._get(url))
+
+    def page(self, url: str, xhr: bool = False) -> str:
+        """One logged-in page (or XHR response) body; raises `SessionStopped` on any failure."""
+        if not is_fetchable(url):
+            raise SessionStopped(f"refused url {urlsplit(url).path}")
+        if xhr and self._csrf is None:
+            raise SessionStopped("no csrf token from page 1 of this session", auth=True)
+        text = asyncio.run(self._get_session(url, xhr))
+        if not xhr:
+            found = _CSRF.search(text)
+            self._csrf = found.group(1) if found else self._csrf
+        return text
+
+    def _redact(self, text: str) -> str:
+        if self._cookie:
+            text = text.replace(self._cookie, "[redacted]")
+            for part in self._cookie.split(";"):
+                value = part.split("=", 1)[-1].strip()
+                if len(value) >= 6:
+                    text = text.replace(value, "[redacted]")
+        return text
+
+    async def _get_session(self, url: str, xhr: bool) -> str:
+        plain = {"User-Agent": USER_AGENT}
+        headers = {**plain, "Cookie": self._cookie or ""}
+        if not self._cookie:
+            headers.pop("Cookie")
+        if xhr:
+            headers |= {
+                "Accept": XHR_ACCEPT,
+                "X-Requested-With": "XMLHttpRequest",
+                "X-CSRF-Token": self._csrf or "",
+            }
+        timeout = httpx.Timeout(15.0, connect=5.0)
+        failure: str | None = None
+        async with self._factory() as client:
+            if self._robots is None:
+                self._robots = await self._load_robots(client, plain, timeout)
+            if not self._robots.can_fetch(USER_AGENT, url):
+                raise SessionStopped(f"robots.txt disallows {urlsplit(url).path}")
+            try:
+                resp = await get_capped(
+                    client,
+                    url,
+                    max_bytes=MAX_BYTES,
+                    headers=headers,
+                    timeout=timeout,
+                    follow_redirects=False,  # a redirect is a stop, and the cookie never follows
+                )
+            except httpx.HTTPError as exc:
+                failure = f"network error: {type(exc).__name__}: {self._redact(str(exc))}"
+        if failure is not None:  # raised outside `except`: no chained httpx error (whose request
+            logger.warning("culinary agents stopped: %s", failure)  # holds the cookie) rides along
+            raise SessionStopped(failure)
+        return self._check(resp)
+
+    def _check(self, resp: httpx.Response) -> str:
+        status = resp.status_code
+        stop: SessionStopped | None = None
+        if status in (401, 403):
+            stop = SessionStopped(f"http {status}", auth=True)
+        elif status == 429:
+            stop = SessionStopped("http 429 rate limited")
+        elif 300 <= status < 400:
+            target = urlsplit(resp.headers.get("location", "")).path
+            if target.startswith("/users/sign_in"):
+                stop = SessionStopped("sign-in redirect", auth=True)
+            else:
+                stop = SessionStopped(f"unexpected redirect (http {status}) to {target}")
+        elif status != 200:
+            stop = SessionStopped(f"http {status}")
+        elif not resp.text.strip():
+            stop = SessionStopped("empty page")
+        if stop is not None:
+            logger.warning("culinary agents stopped: %s", stop.reason)
+            raise stop
+        return resp.text
 
     async def _get(self, url: str) -> str | None:
         headers = {"User-Agent": USER_AGENT}
@@ -126,6 +295,8 @@ class PoliteFetcher:
             if not self._robots.can_fetch(USER_AGENT, url):
                 logger.warning("culinary agents: robots.txt disallows %s", url)
                 return None
+            if self._cookie:
+                headers = {**headers, "Cookie": self._cookie}
             try:
                 resp = await get_capped(
                     client,
@@ -133,10 +304,12 @@ class PoliteFetcher:
                     max_bytes=MAX_BYTES,
                     headers=headers,
                     timeout=timeout,
-                    follow_redirects=True,
+                    follow_redirects=not self._cookie,
                 )
             except httpx.HTTPError as exc:
-                logger.warning("culinary agents fetch failed: url=%s error=%s", url, exc)
+                logger.warning(
+                    "culinary agents fetch failed: url=%s error=%s", url, self._redact(str(exc))
+                )
                 return None
         if resp.status_code != 200 or not is_fetchable(str(resp.url)):
             logger.warning(
@@ -188,7 +361,21 @@ def _text(node: LexborNode | None) -> str:
     return " ".join(node.text().split()) if node is not None else ""
 
 
+def _absolute_date(text: str) -> date | None:
+    for fmt in ("%b %d, %Y", "%B %d, %Y", "%b %d %Y", "%B %d %Y", "%m/%d/%Y"):
+        try:
+            return datetime.strptime(text.replace(".", ""), fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
 def _posted(text: str, today: date) -> date | None:
+    """The posting date: absolute ("Posted on Nov 10, 2026", logged-in cards) when shown, else
+    derived from a relative age ("Posted 3 days ago")."""
+    absolute = _POSTED_ABS.search(text)
+    if absolute and (day := _absolute_date(absolute.group(1))) is not None:
+        return day
     match = _POSTED.search(text)
     if match:
         n, unit = int(match.group(1)), match.group(2).lower()
@@ -218,6 +405,8 @@ def _job_from_card(card: LexborNode, today: date, opening_soon: bool) -> CAJob |
         save = card.css_first("a.js-action")
         ident = entity_id(save.attributes.get("href") or "") if save is not None else None
     tags = card.css_first(".my-job-tags")
+    job_id = _JOB_ID.search(urlsplit(href).path)
+    sponsored = (anchor.attributes.get("data-sponsored") or "").lower() == "true"
     return CAJob(
         company=company,
         company_url=f"{BASE}/entities/{ident}" if ident else "",
@@ -227,6 +416,8 @@ def _job_from_card(card: LexborNode, today: date, opening_soon: bool) -> CAJob |
         posted=_posted(_text(tags), today),
         url=urljoin(BASE, urlsplit(href).path),
         opening_soon=opening_soon,
+        job_id=job_id.group(1) if job_id else None,
+        sponsored=sponsored or _text(tags).lower() == "sponsored",
     )
 
 
@@ -249,6 +440,49 @@ def parse_job_search(html: str, today: date, *, opening_soon: bool = False) -> l
             continue
         out.append(job)
     return out
+
+
+# A jQuery call whose single argument is one JS string literal: $("#x").append("...").
+_UJS_CALL = re.compile(
+    r"""\.(?:append|prepend|html|replaceWith)\(\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')\s*\)""",
+    re.DOTALL,
+)
+_JS_ESCAPE = re.compile(r'\\x([0-9a-fA-F]{2})|\\(.)|"', re.DOTALL)
+
+
+def _js_string(body: str) -> str:
+    """Decode a JS string literal's body with the JSON decoder (not `unicode_escape`, which
+    corrupts non-ASCII text): JS-only escapes (\\' \\` \\$ \\xHH) and raw double quotes from
+    single-quoted literals are first rewritten into JSON form."""
+
+    def to_json(m: re.Match[str]) -> str:
+        if m.group(1) is not None:
+            return f"\\u00{m.group(1)}"
+        if m.group(2) is None:
+            return '\\"'  # a raw double quote inside a single-quoted literal
+        char = m.group(2)
+        return char if char in "'`$" else m.group(0)
+
+    return json.loads(f'"{_JS_ESCAPE.sub(to_json, body)}"', strict=False)
+
+
+def extract_ujs_html(js_text: str) -> str:
+    """The HTML a Rails UJS response injects: every `.append("...")` / `.html("...")` string,
+    decoded and joined. Raw HTML passes through unchanged; anything else gives "".
+
+    The only function that knows the XHR response shape, so it is the one to change if the
+    live response differs from the synthetic fixtures.
+    """
+    if js_text.lstrip().startswith("<"):
+        return js_text
+    parts: list[str] = []
+    for m in _UJS_CALL.finditer(js_text):
+        body = m.group(1) if m.group(1) is not None else m.group(2)
+        try:
+            parts.append(_js_string(body))
+        except ValueError:
+            logger.warning("culinary agents: undecodable UJS string skipped")
+    return "".join(parts)
 
 
 def _company_from_card(card: LexborNode) -> CACompany | None:
@@ -426,6 +660,218 @@ def fetch_nyc(
         logger.warning("culinary agents stopped: %s", exc)
         enriched = list(companies.values())
     return list(jobs.values()), enriched
+
+
+# ---- logged-in walk ---------------------------------------------------------------------------
+
+
+class SearchPage(BaseModel):
+    """One page of a logged-in search: its number and the cards on it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    page: int
+    jobs: tuple[CAJob, ...] = ()
+    companies: tuple[CACompany, ...] = ()
+
+
+def iter_search_pages(
+    kind: str,
+    location: str,
+    fetch: SessionFetch,
+    budget: CallBudget,
+    *,
+    opening_soon: bool,
+    cfg: CulinaryAgentsConfig,
+    today: date,
+    pace: Callable[[], None] = lambda: None,
+    max_pages: int | None = None,
+) -> Iterator[SearchPage]:
+    """Parsed cards page by page (`kind` is "jobs" or "companies"), newest first.
+
+    Page 1 is HTML (it also carries the session's CSRF token); later pages are UJS XHR
+    responses. Ends at the first page with no cards or at `max_pages`; an empty first page or an
+    unrecognised XHR response is a stop (`SessionStopped`), since NYC always has listings.
+    The budget is spent before every request.
+    """
+    sponsored_so_far = 0
+    for page in range(1, (max_pages or cfg.max_pages_per_search) + 1):
+        url = session_search_url(
+            kind, location, page, sponsored_so_far, cfg, opening_soon=opening_soon
+        )
+        budget.spend()  # raises BudgetExceeded before the request over the limit goes out
+        pace()
+        text = fetch(url, page > 1)
+        html = extract_ujs_html(text) if page > 1 else text
+        if page > 1 and not html and ".append(" not in text and ".html(" not in text:
+            raise SessionStopped(f"unrecognised XHR response on {kind} page {page}")
+        if kind == "companies":
+            found = SearchPage(page=page, companies=tuple(parse_company_search(html)))
+        else:
+            jobs = tuple(parse_job_search(html, today, opening_soon=opening_soon))
+            sponsored_so_far += sum(j.sponsored for j in jobs)
+            found = SearchPage(page=page, jobs=jobs)
+        if not found.jobs and not found.companies:
+            if page == 1:
+                raise SessionStopped(f"empty page ({kind} page 1 has no cards)")
+            return
+        yield found
+
+
+class WalkResult(BaseModel):
+    """What one logged-in run read, and why it ended."""
+
+    model_config = ConfigDict(frozen=True)
+
+    jobs: tuple[CAJob, ...]
+    companies: tuple[CACompany, ...]
+    seen: tuple[CASeen, ...]  # every item seen this run, first_seen kept from earlier runs
+    pages: int
+    new_jobs: int
+    new_companies: int
+    private_skipped: int
+    early_exit: tuple[str, ...]  # "<search> page N" for each search the daily rule stopped
+    stopped: str  # "" when the walk finished; else the stop reason
+    auth_failure: bool
+
+
+_SEARCHES: tuple[tuple[str, bool, str], ...] = (
+    ("jobs", False, "jobs"),
+    ("jobs", True, "opening-soon jobs"),
+    ("companies", True, "opening-soon companies"),
+)
+
+
+def walk_nyc(
+    cfg: CulinaryAgentsConfig,
+    budget: CallBudget,
+    fetch: SessionFetch,
+    seen: Mapping[str, CASeen],
+    today: date,
+    *,
+    backfill: bool,
+    sleep: Callable[[float], None] = time.sleep,
+    known_companies: Mapping[str, CACompany] | None = None,
+) -> WalkResult:
+    """The logged-in walk over each location's job, opening-soon job and opening-soon company
+    searches, then opening-soon company profiles.
+
+    Daily mode stops a search after `daily_stop_after_known` consecutive organic items already
+    in `seen` (sponsored cards neither count nor reset the run). Backfill walks every page up to
+    `max_pages_per_search`. A stop keeps what was fetched; already-seen items keep `first_seen`,
+    so a crashed backfill resumes for free.
+    """
+    pace = _Pacer(cfg.delay_seconds, sleep)
+    known_companies = known_companies or {}
+    jobs: dict[str, CAJob] = {}
+    companies: dict[str, CACompany] = {}
+    touched: dict[str, CASeen] = {}
+    exits: list[str] = []
+    private = 0
+    stopped, auth = "", False
+
+    def touch(key: str) -> bool:
+        """Record `key` as seen today; True when an earlier run had already seen it."""
+        before = seen.get(key)
+        record = touched.get(key) or before
+        touched[key] = (
+            record.model_copy(update={"last_seen": today})
+            if record
+            else CASeen(key=key, first_seen=today, last_seen=today)
+        )
+        return before is not None
+
+    try:
+        for location in cfg.locations:
+            for kind, soon, label in _SEARCHES:
+                run_known = 0
+                for found in iter_search_pages(
+                    kind,
+                    location,
+                    fetch,
+                    budget,
+                    opening_soon=soon,
+                    cfg=cfg,
+                    today=today,
+                    pace=pace,
+                ):
+                    kept, skipped = drop_private_listings(found.jobs)
+                    private += skipped
+                    for job in kept:
+                        key = job_key(job)
+                        known = touch(key)
+                        if soon or key not in jobs:
+                            jobs[key] = job  # the opening-soon copy carries the flag
+                        if not job.sponsored:
+                            run_known = run_known + 1 if known else 0
+                    for company in found.companies:
+                        key = company_key(company)
+                        known = touch(key)
+                        companies.setdefault(key, company)
+                        run_known = run_known + 1 if known else 0
+                    if not backfill and run_known >= cfg.daily_stop_after_known:
+                        exits.append(f"{label} page {found.page}")
+                        break
+                if soon and kind == "jobs":
+                    for job in jobs.values():  # an opening-soon employer is an opening company
+                        if job.opening_soon and job.company_url:
+                            derived = _company_from_job(job)
+                            key = company_key(derived)
+                            if key not in companies:
+                                touch(key)
+                                companies[key] = derived
+        _profiles(companies, touched, known_companies, cfg, budget, fetch, pace, today)
+    except SessionStopped as exc:
+        stopped, auth = exc.reason, exc.auth
+    except BudgetExceeded as exc:
+        stopped = str(exc)
+    return WalkResult(
+        jobs=tuple(jobs.values()),
+        companies=tuple(companies.values()),
+        seen=tuple(touched.values()),
+        pages=budget.used,
+        new_jobs=sum(k not in seen for k in jobs),
+        new_companies=sum(k not in seen for k, c in companies.items() if c.opening_soon),
+        private_skipped=private,
+        early_exit=tuple(exits),
+        stopped=stopped,
+        auth_failure=auth,
+    )
+
+
+def _profiles(
+    companies: dict[str, CACompany],
+    touched: dict[str, CASeen],
+    known: Mapping[str, CACompany],
+    cfg: CulinaryAgentsConfig,
+    budget: CallBudget,
+    fetch: SessionFetch,
+    pace: Callable[[], None],
+    today: date,
+) -> None:
+    """Opening-soon company profiles for a website, each fetched once and not again while the
+    last fetch is under `profile_refresh_days` old (the stored website is reused)."""
+    fetched = 0
+    for key, company in list(companies.items()):
+        if not company.opening_soon or company.website or not is_fetchable(company.url):
+            continue
+        record = touched.get(key)
+        last = record.profile_fetched_on if record else None
+        if last is not None and (today - last).days < cfg.profile_refresh_days:
+            stored = known.get(key)
+            if stored is not None and stored.website:
+                companies[key] = company.model_copy(update={"website": stored.website})
+            continue
+        if fetched >= cfg.max_company_pages:
+            break
+        budget.spend()
+        pace()
+        page = parse_company(fetch(company.url, False), company.url)
+        fetched += 1
+        if record is not None:
+            touched[key] = record.model_copy(update={"profile_fetched_on": today})
+        if page is not None and page.website:
+            companies[key] = company.model_copy(update={"website": page.website})
 
 
 # ---- matching and signals -------------------------------------------------------------------

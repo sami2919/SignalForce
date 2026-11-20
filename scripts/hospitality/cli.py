@@ -52,6 +52,9 @@ from scripts.hospitality.messages.judge import judge
 from scripts.hospitality.models import (
     BacktestResult,
     BenchmarkResult,
+    CACompany,
+    CAJob,
+    CASeen,
     CaseReplay,
     Contact,
     CurveRecord,
@@ -98,7 +101,18 @@ from scripts.hospitality.scoring import (
     score_group,
 )
 from scripts.hospitality.signals import license_signals
-from scripts.hospitality.sources.culinary_agents import Fetch, PoliteFetcher, fetch_nyc, to_signals
+from scripts.hospitality.sources.culinary_agents import (
+    COOKIE_ENV,
+    SESSION_EXPIRED,
+    Fetch,
+    PoliteFetcher,
+    SessionFetch,
+    company_key,
+    fetch_nyc,
+    job_key,
+    to_signals,
+    walk_nyc,
+)
 from scripts.hospitality.sources.dohmh import (
     fetch_first_inspections,
     fetch_never_inspected,
@@ -1033,18 +1047,48 @@ def press(days: int = 120, today: date | None = None) -> dict[str, object]:
     }
 
 
+CA_LOGGED_IN_REFUSAL = (
+    "Logged-in Culinary Agents mode is off. The Culinary Agents user agreement (§7) bans robots "
+    "and scrapers for any purpose without written permission and limits accounts to personal "
+    "use; running this risks a banned account or a legal letter, a risk only the operator can "
+    "accept. To run it: set culinary_agents.enabled and culinary_agents.authenticated to true "
+    "in your local hospitality config and put a fresh session cookie in the "
+    "CULINARY_AGENTS_COOKIE environment variable (never in a file you commit or in chat)."
+)
+
+
 def culinary_agents(
     fetch: Fetch | None = None,
     today: date | None = None,
     sleep: Callable[[float], None] = time.sleep,
+    *,
+    session_fetch: SessionFetch | None = None,
+    backfill: bool = False,
+    max_pages: int | None = None,
 ) -> dict[str, object]:
-    """Culinary Agents hiring / opening-soon signals and group evidence; merge groups, rescore."""
+    """Culinary Agents hiring / opening-soon signals and group evidence; merge groups, rescore.
+
+    Public mode reads page 1 of each search. Logged-in mode (`culinary_agents.authenticated`,
+    or `--backfill` / `--max-pages`) walks the paginated XHR search with the operator's session.
+    """
     cfg = load_config()
     if not cfg.culinary_agents.enabled:  # fail fast, before touching the store or the network
         raise SystemExit(
             "The Culinary Agents source is disabled. Its user agreement appears to restrict "
             "automated data collection: review https://culinaryagents.com/agreement, then set "
             "culinary_agents.enabled: true in the hospitality config to run it."
+        )
+    if cfg.culinary_agents.authenticated or backfill or max_pages is not None:
+        cookie = os.environ.get(COOKIE_ENV, "").strip()
+        if not cfg.culinary_agents.authenticated or not cookie:
+            raise SystemExit(CA_LOGGED_IN_REFUSAL)
+        return _culinary_agents_logged_in(
+            cfg,
+            session_fetch or PoliteFetcher(cookie=cookie).page,
+            today,
+            sleep,
+            backfill,
+            max_pages,
         )
     today = today or date.today()
     store = DocStore()
@@ -1067,6 +1111,77 @@ def culinary_agents(
         "stopped": f"culinary_agents page budget spent ({budget.limit}); results may be partial"
         if spent
         else "",
+        "scored_groups": scored["scored_groups"],
+    }
+
+
+def _culinary_agents_logged_in(
+    cfg: HospitalityConfig,
+    fetch: SessionFetch,
+    today: date | None,
+    sleep: Callable[[float], None],
+    backfill: bool,
+    max_pages: int | None,
+) -> dict[str, object]:
+    """Backfill once (`--backfill`), then a daily delta that stops at already-seen items.
+
+    Seen items (`ca_seen`), jobs (`ca_jobs`) and companies (`ca_companies`) are stored so the
+    next run skips what it knows, `first_seen` dates signals and hiring bursts span runs.
+    """
+    today = today or date.today()
+    store = DocStore()
+    venues = store.load("venues", Venue)
+    groups = store.load("groups", Group)
+    name = "culinary_agents_backfill" if backfill else "culinary_agents"
+    limit = cfg.budgets.get(name, 150 if backfill else 40)
+    if max_pages is not None:
+        limit = min(limit, max_pages)
+    budget = CallBudget(name, limit)
+    seen = {s.key: s for s in store.load("ca_seen", CASeen)}
+    stored_jobs = {job_key(j): j for j in store.load("ca_jobs", CAJob)}
+    stored_companies = {company_key(c): c for c in store.load("ca_companies", CACompany)}
+    walk = walk_nyc(
+        cfg.culinary_agents,
+        budget,
+        fetch,
+        seen,
+        today,
+        backfill=backfill,
+        sleep=sleep,
+        known_companies=stored_companies,
+    )
+    store.save("ca_seen", list(walk.seen), key=lambda s: s.key)  # type: ignore[attr-defined]
+    store.save("ca_jobs", list(walk.jobs), key=job_key)  # type: ignore[arg-type]
+    store.save("ca_companies", list(walk.companies), key=company_key)  # type: ignore[arg-type]
+    all_jobs = list({**stored_jobs, **{job_key(j): j for j in walk.jobs}}.values())
+    all_companies = list(
+        {**stored_companies, **{company_key(c): c for c in walk.companies}}.values()
+    )
+    first_seen = {**{k: s.first_seen for k, s in seen.items()}}
+    first_seen |= {s.key: s.first_seen for s in walk.seen}
+    signals, evidence = to_signals(
+        all_jobs, all_companies, venues, groups, today, cfg.culinary_agents, first_seen
+    )
+    store.save("signals", signals, key=lambda s: s.signal_id)  # type: ignore[attr-defined]
+    store.save("group_evidence", evidence, key=_evidence_key)  # type: ignore[arg-type]
+    _regroup(store, cfg, venues, store.load("licenses", LicenseRecord))
+    scored = score()
+    stopped = walk.stopped
+    if max_pages is not None and "budget exhausted" in stopped:
+        stopped = f"page cap reached (--max-pages {max_pages})"
+    if walk.auth_failure:
+        stopped = f"{stopped}; {SESSION_EXPIRED}"
+    return {
+        "mode": "backfill" if backfill else "daily",
+        "budget": limit,
+        "pages": walk.pages,
+        "new_jobs": walk.new_jobs,
+        "new_opening_soon_companies": walk.new_companies,
+        "private_listings_skipped": walk.private_skipped,
+        "early_exit": ", ".join(walk.early_exit),
+        "stopped": stopped,
+        "signals": len(signals),
+        "evidence": len(evidence),
         "scored_groups": scored["scored_groups"],
     }
 
@@ -1399,9 +1514,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     p_press.add_argument(
         "--days", type=int, default=120, help="Search articles from the last N days"
     )
-    sub.add_parser(
+    p_ca = sub.add_parser(
         "culinary-agents",
         help="Culinary Agents hiring / opening-soon signals (disabled unless configured)",
+    )
+    p_ca.add_argument(
+        "--backfill",
+        action="store_true",
+        help="Logged-in: walk every page once (budgets.culinary_agents_backfill)",
+    )
+    p_ca.add_argument(
+        "--max-pages", type=int, help="Logged-in: fetch at most this many pages in this run"
     )
     p_contacts = sub.add_parser("contacts", help="Contacts for top prospects (team page, Hunter)")
     p_contacts.add_argument("--top", type=int, default=25, help="Top N ranked prospects")
@@ -1488,7 +1611,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         for name, value in press(args.days).items():
             print(f"{name}: {value}")
     elif args.command == "culinary-agents":
-        for name, value in culinary_agents().items():
+        for name, value in culinary_agents(
+            backfill=args.backfill, max_pages=args.max_pages
+        ).items():
             print(f"{name}: {value}")
     elif args.command == "contacts":
         for name, value in contacts(args.top).items():

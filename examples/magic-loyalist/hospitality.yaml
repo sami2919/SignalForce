@@ -88,7 +88,7 @@ website_match_min_name_similarity: 0.6
 # Sum 1.10; fit is capped at 1.0, so only a group meeting every criterion reaches the cap.
 fit_weights: {multi_venue: 0.30, reservation_platform: 0.30, events_program: 0.15, accolade: 0.15, full_service_class: 0.10, fine_dining_service: 0.10}
 relationship_boost: 0.5
-budgets: {culinary_agents: 40, places: 400, firecrawl: 300, exa: 120, hunter: 40, clay: 25, claude_calls: 600}
+budgets: {culinary_agents: 40, culinary_agents_backfill: 150, places: 400, firecrawl: 300, exa: 120, hunter: 40, clay: 25, claude_calls: 600}
 models: {extract: claude-opus-5-5, draft: claude-opus-5-5, judge: claude-opus-5-5, baseline: claude-opus-5-5}
 match_max_distance_m: 40.0
 match_auto_threshold: 0.90
@@ -268,6 +268,16 @@ alumni_employers:
 # budget is budgets.culinary_agents, and nothing under /users is ever requested.
 culinary_agents:
   enabled: false
+  # Logged-in mode: your own session cookie in CULINARY_AGENTS_COOKIE (never in this file).
+  # The agreement (section 7) bans robots and scrapers without written permission and limits
+  # accounts to personal use: turning this on accepts a banned account or a legal letter.
+  # Keep it false here; turn it on locally. Daily run budget: budgets.culinary_agents;
+  # `--backfill` budget: budgets.culinary_agents_backfill.
+  authenticated: false
+  max_pages_per_search: 50
+  daily_stop_after_known: 15     # consecutive already-seen organic items before a daily run stops
+  segment_ids: ["13", "9", "2", "1"]   # captured defaults; confirm the labels on the first run
+  profile_refresh_days: 30
   locations: ["New York, NY"]   # 3 pages each; other strings (e.g. "Brooklyn, NY") are untested
   delay_seconds: 2.0
   max_company_pages: 10

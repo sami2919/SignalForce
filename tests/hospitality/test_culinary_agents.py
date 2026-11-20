@@ -1,4 +1,5 @@
 import logging
+import re
 from datetime import UTC, date, datetime
 from pathlib import Path
 
@@ -8,7 +9,7 @@ import pytest
 from scripts.hospitality import cli
 from scripts.hospitality.budget import CallBudget
 from scripts.hospitality.config import CulinaryAgentsConfig, load_config
-from scripts.hospitality.models import CAJob, Group, Signal, Venue
+from scripts.hospitality.models import CAJob, CASeen, Group, Signal, Venue
 from scripts.hospitality.resolve.groups import merge_groups
 from scripts.hospitality.scoring import rank_prospects, score_group
 from scripts.hospitality.sources import culinary_agents as ca
@@ -624,7 +625,7 @@ def test_polite_fetcher_fails_closed_when_robots_cannot_be_read(robots: str) -> 
 def test_fixtures_are_synthetic_not_captured_pages() -> None:
     """M14: the source's agreement appears to restrict automated collection and this repo is
     open source, so the fixtures mirror the page structure with invented businesses and text."""
-    for page in FIX.glob("*.html"):
+    for page in [*FIX.glob("*.html"), *FIX.glob("*.js.txt")]:
         html = page.read_text()
         assert "amazonaws.com" not in html, page.name  # no hot-linked source assets
         assert "SYNTHETIC FIXTURE" in html, page.name
@@ -822,3 +823,511 @@ def test_new_priors_and_types_load_and_old_role_hire_still_loads() -> None:
         {k: v for k, v in _job("Verdigris", "GM").model_dump().items() if k not in ("job_id",)}
     )
     assert old.sponsored is False
+
+
+# ---- logged-in mode: UJS extraction, pagination, stops, seen store ----
+
+COOKIE = "remember_user_token=SECRET-COOKIE-VALUE-123; _cagnts_session=SECRET-SESSION-456"
+AUTH_CFG = CulinaryAgentsConfig(
+    enabled=True,
+    authenticated=True,
+    locations=("New York, NY",),
+    max_company_pages=0,
+    daily_stop_after_known=15,
+)
+
+
+def test_extract_ujs_html_unescapes_a_js_string_literal() -> None:
+    js = (
+        '$("#js-jobs-result").append("<div class=\\"a\\">Chef\\\'s Table<\\/div>\\n'
+        '<span>Caf\\u00e9 \u015ctelo \\u2019</span>");\n'
+        '$("#load_more_btn").attr("href", "/search/jobs?page=3");'
+    )
+    html = ca.extract_ujs_html(js)
+    assert html == '<div class="a">Chef\'s Table</div>\n<span>Café Ŝtelo ’</span>'
+
+
+def test_extract_ujs_html_joins_calls_falls_back_to_html_and_rejects_unknown() -> None:
+    js = '$("#a").append("<p>one</p>");\n$("#b").html(\'<p>two "q"</p>\');'
+    assert ca.extract_ujs_html(js) == '<p>one</p><p>two "q"</p>'
+    assert ca.extract_ujs_html("  <div>already html</div>") == "  <div>already html</div>"
+    assert ca.extract_ujs_html('window.location = "/users/sign_in";') == ""
+    assert ca.extract_ujs_html(read("job_search_xhr_empty.js.txt")) == ""
+
+
+def test_xhr_fixture_cards_parse_with_sponsored_flag_job_id_and_unicode() -> None:
+    parsed = parse_job_search(ca.extract_ujs_html(read("job_search_xhr.js.txt")), TODAY)
+    by = {j.company: j for j in parsed}
+    assert len(parsed) == 6
+    cafe = by["Café Ŝtelo"]  # non-ASCII survives the JS-string decode
+    assert cafe.job_id == "9200001" and cafe.title == "Executive Chef"
+    assert cafe.group == "Ŝtelo Hospitality"
+    assert cafe.posted == date(2026, 11, 10)  # absolute date on a logged-in card
+    assert by["Chef's Table at Larkspur"].posted == date(2026, 11, 13)
+    assert by["Ambergate"].sponsored and by["Halden Hall"].sponsored
+    assert not cafe.sponsored
+    assert "ad_id" not in by["Ambergate"].url
+
+
+def test_session_search_urls_use_exactly_offset_page_and_sj_offset() -> None:
+    first = ca.session_search_url("jobs", "New York, NY", 1, 0, AUTH_CFG)
+    assert first == (
+        "https://culinaryagents.com/search/jobs?search[country]=US"
+        "&search[location]=New+York%2C+NY&search[segment_ids][]=13&search[segment_ids][]=9"
+        "&search[segment_ids][]=2&search[segment_ids][]=1"
+    )
+    second = ca.session_search_url("jobs", "New York, NY", 2, 4, AUTH_CFG)
+    assert second == (
+        "https://culinaryagents.com/search/jobs?offset=20&page=2&search[country]=US"
+        "&search[location]=New+York%2C+NY&search[segment_ids][]=13&search[segment_ids][]=9"
+        "&search[segment_ids][]=2&search[segment_ids][]=1&sj_offset=4"
+    )
+    soon = ca.session_search_url("jobs", "New York, NY", 3, 5, AUTH_CFG, opening_soon=True)
+    assert "offset=40&page=3" in soon and soon.endswith("&sj_offset=5")
+    assert "search[entity_status][]=opening_soon" in soon
+    companies = ca.session_search_url("companies", "New York, NY", 2, 0, AUTH_CFG)
+    assert companies.startswith("https://culinaryagents.com/companies/search?offset=20&page=2")
+    assert "search[open_status][]=opening_soon" in companies and "sj_offset" not in companies
+    assert all(is_fetchable(u) for u in (first, second, soon, companies))
+
+
+class FakeSession:
+    """Serves the synthetic logged-in pages: page 1 HTML, page 2 UJS, page 3 empty UJS."""
+
+    def __init__(self, overrides: dict[int, str] | None = None) -> None:
+        self.calls: list[tuple[str, bool]] = []
+        self.overrides = overrides or {}
+
+    def __call__(self, url: str, xhr: bool) -> str:
+        self.calls.append((url, xhr))
+        n = len(self.calls)
+        if n in self.overrides:
+            raise ca.SessionStopped(self.overrides[n], auth="401" in self.overrides[n])
+        page = int(re.search(r"[?&]page=(\d+)", url).group(1)) if "page=" in url else 1
+        if "/entities/" in url:
+            return read("company_page.html")
+        if "/companies/search" in url:
+            if page == 1:
+                return read("company_search_opening_soon.html")
+            return read("job_search_xhr_empty.js.txt")
+        return {1: read("job_search_logged_in.html"), 2: read("job_search_xhr.js.txt")}.get(
+            page, read("job_search_xhr_empty.js.txt")
+        )
+
+
+def test_iter_search_pages_walks_until_an_empty_page_and_tracks_sj_offset() -> None:
+    session = FakeSession()
+    budget = CallBudget("ca", 50)
+    pages = list(
+        ca.iter_search_pages(
+            "jobs", "New York, NY", session, budget, opening_soon=False, cfg=AUTH_CFG, today=TODAY
+        )
+    )
+    assert [p.page for p in pages] == [1, 2]
+    assert budget.used == 3  # the empty page 3 was fetched, then the walk ended
+    urls = [u for u, _ in session.calls]
+    assert [x for _, x in session.calls] == [False, True, True]  # page 1 is HTML, then XHR
+    assert "offset=20&page=2" in urls[1] and urls[1].endswith("sj_offset=1")  # 1 sponsored
+    assert "offset=40&page=3" in urls[2] and urls[2].endswith("sj_offset=3")  # 1 + 2
+
+
+def test_iter_search_pages_respects_max_pages_and_spends_before_each_fetch() -> None:
+    budget = CallBudget("ca", 50)
+    spent: list[int] = []
+    inner = FakeSession()
+
+    def session(url: str, xhr: bool) -> str:
+        spent.append(budget.used)
+        return inner(url, xhr)
+
+    pages = list(
+        ca.iter_search_pages(
+            "jobs",
+            "New York, NY",
+            session,
+            budget,
+            opening_soon=False,
+            cfg=AUTH_CFG,
+            today=TODAY,
+            max_pages=1,
+        )
+    )
+    assert len(pages) == 1 and spent == [1]
+
+
+def test_empty_first_page_is_a_stop_not_an_end() -> None:
+    with pytest.raises(ca.SessionStopped, match="empty page"):
+        list(
+            ca.iter_search_pages(
+                "jobs",
+                "New York, NY",
+                lambda u, x: "<html><body>no cards</body></html>",
+                CallBudget("ca", 5),
+                opening_soon=False,
+                cfg=AUTH_CFG,
+                today=TODAY,
+            )
+        )
+
+
+def test_unrecognised_xhr_response_is_a_stop() -> None:
+    def session(url: str, xhr: bool) -> str:
+        return read("job_search_logged_in.html") if not xhr else 'window.location="/x";'
+
+    with pytest.raises(ca.SessionStopped, match="unrecognised"):
+        list(
+            ca.iter_search_pages(
+                "jobs",
+                "New York, NY",
+                session,
+                CallBudget("ca", 5),
+                opening_soon=False,
+                cfg=AUTH_CFG,
+                today=TODAY,
+            )
+        )
+
+
+def _session_fetcher(handler, cookie: str = COOKIE) -> PoliteFetcher:
+    return PoliteFetcher(
+        client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        cookie=cookie,
+    )
+
+
+def _robots_ok(request: httpx.Request) -> httpx.Response | None:
+    if request.url.path == "/robots.txt":
+        return httpx.Response(200, text="User-agent: *\nDisallow: /users\n")
+    return None
+
+
+def test_session_fetcher_sends_cookie_xhr_headers_and_csrf_from_page_one() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if (r := _robots_ok(request)) is not None:
+            return r
+        if request.url.params.get("page") == "2":
+            return httpx.Response(200, text=read("job_search_xhr.js.txt"))
+        return httpx.Response(200, text=read("job_search_logged_in.html"))
+
+    f = _session_fetcher(handler)
+    page1 = ca.session_search_url("jobs", "New York, NY", 1, 0, AUTH_CFG)
+    page2 = ca.session_search_url("jobs", "New York, NY", 2, 1, AUTH_CFG)
+    assert "csrf-token" in f.page(page1)
+    assert ".append(" in f.page(page2, xhr=True)
+    robots, first, second = seen
+    assert "cookie" not in robots.headers  # the session never goes to robots.txt
+    assert first.headers["cookie"] == COOKIE and "x-csrf-token" not in first.headers
+    assert second.headers["cookie"] == COOKIE
+    assert second.headers["x-requested-with"] == "XMLHttpRequest"
+    assert second.headers["accept"].startswith("text/javascript")
+    assert second.headers["x-csrf-token"] == "SYNTHETIC-CSRF-TOKEN-0000"
+    assert second.headers["user-agent"] == ca.USER_AGENT  # honest UA, no impersonation
+
+
+def test_session_fetcher_refuses_xhr_without_a_csrf_token() -> None:
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.path)
+        return _robots_ok(request) or httpx.Response(200, text="x")
+
+    f = _session_fetcher(handler)
+    with pytest.raises(ca.SessionStopped, match="csrf"):
+        f.page(ca.session_search_url("jobs", "New York, NY", 2, 0, AUTH_CFG), xhr=True)
+    assert seen == []  # nothing went out, not even robots.txt
+
+
+@pytest.mark.parametrize(
+    ("response", "reason", "auth"),
+    [
+        (httpx.Response(401), "401", True),
+        (httpx.Response(403), "403", True),
+        (httpx.Response(429), "429", False),
+        (
+            httpx.Response(302, headers={"location": "https://culinaryagents.com/users/sign_in"}),
+            "sign-in redirect",
+            True,
+        ),
+        (httpx.Response(200, text="   \n"), "empty page", False),
+    ],
+)
+def test_session_fetcher_stops_without_retry_and_never_leaks_the_cookie(
+    response: httpx.Response, reason: str, auth: bool, caplog
+) -> None:
+    pages: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if (r := _robots_ok(request)) is not None:
+            return r
+        pages.append(str(request.url))
+        return response
+
+    f = _session_fetcher(handler)
+    with caplog.at_level(logging.DEBUG), pytest.raises(ca.SessionStopped) as info:
+        f.page(ca.session_search_url("jobs", "New York, NY", 1, 0, AUTH_CFG))
+    assert len(pages) == 1  # stopped, never retried
+    assert reason in info.value.reason and info.value.auth is auth
+    for text in (str(info.value), repr(info.value), info.value.reason, caplog.text):
+        assert "SECRET" not in text
+    assert info.value.__cause__ is None and info.value.__context__ is None
+
+
+def test_session_fetcher_network_error_never_leaks_the_cookie(caplog) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if (r := _robots_ok(request)) is not None:
+            return r
+        raise httpx.ConnectError(f"down; headers were {request.headers.get('cookie')}")
+
+    f = _session_fetcher(handler)
+    with caplog.at_level(logging.DEBUG), pytest.raises(ca.SessionStopped) as info:
+        f.page(ca.session_search_url("jobs", "New York, NY", 1, 0, AUTH_CFG))
+    assert "network error" in info.value.reason
+    for text in (str(info.value), caplog.text):
+        assert "SECRET" not in text
+    assert info.value.__cause__ is None and info.value.__context__ is None
+
+
+def test_session_fetcher_keeps_the_public_guarantees() -> None:
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.path)
+        if request.url.path == "/robots.txt":
+            return httpx.Response(503)
+        return httpx.Response(200, text="<html>ok</html>")
+
+    f = _session_fetcher(handler)
+    with pytest.raises(ca.SessionStopped, match="robots"):
+        f.page("https://culinaryagents.com/search/jobs?x=1")
+    with pytest.raises(ca.SessionStopped, match="refused"):
+        f.page("https://culinaryagents.com/users/sign_in")
+    assert seen == ["/robots.txt"]  # robots fails closed; /users never requested
+
+
+def _walk(seen=None, cfg=AUTH_CFG, session=None, backfill=False, budget=None, known=None):
+    return ca.walk_nyc(
+        cfg,
+        budget or CallBudget("ca", 60),
+        session or FakeSession(),
+        seen or {},
+        TODAY,
+        backfill=backfill,
+        sleep=lambda s: None,
+        known_companies=known or {},
+    )
+
+
+def test_walk_collects_new_items_flags_sponsored_and_counts_private_listings() -> None:
+    out = _walk()
+    assert out.pages == 8  # jobs 3 + opening-soon jobs 3 + companies 2
+    assert out.stopped == "" and out.early_exit == ()
+    keys = {ca.job_key(j) for j in out.jobs}
+    assert len(keys) == len(out.jobs)  # de-duplicated by job id
+    assert out.private_skipped >= 1
+    assert not any(ca.is_private_listing(j) for j in out.jobs)
+    assert out.new_jobs == len(out.jobs)
+    assert out.new_companies == sum(c.opening_soon for c in out.companies) > 0
+    assert {s.key for s in out.seen} >= keys
+    assert all(s.first_seen == TODAY == s.last_seen for s in out.seen)
+
+
+def test_daily_mode_exits_early_after_n_known_organic_items_ignoring_sponsored() -> None:
+    seen = {
+        k: CASeen(key=k, first_seen=date(2026, 11, 1), last_seen=date(2026, 11, 15))
+        for k in ("job:9100101", "job:9100103")  # page 1's two organic jobs; sponsored is new
+    }
+    cfg = AUTH_CFG.model_copy(update={"daily_stop_after_known": 2})
+    session = FakeSession()
+    out = _walk(seen, cfg, session)
+    job_pages = [u for u, _ in session.calls if "/search/jobs" in u]
+    assert len(job_pages) == 2  # page 1 of each job search, no XHR page
+    assert out.early_exit == ("jobs page 1", "opening-soon jobs page 1")
+    assert out.new_jobs == 1  # only the sponsored card was new
+    kept = next(s for s in out.seen if s.key == "job:9100101")
+    assert kept.first_seen == date(2026, 11, 1) and kept.last_seen == TODAY
+
+
+def test_sponsored_items_alone_never_trigger_the_early_exit() -> None:
+    seen = {"job:9100102": CASeen(key="job:9100102", first_seen=TODAY, last_seen=TODAY)}
+    cfg = AUTH_CFG.model_copy(update={"daily_stop_after_known": 1})
+    out = _walk(seen, cfg)
+    assert out.early_exit == ()  # the one known item was sponsored
+
+
+def test_backfill_ignores_the_early_exit_and_resumes_from_ca_seen() -> None:
+    cfg = AUTH_CFG.model_copy(update={"daily_stop_after_known": 1})
+    crashed = _walk(cfg=cfg, session=FakeSession({2: "http 429 rate limited"}), backfill=True)
+    assert crashed.pages == 2 and "429" in crashed.stopped and not crashed.auth_failure
+    assert crashed.jobs  # what was fetched before the stop is kept
+    seen = {s.key: s.model_copy(update={"first_seen": date(2026, 11, 2)}) for s in crashed.seen}
+    resumed = _walk(seen, cfg, backfill=True)
+    assert resumed.early_exit == () and resumed.stopped == ""
+    assert resumed.new_jobs == len(resumed.jobs) - len(crashed.jobs)
+    for s in resumed.seen:
+        if s.key in seen:
+            assert s.first_seen == date(2026, 11, 2)  # resumed, not re-dated
+        else:
+            assert s.first_seen == TODAY
+
+
+def test_walk_records_auth_stop_and_keeps_what_was_fetched() -> None:
+    out = _walk(session=FakeSession({3: "http 401"}))
+    assert out.auth_failure and "401" in out.stopped
+    assert out.pages == 3 and out.jobs
+
+
+def test_profiles_fetched_once_and_not_refetched_within_30_days() -> None:
+    cfg = AUTH_CFG.model_copy(update={"max_company_pages": 10})
+    session = FakeSession()
+    first = _walk(cfg=cfg, session=session)
+    profiles = [u for u, _ in session.calls if "/entities/" in u]
+    assert profiles and all(not x for u, x in session.calls if "/entities/" in u)
+    assert all(
+        s.profile_fetched_on == TODAY
+        for s in first.seen
+        if s.key in {ca.company_key(c) for c in first.companies if c.website}
+    )
+    seen = {
+        s.key: s.model_copy(update={"profile_fetched_on": date(2026, 11, 1)}) for s in first.seen
+    }
+    known = {ca.company_key(c): c for c in first.companies}
+    again = FakeSession()
+    second = _walk(seen, cfg, again, known=known)
+    assert not [u for u, _ in again.calls if "/entities/" in u]  # fetched 15 days ago
+    websites = {c.name: c.website for c in second.companies if c.website}
+    assert websites == {c.name: c.website for c in first.companies if c.website}
+    stale = {
+        k: s.model_copy(update={"profile_fetched_on": date(2026, 10, 1)}) for k, s in seen.items()
+    }
+    third = FakeSession()
+    _walk(stale, cfg, third, known=known)
+    assert [u for u, _ in third.calls if "/entities/" in u]  # 46 days old: refreshed
+
+
+def test_first_seen_is_the_signal_date() -> None:
+    co = _co("Verdigris", opening_soon=True, locations=("13 Example Street, New York, NY",))
+    job = _job("Verdigris", "Executive Chef", posted=None, job_id="77")
+    first = {ca.company_key(co): date(2026, 11, 3), ca.job_key(job): date(2026, 11, 5)}
+    sigs, _ = to_signals([job], [co], [VERDIGRIS], [], TODAY, CFG, first_seen=first)
+    by = {s.signal_type: s for s in sigs}
+    assert by["opening_soon"].occurred_at == datetime(2026, 11, 3, tzinfo=UTC)
+    assert by["new_chef"].occurred_at == datetime(2026, 11, 5, tzinfo=UTC)
+    dated = _job("Verdigris", "Executive Chef", posted=date(2026, 11, 1), job_id="77")
+    sigs, _ = to_signals([dated], [], [VERDIGRIS], [], TODAY, CFG, first_seen=first)
+    assert sigs[0].occurred_at == datetime(2026, 11, 1, tzinfo=UTC)  # a posting date wins
+
+
+# ---- logged-in CLI ----
+
+
+def _auth_cfg(**kw):
+    base = load_config()
+    ca_cfg = CulinaryAgentsConfig(
+        enabled=True, locations=("New York, NY",), max_company_pages=0, **kw
+    )
+    return base.model_copy(update={"culinary_agents": ca_cfg})
+
+
+@pytest.mark.parametrize(
+    ("authenticated", "cookie", "kwargs"),
+    [
+        (False, COOKIE, {"backfill": True}),
+        (False, COOKIE, {"max_pages": 2}),
+        (True, None, {}),
+        (True, "", {"backfill": True}),
+    ],
+)
+def test_cli_refuses_logged_in_mode_without_authenticated_or_cookie(
+    monkeypatch, authenticated, cookie, kwargs
+) -> None:
+    monkeypatch.setattr(cli, "load_config", lambda: _auth_cfg(authenticated=authenticated))
+    monkeypatch.setattr(cli, "DocStore", lambda: pytest.fail("touched the store"))
+    if cookie is None:
+        monkeypatch.delenv("CULINARY_AGENTS_COOKIE", raising=False)
+    else:
+        monkeypatch.setenv("CULINARY_AGENTS_COOKIE", cookie)
+    session = FakeSession()
+    with pytest.raises(SystemExit) as info:
+        cli.culinary_agents(session_fetch=session, today=TODAY, sleep=lambda s: None, **kwargs)
+    msg = str(info.value)
+    assert "§7" in msg and "risk" in msg
+    assert "SECRET" not in msg
+    assert session.calls == []
+
+
+def _auth_store(monkeypatch, tmp_path, **cfg_kw):
+    from scripts.hospitality.store import DocStore
+
+    store = DocStore(f"sqlite:///{tmp_path}/m.db")
+    venues = [
+        make_venue("v:verdigris", name="Verdigris", address="13 EXAMPLE ST"),
+        make_venue("v:quillon", name="Quillon", address="44 FIXTURE PL"),
+        make_venue("v:marinella", name="Marinella", address="149 SAMPLE ST"),
+    ]
+    store.save("venues", venues, key=lambda v: v.venue_id)
+    store.save(
+        "groups",
+        [
+            Group(
+                group_id=f"g:{v.venue_id}",
+                name=v.name,
+                venue_ids=(v.venue_id,),
+                resolution="singleton",
+            )
+            for v in venues
+        ],
+        key=lambda g: g.group_id,
+    )
+    monkeypatch.setattr(cli, "DocStore", lambda: store)
+    monkeypatch.setattr(cli, "load_config", lambda: _auth_cfg(authenticated=True, **cfg_kw))
+    monkeypatch.setattr(cli, "score", lambda: {"scored_groups": 3})
+    monkeypatch.setenv("CULINARY_AGENTS_COOKIE", COOKIE)
+    return store
+
+
+def test_cli_logged_in_daily_run_saves_seen_signals_and_summary(monkeypatch, tmp_path) -> None:
+    store = _auth_store(monkeypatch, tmp_path)
+    out = cli.culinary_agents(session_fetch=FakeSession(), today=TODAY, sleep=lambda s: None)
+    assert out["pages"] == 8 and out["stopped"] == "" and out["early_exit"] == ""
+    assert out["new_jobs"] > 0 and out["new_opening_soon_companies"] > 0
+    assert out["private_listings_skipped"] >= 1
+    seen = store.load("ca_seen", CASeen)
+    assert seen and all(s.first_seen == TODAY for s in seen)
+    kinds = {(s.entity_id, s.signal_type) for s in store.load("signals", Signal)}
+    assert ("v:verdigris", "new_gm") in kinds
+    assert ("v:quillon", "guest_role_hire") in kinds
+    assert ("v:marinella", "opening_soon") in kinds
+    assert "SECRET" not in repr(out)
+    # the next morning: everything is known, so both job searches stop after page 1
+    later = cli.culinary_agents(
+        session_fetch=FakeSession(), today=date(2026, 11, 17), sleep=lambda s: None
+    )
+    assert later["new_jobs"] == 0
+    first = {s.key: s for s in store.load("ca_seen", CASeen)}
+    assert all(s.first_seen == TODAY for s in first.values())
+    sig = next(s for s in store.load("signals", Signal) if s.signal_type == "opening_soon")
+    assert sig.occurred_at == datetime(2026, 11, 16, tzinfo=UTC)  # first seen, not today
+
+
+def test_cli_max_pages_caps_the_run_and_backfill_uses_its_budget(monkeypatch, tmp_path) -> None:
+    _auth_store(monkeypatch, tmp_path)
+    session = FakeSession()
+    out = cli.culinary_agents(session_fetch=session, today=TODAY, sleep=lambda s: None, max_pages=2)
+    assert out["pages"] == 2 and len(session.calls) == 2
+    assert "--max-pages 2" in out["stopped"]
+    out = cli.culinary_agents(
+        session_fetch=FakeSession(), today=TODAY, sleep=lambda s: None, backfill=True
+    )
+    assert out["mode"] == "backfill" and out["budget"] == 150
+
+
+def test_cli_auth_stop_says_session_expired(monkeypatch, tmp_path, capsys) -> None:
+    _auth_store(monkeypatch, tmp_path)
+    out = cli.culinary_agents(
+        session_fetch=FakeSession({2: "http 401"}), today=TODAY, sleep=lambda s: None
+    )
+    assert "session expired — refresh CULINARY_AGENTS_COOKIE" in out["stopped"]
+    assert "SECRET" not in repr(out)

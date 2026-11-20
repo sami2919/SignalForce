@@ -28,6 +28,19 @@ class CulinaryAgentsConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     enabled: bool = False
+    # Logged-in mode (the operator's own session cookie in CULINARY_AGENTS_COOKIE): paginates
+    # past page 1 through the site's XHR endpoint. The agreement (section 7) bans robots and
+    # scrapers without written permission; the operator accepts the risk by turning this on.
+    authenticated: bool = False
+    # Logged-in mode: pages walked per search at most (20 items a page), and the daily run's
+    # early exit after this many consecutive already-seen organic (non-sponsored) items.
+    max_pages_per_search: int = 50
+    daily_stop_after_known: int = 15
+    # Search segment filter ids sent as search[segment_ids][] (captured defaults; confirm the
+    # labels during the first supervised run).
+    segment_ids: tuple[str, ...] = ("13", "9", "2", "1")
+    # A company profile fetched less than this many days ago is not fetched again.
+    profile_refresh_days: int = 30
     # Search locations; each costs 3 pages: jobs, opening-soon jobs, opening-soon companies.
     locations: tuple[str, ...] = ("New York, NY",)
     delay_seconds: float = 2.0
