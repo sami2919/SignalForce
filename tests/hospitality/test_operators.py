@@ -119,3 +119,14 @@ def test_single_unnamed_group_is_not_a_cluster() -> None:
         {},
     )
     assert clusters == []
+
+
+def test_registry_placeholder_name_is_the_company_itself_not_a_person() -> None:
+    # The registry writes "THE LIMITED LIABILITY COMPANY" when a company names itself; it is
+    # not an operator, so two such companies at different addresses must not cluster.
+    a = rec("Amis79 LLC", "THE LIMITED LIABILITY COMPANY", "79 Macdougal Street", "10012")
+    b = rec("93 Greenwich LLC", "THE LIMITED LIABILITY COMPANY", "93 Greenwich Avenue", "10014")
+    assert operator_key(a) == ("office", office_key("79 Macdougal Street", "10012"))
+    clusters = cluster_operators({"g:a": [a], "g:b": [b]}, {"g:a": "A", "g:b": "B"},
+                                 frozenset(), CFG, {})  # fmt: skip
+    assert clusters == []

@@ -517,8 +517,11 @@ def _groups_view(
         if v.group_id in acct:
             venues_of.setdefault(v.group_id, []).append(v)
             for lid in v.license_ids:
-                if lid in legal and legal[lid] not in companies.setdefault(v.group_id, []):
-                    companies[v.group_id].append(legal[lid])
+                have = companies.setdefault(v.group_id, [])
+                if lid in legal and normalize_company(legal[lid]) not in {
+                    normalize_company(n) for n in have
+                }:
+                    have.append(legal[lid])
     recs_by_group = {
         g: [by_key[k] for k in (normalize_company(n) for n in ns) if k in by_key]
         for g, ns in companies.items()

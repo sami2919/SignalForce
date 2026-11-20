@@ -500,3 +500,14 @@ def test_top25_unchanged_with_groups_view(tmp_path) -> None:
     plain = sections(build(full_store(tmp_path / "a"), tmp_path / "a"))[7]
     with_view = sections(build(_registry_store(tmp_path / "b"), tmp_path / "b"))[7]
     assert plain.split("#### 1.", 1)[1] == with_view.split("#### 1.", 1)[1]
+
+
+def test_groups_view_lists_a_company_once_across_spellings(tmp_path) -> None:
+    store = _registry_store(tmp_path)
+    venues = {v.venue_id: v for v in store.load("venues", Venue)}
+    venues["v:a"] = venues["v:a"].model_copy(update={"license_ids": ("L1", "L4")})
+    store.save("venues", list(venues.values()), key=lambda v: v.venue_id)
+    store.save("licenses", [make_license("L4", legal_name="Zephyr, L.L.C.")],
+               key=lambda r: r.record_id)  # fmt: skip
+    view = _view(build(store, tmp_path))
+    assert view.count("behind it: Pat Owner") == 2  # Zephyr once, Quill once

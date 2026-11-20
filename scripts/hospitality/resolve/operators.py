@@ -59,13 +59,21 @@ def _person(name: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9 ]+", " ", text.lower())).strip()
 
 
+# What the registry writes in the process name when the company receives its own papers.
+_SELF_PLACEHOLDERS = frozenset(
+    {"THE LIMITED LIABILITY COMPANY", "LIMITED LIABILITY COMPANY", "THE LLC", "THE CORPORATION",
+     "THE COMPANY", "CORPORATION", "THE ENTITY"}
+)  # fmt: skip
+
+
 def operator_key(record: RegistryRecord) -> tuple[Kind, str] | None:
     """('person', name) when someone other than the company receives its papers; ('office',
     address key) when the company names only itself; None without usable process data."""
     if not record.found:
         return None
     own = normalize_company(record.entity_name or record.legal_name)
-    if record.process_name and normalize_company(record.process_name) != own:
+    placeholder = normalize_company(record.process_name or "") in _SELF_PLACEHOLDERS
+    if record.process_name and not placeholder and normalize_company(record.process_name) != own:
         person = _person(record.process_name)
         if person:
             return ("person", person)
