@@ -40,3 +40,9 @@ class SocrataClient(BaseAPIClient):
             if len(page) < page_size:
                 return
             offset += page_size
+
+    def count(self, dataset_id: str, *, where: str) -> int:
+        """`count(*)` of the rows matching `where` (an aggregate: no `$order`, no paging)."""
+        params: dict[str, str | int] = {"$select": "count(*)", "$where": where}
+        page = self.get_list(f"/resource/{dataset_id}.json", params=params)
+        return int((page[0].get("count") if page else 0) or 0)

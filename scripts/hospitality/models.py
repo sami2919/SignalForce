@@ -101,6 +101,29 @@ class Group(_Frozen):
     resolution: GroupResolution
 
 
+class RegistryRecord(_Frozen):
+    """One NY company-registry lookup for a licence company (found or not), cached by name."""
+
+    name_key: str  # normalize_company(legal_name)
+    legal_name: str
+    found: bool
+    dos_id: str | None = None
+    entity_name: str | None = None
+    filed: date | None = None
+    # Who receives legal papers: a person, the company itself at an office, an agent or a firm.
+    process_name: str | None = None
+    process_address: str | None = None
+    process_zip: str | None = None
+    note: str = ""
+
+
+class AddressCount(_Frozen):
+    """Registry companies receiving papers at one address line + ZIP (agents receive many)."""
+
+    key: str
+    companies: int
+
+
 class WebsiteLookup(_Frozen):
     """One paid website lookup for a venue (hit or miss), kept apart from the rebuilt venues.
 

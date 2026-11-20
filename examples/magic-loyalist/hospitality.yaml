@@ -89,7 +89,7 @@ website_match_min_name_similarity: 0.6
 # Sum 1.10; fit is capped at 1.0, so only a group meeting every criterion reaches the cap.
 fit_weights: {multi_venue: 0.30, reservation_platform: 0.30, events_program: 0.15, accolade: 0.15, full_service_class: 0.10, fine_dining_service: 0.10}
 relationship_boost: 0.5
-budgets: {culinary_agents: 40, culinary_agents_backfill: 150, places: 400, firecrawl: 300, exa: 120, hunter: 40, clay: 25, claude_calls: 600}
+budgets: {registry: 600, culinary_agents: 40, culinary_agents_backfill: 150, places: 400, firecrawl: 300, exa: 120, hunter: 40, clay: 25, claude_calls: 600}
 models: {extract: claude-opus-5-5, draft: claude-opus-5-5, judge: claude-opus-5-5, baseline: claude-opus-5-5}
 match_max_distance_m: 40.0
 match_auto_threshold: 0.90
@@ -104,6 +104,10 @@ shared_host_domains: [instagram.com, facebook.com, tiktok.com, twitter.com, x.co
   ubereats.com, bit.ly]
 # Website lookup. `search` = Exa primary, Firecrawl search fallback, then a page must show the
 # venue's own phone (DOHMH) or street address to be accepted; `places` = Google Places.
+# NY company registry (who receives each licence company's legal papers): records naming an
+# agent or law firm are not operator evidence. See scripts/hospitality/config.py RegistryConfig.
+registry:
+  max_companies_per_address: 25
 websites:
   provider: search
   search_results: 8

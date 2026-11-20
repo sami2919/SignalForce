@@ -142,6 +142,22 @@ class BenchmarkConfig(BaseModel):
     web_search_usd_each: float  # list price, for the spend warning only
 
 
+class RegistryConfig(BaseModel):
+    """NY company registry lookup: which records are an agent or law firm, not an operator."""
+
+    model_config = ConfigDict(frozen=True)
+
+    # A process name or address containing one of these (case-insensitive) is a registered
+    # agent or law firm: it represents many unrelated companies, so it never groups them.
+    agent_markers: tuple[str, ...] = (
+        "corporation service", "ct corporation", "registered agent", "incorp", "legalinc",
+        "northwest registered", "united states corporation agents", "national registered",
+        "cogency", "llp", "l.l.p.", "esq", "law office", "law firm", "attorneys", "pllc", "p.c.",
+    )  # fmt: skip
+    # An address receiving papers for more companies than this, registry-wide, is an agent.
+    max_companies_per_address: int = 25
+
+
 class WebsitesConfig(BaseModel):
     """Website lookup: provider choice and the search-and-verify rules (lists are data)."""
 
@@ -257,6 +273,7 @@ class HospitalityConfig(BaseModel):
     # checked in order, the first matching reason wins.
     non_restaurant_name_patterns: dict[str, tuple[str, ...]]
     culinary_agents: CulinaryAgentsConfig = CulinaryAgentsConfig()
+    registry: RegistryConfig = RegistryConfig()
     # Employers whose alumni are a warm-intro edge (Loyalist's founders / champions' pedigree).
     alumni_employers: tuple[str, ...] = (
         "Eleven Madison Park",
