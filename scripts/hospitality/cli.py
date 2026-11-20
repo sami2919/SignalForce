@@ -1725,6 +1725,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         "registry", help="Who is behind the top prospects' licence companies (NY registry)"
     )
     p_registry.add_argument("--top", type=int, default=300)
+    p_brief = sub.add_parser(
+        "brief", help="Presentable brief of the top hospitality accounts (out/magic/demo_brief.md)"
+    )
+    p_brief.add_argument("--top", type=int, default=25)
     sub.add_parser("score", help="Score groups (noisy-OR) and print the top 25 prospects")
     p_recall = sub.add_parser("recall", help="Recall of license signals vs DOHMH first inspections")
     p_recall.add_argument("--weeks", type=int, default=12, help="Look-back window in weeks")
@@ -1800,6 +1804,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         out = crawl()
         for name, value in out.items():
             print(f"{name}: {value}")
+    elif args.command == "brief":
+        from scripts.hospitality.brief import build_brief
+
+        path = build_brief(DocStore(), load_config(), OUT_DIR, seed_path=SEED_PATH, top=args.top)
+        print(f"brief: {path}")
     elif args.command == "registry":
         for name, n in registry(args.top).items():
             print(f"{name}: {n}")
