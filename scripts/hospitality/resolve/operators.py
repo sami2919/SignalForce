@@ -12,15 +12,29 @@ from collections.abc import Mapping, Sequence
 from typing import Literal
 
 from scripts.hospitality.config import RegistryConfig
-from scripts.hospitality.models import OperatorCluster, RegistryRecord
+from scripts.hospitality.models import AddressCount, OperatorCluster, RegistryRecord
 from scripts.hospitality.resolve.normalize import normalize_address
-from scripts.hospitality.sources.registry import normalize_company
+from scripts.hospitality.sources.registry import COUNTS, count_key, normalize_company
+from scripts.hospitality.store import DocStore
 
 Kind = Literal["person", "office"]
 
 
 def office_key(address: str, zip_code: str) -> str:
     return f"{normalize_address(address)}|{(zip_code or '')[:5]}"
+
+
+def stored_counts(records: Sequence[RegistryRecord], store: DocStore) -> dict[str, int]:
+    """Cached registry-wide company counts, keyed the way `is_agent` reads them."""
+    cached = {c.key: c.companies for c in store.load(COUNTS, AddressCount)}
+    out: dict[str, int] = {}
+    for r in records:
+        line = r.process_address_1 or r.process_address
+        if r.process_address and line and r.process_zip:
+            n = cached.get(count_key(line, r.process_zip))
+            if n is not None:
+                out[office_key(r.process_address, r.process_zip)] = n
+    return out
 
 
 def _marker_hit(text: str, marker: str) -> bool:

@@ -126,11 +126,15 @@ def lookup_companies(
     return out
 
 
+def count_key(address: str, zip_code: str) -> str:
+    return f"{normalize_company(address)}|{zip_code}"
+
+
 def count_companies_at(
     address: str, zip_code: str, client, budget: CallBudget, store: DocStore
 ) -> int:
     """How many registry companies receive papers at this address line and ZIP (cached)."""
-    key = f"{normalize_company(address)}|{zip_code}"
+    key = count_key(address, zip_code)
     for c in store.load(COUNTS, AddressCount):
         if c.key == key:
             return c.companies

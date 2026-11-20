@@ -14,8 +14,10 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlsplit
 
+import requests
 from anthropic import Anthropic
 
+from scripts.api_client import APIError
 from scripts.firecrawl_client import FirecrawlClient
 from scripts.hospitality.benchmark.baseline import run_baseline
 from scripts.hospitality.benchmark.compare import compare
@@ -70,6 +72,7 @@ from scripts.hospitality.models import (
     LicenseRecord,
     LicenseSource,
     RecallReport,
+    RegistryRecord,
     ScoredAccount,
     Signal,
     StackObservation,
@@ -93,6 +96,11 @@ from scripts.hospitality.resolve.carry import (
 )
 from scripts.hospitality.resolve.groups import regroup
 from scripts.hospitality.resolve.match import match_licenses
+from scripts.hospitality.resolve.operators import (
+    cluster_operators,
+    is_agent,
+    stored_counts,
+)
 from scripts.hospitality.resolve.venues import build_venues
 from scripts.hospitality.scoring import (
     contract_operator_reason,
@@ -130,6 +138,11 @@ from scripts.hospitality.sources.dohmh import (
     fetch_first_inspections,
     fetch_never_inspected,
     merge_inspection_venues,
+)
+from scripts.hospitality.sources.registry import (
+    count_companies_at,
+    lookup_companies,
+    normalize_company,
 )
 from scripts.hospitality.sources.sla import fetch_licenses
 from scripts.hospitality.sources.snapshot import first_seen_pending, take_snapshot
@@ -652,6 +665,80 @@ def labels() -> dict[str, int]:
 
 def _aliases(store: DocStore) -> dict[str, str]:
     return {a.old_venue_id: a.new_venue_id for a in store.load("venue_aliases", VenueAlias)}
+
+
+NAMED_GROUP_RESOLUTIONS = frozenset({"job_board", "shared_domain", "press", "manual"})
+
+
+def _top_prospect_companies(
+    store: DocStore, top: int
+) -> tuple[list[ScoredAccount], dict[str, list[str]]]:
+    """The top cold prospects and, per group, the legal names of its venues' licences."""
+    accounts = rank_prospects(_gated_scores(store))[:top]
+    wanted = {a.group_id for a in accounts}
+    legal = {r.record_id: r.legal_name for r in store.load("licenses", LicenseRecord)}
+    by_group: dict[str, list[str]] = {}
+    for v in store.load("venues", Venue):
+        if v.group_id in wanted:
+            for lid in v.license_ids:
+                if lid in legal:
+                    by_group.setdefault(v.group_id, []).append(legal[lid])
+    return accounts, {g: list(dict.fromkeys(n)) for g, n in by_group.items()}
+
+
+def registry(top: int = 300, *, client=None, budget: int | None = None) -> dict[str, int | str]:
+    """Look up who receives legal papers for the licence companies of the top cold prospects.
+
+    Free public data (data.ny.gov, no key), cached and budgeted. Display-only: scores and the
+    stored groups are untouched; `report` shows the operator clusters it implies.
+    """
+    cfg = load_config()
+    store = DocStore()
+    accounts, companies = _top_prospect_companies(store, top)
+    names = list(dict.fromkeys(n for ns in companies.values() for n in ns))
+    calls = CallBudget(
+        "registry", budget if budget is not None else cfg.budgets.get("registry", 600)
+    )
+    client = client or SocrataClient(
+        "data.ny.gov", app_token=os.environ.get("SOCRATA_APP_TOKEN") or None
+    )
+    stopped = ""
+    try:
+        records = lookup_companies(names, client, calls, store)
+        for r in records:
+            line = r.process_address_1 or r.process_address
+            if r.found and line and r.process_zip and not is_agent(r, cfg.registry, {}):
+                count_companies_at(line, r.process_zip, client, calls, store)
+    except BudgetExceeded as exc:
+        stopped = f"budget: {exc}"
+    except APIError as exc:
+        stopped = f"api error: {exc}"
+    except requests.exceptions.RequestException as exc:  # dropped connection, proxy reset
+        stopped = f"network error: {type(exc).__name__}"
+    cached = {r.name_key: r for r in store.load("registry_records", RegistryRecord)}
+    by_group = {
+        g: [cached[k] for k in (normalize_company(n) for n in ns) if k in cached]
+        for g, ns in companies.items()
+    }
+    records = [r for rs in by_group.values() for r in rs]
+    counts = stored_counts(records, store)
+    groups = store.load("groups", Group)
+    named = frozenset(g.group_id for g in groups if g.resolution in NAMED_GROUP_RESOLUTIONS)
+    clusters = cluster_operators(
+        by_group, {g.group_id: g.name for g in groups}, named, cfg.registry, counts
+    )
+    found = [r for r in records if r.found]
+    return {
+        "prospect_groups": len(accounts),
+        "companies": len(names),
+        "looked_up": len(records),
+        "found": len(found),
+        "not_found": len(records) - len(found),
+        "agents": sum(is_agent(r, cfg.registry, counts) for r in found),
+        "clusters": len(clusters),
+        "requests": calls.used,
+        "stopped": stopped,
+    }
 
 
 def _gated_scores(store: DocStore) -> list[ScoredAccount]:
@@ -1634,6 +1721,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     sub.add_parser("crawl", help="Crawl venue websites; detect stacks and emit stack signals")
     sub.add_parser("labels", help="Label customer groups (seed list + Loyalist embeds)")
+    p_registry = sub.add_parser(
+        "registry", help="Who is behind the top prospects' licence companies (NY registry)"
+    )
+    p_registry.add_argument("--top", type=int, default=300)
     sub.add_parser("score", help="Score groups (noisy-OR) and print the top 25 prospects")
     p_recall = sub.add_parser("recall", help="Recall of license signals vs DOHMH first inspections")
     p_recall.add_argument("--weeks", type=int, default=12, help="Look-back window in weeks")
@@ -1709,6 +1800,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         out = crawl()
         for name, value in out.items():
             print(f"{name}: {value}")
+    elif args.command == "registry":
+        for name, n in registry(args.top).items():
+            print(f"{name}: {n}")
     elif args.command == "labels":
         for name, n in labels().items():
             print(f"{name}: {n}")
