@@ -12,6 +12,7 @@ from collections import Counter
 from collections.abc import Callable, Sequence
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from anthropic import Anthropic
 
@@ -115,6 +116,7 @@ from scripts.hospitality.sources.culinary_agents import (
     fetch_nyc,
     job_key,
     read_page,
+    redact,
     to_signals,
     walk_nyc,
 )
@@ -1098,6 +1100,7 @@ def culinary_agents(
             sleep,
             backfill,
             max_pages,
+            cookie,
         )
     today = today or date.today()
     store = DocStore()
@@ -1194,6 +1197,25 @@ def _culinary_agents_articles(
     }
 
 
+STOPPED_PAGE = "culinary_agents_stopped_page.txt"
+
+
+def _save_stopped_page(reason: str, url: str, body: str, cookie: str) -> str:
+    """Save the body of the page a logged-in walk stopped on, cookie redacted, under OUT_DIR
+    (gitignored) for inspection; "" when the walk did not stop on a page. Overwritten per stop.
+    """
+    if not body:
+        return ""
+    parts = urlsplit(url)
+    target = f"{parts.path}?{parts.query}" if parts.query else parts.path
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    path = OUT_DIR / STOPPED_PAGE
+    path.write_text(
+        redact(f"# stopped on {target}: {reason}\n{body}", cookie or None), encoding="utf-8"
+    )
+    return str(path)
+
+
 def _culinary_agents_logged_in(
     cfg: HospitalityConfig,
     fetch: SessionFetch,
@@ -1201,6 +1223,7 @@ def _culinary_agents_logged_in(
     sleep: Callable[[float], None],
     backfill: bool,
     max_pages: int | None,
+    cookie: str = "",
 ) -> dict[str, object]:
     """Backfill once (`--backfill`), then a daily delta that stops at already-seen items.
 
@@ -1250,6 +1273,7 @@ def _culinary_agents_logged_in(
         stopped = f"page cap reached (--max-pages {max_pages})"
     if walk.auth_failure:
         stopped = f"{stopped}; {SESSION_EXPIRED}"
+    stopped_page = _save_stopped_page(walk.stopped, walk.stopped_url, walk.stopped_body, cookie)
     return {
         "mode": "backfill" if backfill else "daily",
         "budget": limit,
@@ -1259,6 +1283,7 @@ def _culinary_agents_logged_in(
         "private_listings_skipped": walk.private_skipped,
         "early_exit": ", ".join(walk.early_exit),
         "stopped": stopped,
+        "stopped_page": stopped_page,
         "signals": len(signals),
         "evidence": len(evidence),
         "scored_groups": scored["scored_groups"],

@@ -1,0 +1,26 @@
+// SYNTHETIC FIXTURE: hand-built in the exact shape of a live end-of-results Rails UJS XHR response (the last page's cards, then an `if (!false)` block appending a Partner Jobs section of third-party listings); every business, address, id and text is invented.
+(function() {
+  var result;
+
+  $('#js-show-more').remove();
+
+  result = "<div class=\"col-sm-6 col-md-4 col-xxl-3\"><div class=\"card new-job-card bg-white d-block text-body mb-2\"><div class=\"card-body job-card-body position-relative\"><a class=\"ca-single-job-card stretched-link\" data-entity=\"Wrenhaven\" data-event-label=\"\" data-jobid=\"9500001-1\" data-remote=\"true\" data-sponsored=\"false\" data-title=\"General Manager\" href=\"/jobs/9500001-x\" target=\"_self\"><\/a><div class=\"right-container float-end\"><div class=\"avatar js-entity-9600001 avatar-60 avatar-facility\"><span><\/span><\/div><\/div><div class=\"left-container\"><div class=\"key-info\"><div class=\"job-title text-ellipsis text-primary\"><strong>General Manager<\/strong><\/div><div class=\"text-body text-ellipsis\">Wrenhaven<\/div><div class=\"text-body text-ellipsis job-employment\">Full Time<\/div><div class=\"text-muted text-ellipsis\">Wrenhaven Hospitality<\/div><div class=\"text-muted text-ellipsis\">90 Imaginary Street, New York, NY • Seasonal<\/div><\/div><\/div><\/div><div class=\"card-footer job-card-footer bg-white px-4 py-2\"><div class=\"float-start mb-0 p-0\"><a class=\"js-action text-decoration-none\" data-save-jobid=\"9500001\" data-remote=\"true\" rel=\"nofollow\" data-method=\"post\" href=\"/jobs/9500001/save\"><span class=\"text-body\">Save<\/span><\/a><\/div><div class=\"float-end text-muted text-ellipsis my-job-tags font-size-12 mb-0 p-0\">Posted 2 days ago<\/div><\/div><\/div><\/div>";
+
+  $('#js-jobs-result').append(result);
+
+  JobOverlay.resetJobResults();
+
+  if (!false) {
+    result = "<div class=\"col-sm-12\"><div class=\"partner-jobs-header mb-3\">Partner Jobs<\/div><div class=\"row g-3\" id=\"js-partner-jobs-result\"><div class=\"col-sm-6 col-md-4 col-xxl-3\"><div class=\"card bg-white\"><div class=\"card-body ca-single-job-card\"><a class=\"stretched-link\" href=\"https://partner.example/job/1\" onclick=\"partner_view(1, 2, 3, &#39;&amp;job_loc=Example%2CNY&#39;)\"><\/a><div class=\"row\"><div class=\"col-12\"><a class=\"text-overflow job-title-link text-primary text-decoration-none\" href=\"https://partner.example/job/1\" onclick=\"partner_view(1, 2, 3, &#39;&amp;job_loc=Example%2CNY&#39;)\"><strong>Assistant General Manager<\/strong><\/a><br><span class=\"text-overflow\">Harrowgate Diner<\/span><\/br><small class=\"text-overflow text-muted\">Example, NJ<\/small><br /><hr /><\/div><\/div><div class=\"row\"><div class=\"col-4 text-start text-overflow\"><span><i class=\"bi bi-box-arrow-up-right\"><\/i>Apply<\/span><\/div><div class=\"col-8 offset-4 text-end\"><span id=\"partner_logo_container\"><a class=\"text-muted text-decoration-none\" href=\"https://partner.example/\" id=\"jobs_widget_link\" rel=\"nofollow\" target=\"_blank\">jobs by Partner<\/a><\/span><\/div><\/div><\/div><\/div><\/div><div class=\"col-sm-6 col-md-4 col-xxl-3\"><div class=\"card bg-white\"><div class=\"card-body ca-single-job-card\"><a class=\"stretched-link\" href=\"https://partner.example/job/1\" onclick=\"partner_view(1, 2, 3, &#39;&amp;job_loc=Example%2CNY&#39;)\"><\/a><div class=\"row\"><div class=\"col-12\"><a class=\"text-overflow job-title-link text-primary text-decoration-none\" href=\"https://partner.example/job/1\" onclick=\"partner_view(1, 2, 3, &#39;&amp;job_loc=Example%2CNY&#39;)\"><strong>Line Cook<\/strong><\/a><br><span class=\"text-overflow\">Pemberly Grill<\/span><\/br><small class=\"text-overflow text-muted\">Sample City, NY<\/small><br /><hr /><\/div><\/div><div class=\"row\"><div class=\"col-4 text-start text-overflow\"><span><i class=\"bi bi-box-arrow-up-right\"><\/i>Apply<\/span><\/div><div class=\"col-8 offset-4 text-end\"><span id=\"partner_logo_container\"><a class=\"text-muted text-decoration-none\" href=\"https://partner.example/\" id=\"jobs_widget_link\" rel=\"nofollow\" target=\"_blank\">jobs by Partner<\/a><\/span><\/div><\/div><\/div><\/div><\/div><\/div><\/div><div class=\"col-12\" id=\"js-show-more-partners\"><div class=\"show-more-margin d-grid\"><a class=\"btn btn-default btn-block btn-loading\" id=\"partners_load_more_btn\" data-remote=\"true\" href=\"/search/partner_jobs?page=2\">Show More<\/a><\/div><\/div>";
+    $('#js-jobs-result').append(result);
+  }
+
+  $('.btn-loading').button('reset');
+
+  $('#js-jobs-result-replace').html(result);
+
+  if (8 % 4 !== 0) {
+    window.requestLoadMoreJobs = false;
+  }
+
+}).call(this);

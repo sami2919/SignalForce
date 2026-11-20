@@ -19,6 +19,7 @@ priors:   # precision = P(group in a buying window | signal); starting guesses t
   # Five or more distinct roles from one employer in 30 days, or an "Open Call": an opening.
   # Opening evidence, so it folds with licence signals on the same venue.
   hiring_burst:      {precision: 0.25, half_life_days: null, family: opening}
+  staffing_change:   {precision: 0.10, half_life_days: 90, family: people}   # a burst at an already-open venue
   # Fit evidence only (sommelier, captain, ...): feeds fit_weights.fine_dining_service.
   fine_dining_service: {precision: 0.0, half_life_days: null, family: fit}
   platform_switch:   {precision: 0.05, half_life_days: 90, family: stack}

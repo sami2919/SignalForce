@@ -1568,3 +1568,164 @@ def test_example_config_title_lists_match_the_code_defaults() -> None:
     default = CulinaryAgentsConfig()
     for field in ("chef_titles", "gm_titles", "events_titles", "guest_titles", "service_titles"):
         assert getattr(example, field) == getattr(default, field), field
+
+
+# ---- end of results (Partner Jobs block), the saved stop page ----
+
+
+def test_partner_jobs_are_not_parsed_as_culinary_agents_jobs() -> None:
+    html = ca.extract_ujs_html(read("job_search_xhr_end.js.txt"))
+    jobs = parse_job_search(html, TODAY)
+    assert [(j.company, j.title) for j in jobs] == [("Wrenhaven", "General Manager")]
+    assert jobs[0].group == "Wrenhaven Hospitality"
+
+
+def test_partner_jobs_block_with_no_own_cards_is_a_normal_end() -> None:
+    pages = _xhr_walk([read("job_search_xhr_end_empty.js.txt")])
+    assert [p.page for p in pages] == [1]  # no stop: the site marked the end of results
+
+
+def test_partner_jobs_block_after_the_last_cards_ends_the_walk_after_that_page() -> None:
+    session = FakeSession()
+    bodies = iter([read("job_search_xhr_end.js.txt")])
+
+    def fetch(url: str, xhr: bool) -> str:
+        session.calls.append((url, xhr))
+        return next(bodies) if xhr else read("job_search_logged_in.html")
+
+    pages = list(
+        ca.iter_search_pages(
+            "jobs",
+            "New York, NY",
+            fetch,
+            CallBudget("ca", 10),
+            opening_soon=True,
+            cfg=AUTH_CFG,
+            today=TODAY,
+        )
+    )
+    assert [p.page for p in pages] == [1, 2]
+    assert [j.company for j in pages[1].jobs] == ["Wrenhaven"]
+    assert len(session.calls) == 2  # no page 3 request after the end marker
+
+
+def test_a_stop_carries_the_body_of_the_page_it_stopped_on() -> None:
+    body = '$(\'#js-jobs-result\').append(build("<a class=\\"ca-single-job-card x\\">"));'
+    with pytest.raises(ca.SessionStopped) as info:
+        _xhr_walk([body])
+    assert info.value.body == body
+    assert body not in str(info.value)  # the reason stays short
+
+
+def test_cli_saves_the_stopped_page_under_out_magic(monkeypatch, tmp_path) -> None:
+    _auth_store(monkeypatch, tmp_path)
+    monkeypatch.setattr(cli, "OUT_DIR", tmp_path / "out")
+    body = '$(\'#js-jobs-result\').append(build("<a class=\\"ca-single-job-card x\\">"));'
+
+    def session(url: str, xhr: bool) -> str:
+        return body if xhr else read("job_search_logged_in.html")
+
+    out = cli.culinary_agents(session_fetch=session, today=TODAY, sleep=lambda s: None)
+    assert "unrecognised" in out["stopped"]
+    saved = tmp_path / "out" / "culinary_agents_stopped_page.txt"
+    assert out["stopped_page"] == str(saved)
+    assert saved.read_text().endswith(body)
+    assert "/search/jobs" in saved.read_text().splitlines()[0]
+
+
+def test_cli_redacts_the_cookie_from_a_saved_stopped_page(monkeypatch, tmp_path) -> None:
+    _auth_store(monkeypatch, tmp_path)
+    monkeypatch.setattr(cli, "OUT_DIR", tmp_path / "out")
+    body = '<a class="ca-single-job-card x">SECRET-SESSION-456</a>'
+
+    def session(url: str, xhr: bool) -> str:
+        return read("job_search_logged_in.html") if not xhr else f"$('#x').append(f({body!r}));"
+
+    out = cli.culinary_agents(session_fetch=session, today=TODAY, sleep=lambda s: None)
+    assert "SECRET" not in Path(str(out["stopped_page"])).read_text()
+
+
+def test_cli_reports_no_stopped_page_when_the_walk_finishes(monkeypatch, tmp_path) -> None:
+    _auth_store(monkeypatch, tmp_path)
+    monkeypatch.setattr(cli, "OUT_DIR", tmp_path / "out")
+    out = cli.culinary_agents(session_fetch=FakeSession(), today=TODAY, sleep=lambda s: None)
+    assert out["stopped"] == "" and out["stopped_page"] == ""
+    assert not (tmp_path / "out" / "culinary_agents_stopped_page.txt").exists()
+
+
+# ---- hiring burst by venue status: opening evidence vs staffing_change ----
+
+SIX = ["Line Cook", "Server", "Host", "Porter", "Barback", "Dishwasher"]
+OPEN_VERDIGRIS = make_venue(
+    "v:verdigris", name="Verdigris", address="13 EXAMPLE ST", first_inspection_date=date(2025, 3, 1)
+)
+
+
+def test_open_venue_with_six_roles_gets_staffing_change_not_hiring_burst() -> None:
+    sigs, _ = run(_roles("Verdigris", SIX), [], [OPEN_VERDIGRIS])
+    kinds = [s.signal_type for s in sigs]
+    assert "hiring_burst" not in kinds and kinds.count("staffing_change") == 1
+    change = next(s for s in sigs if s.signal_type == "staffing_change")
+    assert change.entity_id == "v:verdigris" and "6 distinct roles" in change.detail
+
+
+def test_open_venue_open_call_is_a_staffing_change() -> None:
+    sigs, _ = run([_job("Verdigris", "Open Call - All Positions")], [], [OPEN_VERDIGRIS])
+    assert [s.signal_type for s in sigs] == ["staffing_change"]
+
+
+def test_opening_soon_venue_with_six_roles_gets_hiring_burst() -> None:
+    soon = _roles("Verdigris", SIX, opening_soon=True)
+    sigs, _ = run(soon, [], [OPEN_VERDIGRIS])  # inspected, but the employer is opening soon
+    assert [s.signal_type for s in sigs].count("hiring_burst") == 1
+    assert "staffing_change" not in [s.signal_type for s in sigs]
+    listed = [_co("Verdigris", opening_soon=True, locations=("13 Example Street",))]
+    sigs, _ = run(_roles("Verdigris", SIX), listed, [OPEN_VERDIGRIS])  # a company card says so
+    assert "hiring_burst" in [s.signal_type for s in sigs]
+
+
+def test_never_inspected_venue_with_six_roles_keeps_hiring_burst() -> None:
+    sigs, _ = run(_roles("Verdigris", SIX), [], [VERDIGRIS])
+    assert "hiring_burst" in [s.signal_type for s in sigs]
+
+
+def test_open_multi_venue_group_gains_no_window_evidence_from_bursts() -> None:
+    quillon = make_venue(
+        "v:quillon", name="Quillon", address="44 FIXTURE PL", first_inspection_date=date(2024, 6, 1)
+    )
+    jobs = [
+        *_roles("Verdigris", SIX),
+        *(
+            _job("Quillon", t, location="44 Fixture Pl, New York, NY", url=f"https://x/jobs/{i}-q")
+            for i, t in enumerate(SIX, start=500)
+        ),
+    ]
+    venues = [OPEN_VERDIGRIS, quillon]
+    sigs, _ = run(jobs, [], venues)
+    assert sorted(s.signal_type for s in sigs) == ["staffing_change", "staffing_change"]
+    scored = _score(venues, sigs)
+    cfg = load_config()
+    opening = [c for c in scored.contributions if cfg.priors[c.signal_type].family == "opening"]
+    assert opening == []
+    old_style = [s.model_copy(update={"signal_type": "hiring_burst"}) for s in sigs]
+    assert scored.p_window < _score(venues, old_style).p_window
+    assert all(c.precision == pytest.approx(0.10) for c in scored.contributions)
+
+
+def test_staffing_change_prior_is_people_family_and_not_folded_with_licences() -> None:
+    cfg = load_config()
+    prior = cfg.priors["staffing_change"]
+    assert prior.precision == pytest.approx(0.10)
+    assert prior.family == "people" and prior.half_life_days == 90
+    assert "staffing_change" not in cfg.opening_evidence_signals
+    lic = make_signal("license_pending", "v:verdigris")
+    change, _ = run(_roles("Verdigris", SIX), [], [OPEN_VERDIGRIS])
+    both = _score([OPEN_VERDIGRIS], [lic, *change])
+    by_type = {c.signal_type: c for c in both.contributions}
+    assert by_type["staffing_change"].note == ""  # counted, not folded
+    assert Signal.model_validate(make_signal("staffing_change").model_dump())
+
+
+def test_extract_ujs_html_skips_comments_with_quotes_in_them() -> None:
+    js = "// the page's cards\n/* it's \"here\" */\nr = \"<p>one<\\/p>\";\n$('#a').append(r);"
+    assert ca.extract_ujs_html(js) == "<p>one</p>"

@@ -35,6 +35,7 @@ SignalType = Literal[
     "guest_role_hire",  # owner of the guest list / bookings (Culinary Agents)
     "events_role_hire",  # events / private dining hire (Culinary Agents)
     "hiring_burst",  # a whole venue staffing at once: opening evidence (Culinary Agents)
+    "staffing_change",  # an open venue staffing at once: people evidence (Culinary Agents)
     "fine_dining_service",  # fit evidence only (sommelier, captain...): never window evidence
 ]
 

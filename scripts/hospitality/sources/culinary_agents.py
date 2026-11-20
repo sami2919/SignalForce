@@ -103,12 +103,26 @@ SessionFetch = Callable[[str, bool], str]
 class SessionStopped(RuntimeError):
     """The logged-in walk must stop, never retry: 401/403/429, a sign-in redirect, an empty or
     unrecognised page, a refused URL or a network error. `auth` marks a dead session. The reason
-    never contains the cookie (pinned by tests)."""
+    never contains the cookie (pinned by tests). `body` / `url` are the response and request the
+    walk stopped on (empty when there was none), kept so the page can be inspected afterwards."""
 
-    def __init__(self, reason: str, *, auth: bool = False) -> None:
+    def __init__(self, reason: str, *, auth: bool = False, body: str = "", url: str = "") -> None:
         super().__init__(reason)
         self.reason = reason
         self.auth = auth
+        self.body = body
+        self.url = url
+
+
+def redact(text: str, cookie: str | None) -> str:
+    """`text` with the cookie, and every cookie value of 6+ characters, replaced."""
+    if cookie:
+        text = text.replace(cookie, "[redacted]")
+        for part in cookie.split(";"):
+            value = part.split("=", 1)[-1].strip()
+            if len(value) >= 6:
+                text = text.replace(value, "[redacted]")
+    return text
 
 
 # ---- URLs and the fetcher -------------------------------------------------------------------
@@ -224,13 +238,7 @@ class PoliteFetcher:
         return text
 
     def _redact(self, text: str) -> str:
-        if self._cookie:
-            text = text.replace(self._cookie, "[redacted]")
-            for part in self._cookie.split(";"):
-                value = part.split("=", 1)[-1].strip()
-                if len(value) >= 6:
-                    text = text.replace(value, "[redacted]")
-        return text
+        return redact(text, self._cookie)
 
     async def _get_session(self, url: str, xhr: bool) -> str:
         plain = {"User-Agent": USER_AGENT}
@@ -284,6 +292,7 @@ class PoliteFetcher:
         elif not resp.text.strip():
             stop = SessionStopped("empty page")
         if stop is not None:
+            stop.body, stop.url = resp.text, str(resp.request.url)
             logger.warning("culinary agents stopped: %s", stop.reason)
             raise stop
         return resp.text
@@ -454,21 +463,26 @@ def parse_job_search(html: str, today: date, *, opening_soon: bool = False) -> l
 
 _JS_LITERAL = r""""(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'"""
 _JS_NAME = r"[A-Za-z_$][\w$]*"
-# One left-to-right scan of a UJS response. Every string literal is consumed as a token, so
-# nothing inside one is ever read as code. Tokens: `name = "...";`, a jQuery injection whose
-# argument is a literal or a variable (`$("#x").append("...")`, `.append(result)`), any
-# other literal (skipped).
+# One left-to-right scan of a UJS response. Every string literal and comment is consumed as a
+# token, so nothing inside one is ever read as code. Tokens: `name = "...";`, a jQuery
+# injection whose argument is a literal or a variable (`$("#x").append("...")`,
+# `.append(result)`), any other literal or comment (skipped).
 _UJS_TOKEN = re.compile(
     rf"(?<![\w$.])(?P<name>{_JS_NAME})\s*=\s*(?P<value>{_JS_LITERAL})\s*;"
     rf"|\.(?:append|prepend|html|replaceWith)\(\s*(?:(?P<arg>{_JS_LITERAL})|(?P<var>{_JS_NAME}))\s*\)"
-    rf"|{_JS_LITERAL}",
+    rf"|//[^\n]*|/\*.*?\*/|{_JS_LITERAL}",
     re.DOTALL,
 )
-# Card markup in a raw response: a page that has it but yields no card is unrecognised.
+# Culinary Agents' own card markup in a raw response (the job card's anchor class, escaped or
+# not): a page that has it but yields no card is unrecognised. Partner listings reuse the
+# class name on a card body (`card-body ca-single-job-card`), which this does not match.
 _CARD_MARKUP = {
-    "jobs": re.compile(r"ca-single-job-card\b"),
+    "jobs": re.compile(r"class=\\?[\"']ca-single-job-card\b"),
     "companies": re.compile(r"company-card\b"),
 }
+# The site's end of results: after the last page of its own listings it appends a "Partner
+# Jobs" section of third-party listings (not read; no employer facts) into this container.
+_END_OF_RESULTS = re.compile(r"js-partner-jobs-result")
 _JS_ESCAPE = re.compile(r'\\x([0-9a-fA-F]{2})|\\(.)|"', re.DOTALL)
 
 
@@ -749,23 +763,30 @@ def iter_search_pages(
         text = fetch(url, page > 1)
         html = extract_ujs_html(text) if page > 1 else text
         if page > 1 and not html and ".append(" not in text and ".html(" not in text:
-            raise SessionStopped(f"unrecognised XHR response on {kind} page {page}")
+            raise SessionStopped(
+                f"unrecognised XHR response on {kind} page {page}", body=text, url=url
+            )
         if kind == "companies":
             found = SearchPage(page=page, companies=tuple(parse_company_search(html)))
         else:
             jobs = tuple(parse_job_search(html, today, opening_soon=opening_soon))
             sponsored_so_far += sum(j.sponsored for j in jobs)
             found = SearchPage(page=page, jobs=jobs)
+        at_end = bool(_END_OF_RESULTS.search(text))
         if not found.jobs and not found.companies:
             if _CARD_MARKUP[kind].search(text):  # cards were sent but none could be read
                 raise SessionStopped(
                     f"unrecognised response on {kind} page {page}: card markup but no readable"
-                    " cards"
+                    " cards",
+                    body=text,
+                    url=url,
                 )
-            if page == 1:
-                raise SessionStopped(f"empty page ({kind} page 1 has no cards)")
+            if page == 1 and not at_end:
+                raise SessionStopped(f"empty page ({kind} page 1 has no cards)", body=text, url=url)
             return
         yield found
+        if at_end:  # the site marked this as the last page of its own listings
+            return
 
 
 class WalkResult(BaseModel):
@@ -783,6 +804,8 @@ class WalkResult(BaseModel):
     early_exit: tuple[str, ...]  # "<search> page N" for each search the daily rule stopped
     stopped: str  # "" when the walk finished; else the stop reason
     auth_failure: bool
+    stopped_url: str = ""  # the request the walk stopped on, when there was one
+    stopped_body: str = ""  # its response body (unredacted: the caller redacts before saving)
 
 
 _SEARCHES: tuple[tuple[str, bool, str], ...] = (
@@ -819,6 +842,7 @@ def walk_nyc(
     exits: list[str] = []
     private = 0
     stopped, auth = "", False
+    stop_url, stop_body = "", ""
 
     def touch(key: str) -> bool:
         """Record `key` as seen today; True when an earlier run had already seen it."""
@@ -873,6 +897,7 @@ def walk_nyc(
         _profiles(companies, touched, known_companies, cfg, budget, fetch, pace, today)
     except SessionStopped as exc:
         stopped, auth = exc.reason, exc.auth
+        stop_url, stop_body = exc.url, exc.body
     except BudgetExceeded as exc:
         stopped = str(exc)
     return WalkResult(
@@ -886,6 +911,8 @@ def walk_nyc(
         early_exit=tuple(exits),
         stopped=stopped,
         auth_failure=auth,
+        stopped_url=stop_url,
+        stopped_body=stop_body,
     )
 
 
@@ -1132,9 +1159,10 @@ def to_signals(
     observed = _observed(today)
 
     def add(kind: SignalType, vid: str, url: str, extra: str, detail: str, when: date | None):
-        """`extra` disambiguates two signals on one URL; a `hiring_burst` id ignores the URL
-        (one burst per venue, however it was found)."""
-        ident = _short(vid, "burst") if kind == "hiring_burst" else _short(url, extra)
+        """`extra` disambiguates two signals on one URL; a burst id (`hiring_burst` /
+        `staffing_change`) ignores the URL (one burst per venue, however it was found)."""
+        burst = kind in ("hiring_burst", "staffing_change")
+        ident = _short(vid, "burst") if burst else _short(url, extra)
         sig = Signal(
             signal_id=f"{kind}:{vid}:{ident}",
             signal_type=kind,
@@ -1149,6 +1177,12 @@ def to_signals(
 
     members: list[tuple[str, str, str, str]] = []  # (group, company name, venue id, ref url)
     by_venue: dict[str, list[tuple[CAJob, date]]] = {}  # matched jobs, for hiring_burst
+    inspected = {v.venue_id for v in venues if v.first_inspection_date is not None}
+    soon = {  # venues the site lists as opening soon (a company card or an opening-soon job)
+        vid
+        for c in companies
+        if c.opening_soon and (vid := resolver.venue_id(c.name, c.locations, c.website))
+    }
     for job in drop_private_listings(jobs)[0]:
         vid = resolver.venue_id(job.company, (job.location,) if job.location else (), None)
         if vid is None:
@@ -1157,6 +1191,8 @@ def to_signals(
             members.append((job.group, job.company, vid, job.company_url))
         when = job.posted or first_seen.get(job_key(job))
         by_venue.setdefault(vid, []).append((job, when or today))
+        if job.opening_soon:
+            soon.add(vid)
         posted = f", posted {when.isoformat()}" if when else ""
         kind = classify_title(job.title, cfg)
         if kind is not None:
@@ -1173,7 +1209,8 @@ def to_signals(
                 when,
             )
     for vid, items in by_venue.items():
-        _hiring_burst(vid, items, today, cfg, add)
+        opening = vid in soon or vid not in inspected
+        _hiring_burst(vid, items, today, cfg, add, opening=opening)
     for company in companies:
         vid = resolver.venue_id(company.name, company.locations, company.website)
         if vid is None:
@@ -1198,9 +1235,15 @@ def _hiring_burst(
     today: date,
     cfg: CulinaryAgentsConfig,
     add: Callable[[SignalType, str, str, str, str, date | None], None],
+    *,
+    opening: bool,
 ) -> None:
-    """One `hiring_burst` per venue: an "Open Call" posting, or `burst_min_roles` distinct
-    roles (any level) from the employer within `burst_window_days`."""
+    """One burst per venue: an "Open Call" posting, or `burst_min_roles` distinct roles (any
+    level) from the employer within `burst_window_days`.
+
+    It is opening evidence (`hiring_burst`) only when the venue is opening: listed as opening
+    soon, or not yet inspected. An already-open venue staffing up is a `staffing_change`, a
+    people signal that never folds with licence evidence."""
     since = today - timedelta(days=cfg.burst_window_days)
     recent = [(job, when) for job, when in items if when >= since]
     open_calls = [(job, when) for job, when in recent if is_open_call(job.title, cfg)]
@@ -1216,7 +1259,10 @@ def _hiring_burst(
         if open_calls
         else f"{len(roles)} distinct roles in {cfg.burst_window_days} days"
     )
-    add("hiring_burst", vid, ref, "", f"{company} is staffing up: {why}", first)
+    if opening:
+        add("hiring_burst", vid, ref, "", f"{company} is staffing up: {why}", first)
+    else:
+        add("staffing_change", vid, ref, "", f"{company} (open) is staffing up: {why}", first)
 
 
 def _group_evidence(
