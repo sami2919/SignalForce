@@ -91,6 +91,7 @@ def _record(legal_name: str, rows: list[dict]) -> RegistryRecord:
         filed=_filed(best),
         process_name=best.get("dos_process_name") or None,
         process_address=address or None,
+        process_address_1=best.get("dos_process_address_1") or None,
         process_zip=(best.get("dos_process_zip") or "")[:5] or None,
         note=f"{len(same)} registry records with this name; newest filing used"
         if len(same) > 1

@@ -113,8 +113,19 @@ class RegistryRecord(_Frozen):
     # Who receives legal papers: a person, the company itself at an office, an agent or a firm.
     process_name: str | None = None
     process_address: str | None = None
+    process_address_1: str | None = None  # the registry's first line: what counts query
     process_zip: str | None = None
     note: str = ""
+
+
+class OperatorCluster(_Frozen):
+    """Groups that share the operator behind their licence companies (registry evidence)."""
+
+    cluster_id: str  # "<person|office>:<key>"
+    kind: Literal["named_group", "person", "office"]
+    label: str
+    group_ids: tuple[str, ...]
+    members: tuple[RegistryRecord, ...]
 
 
 class AddressCount(_Frozen):

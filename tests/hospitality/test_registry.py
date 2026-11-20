@@ -120,3 +120,15 @@ def test_socrata_count_sends_no_sort_order() -> None:
         assert client.count("n9v6-gdp6", where="x = 1") == 7
     params = get.call_args.kwargs.get("params") or get.call_args.args[1]
     assert "$order" not in params and params["$select"] == "count(*)"
+
+
+def test_lookup_keeps_the_first_address_line_for_counting(store: DocStore) -> None:
+    row = {
+        **MADDY,
+        "dos_process_address_1": "Attn: J. Doe",
+        "dos_process_address_2": "711 Third Ave",
+    }
+    [rec] = lookup_companies(["Rip Raf LLC"], FakeClient({"RIP RAF LLC": [row]}),
+                             CallBudget("registry", 10), store)  # fmt: skip
+    assert rec.process_address == "Attn: J. Doe 711 Third Ave"
+    assert rec.process_address_1 == "Attn: J. Doe"
