@@ -210,6 +210,7 @@ opening_evidence_signals: [license_pending, license_issued, not_yet_inspected, o
 # At most this many venues' opening terms enter a group's p_window (strongest first), so a
 # group with dozens of licenses cannot saturate on license count alone.
 max_opening_venues_per_group: 3
+max_people_signals_per_group: 2   # strongest people-family signals counted per group
 # Contract / institutional food-service operators and non-restaurant premises are not Magic's
 # buyer. Case-insensitive regexes over normalized (lowercase, no punctuation or corp suffix)
 # group, venue and licensee names. Kept narrow: anchored on operator names, never bare words.

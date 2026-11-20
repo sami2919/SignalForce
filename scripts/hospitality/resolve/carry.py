@@ -7,9 +7,10 @@ over here, so a re-resolve neither loses nor re-buys it.
 
 Ids:
 - A venue id is stable while its source is: `v:<camis>` for a DOHMH site, `v:lic:<record>` for
-  a license with no site yet, `v:press:<hash>` for a press-only venue. When a licensed venue
-  gets its DOHMH site, `v:lic:<record>` becomes `v:<camis>`; `venue_moves` finds that move and
-  every venue-keyed record follows it.
+  a license with no site yet, `v:press:<hash>` for a press-only venue, `v:ca:<entity id>` for
+  a job-board venue (a Culinary Agents opening-soon company no public record has yet). When a
+  licensed venue gets its DOHMH site, `v:lic:<record>` becomes `v:<camis>`; `venue_moves`
+  finds that move and every venue-keyed record follows it.
 - A group id is `g:<smallest member venue id>`, so it changes when groups merge. Every group id
   ever minted names one of its member venues, so `canonical_group_id` maps any old group id to
   that venue's current group.
@@ -23,6 +24,7 @@ from datetime import date
 from scripts.hospitality.models import GroupEvidence, Venue, WebsiteLookup
 
 PRESS_VENUE_PREFIX = "v:press:"
+JOB_BOARD_VENUE_PREFIX = "v:ca:"
 
 
 def venue_moves(old: Sequence[Venue], new: Sequence[Venue]) -> dict[str, str]:
@@ -56,14 +58,24 @@ def chain_moves(earlier: Mapping[str, str], latest: Mapping[str, str]) -> dict[s
     return {old: new for old, new in out.items() if old != new}
 
 
-def carried_press_venues(old: Sequence[Venue], rebuilt_ids: Iterable[str]) -> list[Venue]:
-    """Press-only venues from the previous store (not derivable from public data), ungrouped."""
+def _carried(old: Sequence[Venue], rebuilt_ids: Iterable[str], prefix: str) -> list[Venue]:
     rebuilt = set(rebuilt_ids)
     return [
         v.model_copy(update={"group_id": f"g:{v.venue_id}"})
         for v in old
-        if v.venue_id.startswith(PRESS_VENUE_PREFIX) and v.venue_id not in rebuilt
+        if v.venue_id.startswith(prefix) and v.venue_id not in rebuilt
     ]
+
+
+def carried_press_venues(old: Sequence[Venue], rebuilt_ids: Iterable[str]) -> list[Venue]:
+    """Press-only venues from the previous store (not derivable from public data), ungrouped."""
+    return _carried(old, rebuilt_ids, PRESS_VENUE_PREFIX)
+
+
+def carried_job_board_venues(old: Sequence[Venue], rebuilt_ids: Iterable[str]) -> list[Venue]:
+    """Job-board venues from the previous store (not derivable from public data), ungrouped:
+    stored group evidence re-joins them to their groups."""
+    return _carried(old, rebuilt_ids, JOB_BOARD_VENUE_PREFIX)
 
 
 def merge_lookups(

@@ -27,7 +27,14 @@ from scripts.hospitality.models import (
 OPENING_FAMILY = ("license_pending", "license_issued", "not_yet_inspected", "press_opening")
 ANGLE_SIGNALS: dict[Angle, tuple[str, ...]] = {
     "opening": OPENING_FAMILY,
-    "people_change": ("role_hire", "new_gm", "new_chef", "guest_role_hire", "events_role_hire"),
+    "people_change": (
+        "role_hire",
+        "new_gm",
+        "new_chef",
+        "guest_role_hire",
+        "events_role_hire",
+        "staffing_change",
+    ),
     "platform_switch": ("platform_switch", "stack_fragmented"),
     "relationship": ("alumni_edge",),
     "private_events": ("private_events", "tripleseat_resy"),

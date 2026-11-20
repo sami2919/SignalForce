@@ -1757,3 +1757,91 @@ def test_cli_logged_in_run_replaces_its_earlier_signals_and_job_board_evidence(
     assert any(i.startswith("new_gm:v:verdigris") for i in ids)
     names = {e.name for e in store.load("group_evidence", GroupEvidence)}
     assert "Gone Group" not in names and "Press Group" in names
+
+
+# ---- unmatched opening-soon companies become job-board venues ----
+
+
+def test_unmatched_opening_soon_company_becomes_a_job_board_venue() -> None:
+    solano = _co(
+        "Bar Solano",
+        url="https://culinaryagents.com/entities/9200002",
+        locations=("372 Model Street, New York, NY 10012",),
+        opening_soon=True,
+        website="https://barsolano.example",
+    )
+    made = ca.job_board_venues([solano], [VERDIGRIS])
+    assert len(made) == 1
+    v = made[0]
+    assert v.venue_id == "v:ca:9200002" and ca.is_job_board_venue(v.venue_id)
+    assert v.name == "Bar Solano" and v.address == "372 Model Street, New York, NY 10012"
+    assert v.zip_code == "10012" and v.website == "https://barsolano.example"
+    assert v.group_id == "g:v:ca:9200002"  # its own group
+    assert v.first_inspection_date is None and v.camis is None and v.license_ids == ()
+    sigs, _ = run([], [solano], [VERDIGRIS, v])
+    assert [(s.signal_type, s.entity_id) for s in sigs] == [("opening_soon", "v:ca:9200002")]
+
+
+def test_matched_or_not_opening_soon_companies_create_no_venue() -> None:
+    matched = _co("Verdigris", locations=("13 Example Street, New York, NY",), opening_soon=True)
+    hiring_only = _co("Quillby", url="https://culinaryagents.com/entities/7", opening_soon=False)
+    no_entity = _co("Nameless", url="https://culinaryagents.com/companies/x", opening_soon=True)
+    assert ca.job_board_venues([matched, hiring_only, no_entity], [VERDIGRIS]) == []
+
+
+def test_job_board_venue_dedupes_by_strict_name_and_street_number() -> None:
+    # same name and street number, street spelled differently: no new venue
+    existing = make_venue("v:9", name="Bar Solano", address="372 MODEL AVE")
+    solano = _co(
+        "Bar Solano",
+        url="https://culinaryagents.com/entities/9200002",
+        locations=("372 Model Street, New York, NY",),
+        opening_soon=True,
+    )
+    assert ca.job_board_venues([solano], [existing]) == []
+    # a different street number is another site of the brand: a new venue
+    elsewhere = make_venue("v:9", name="Bar Solano", address="10 OTHER ST")
+    assert [v.venue_id for v in ca.job_board_venues([solano], [elsewhere])] == ["v:ca:9200002"]
+
+
+def test_job_board_venues_are_idempotent_across_runs() -> None:
+    solano = _co(
+        "Bar Solano",
+        url="https://culinaryagents.com/entities/9200002",
+        locations=("372 Model Street, New York, NY",),
+        opening_soon=True,
+    )
+    first = ca.job_board_venues([solano], [VERDIGRIS])
+    assert ca.job_board_venues([solano], [VERDIGRIS, *first]) == []
+
+
+def test_job_board_group_link_joins_a_new_venue_to_its_group() -> None:
+    solano = _co(
+        "Bar Solano",
+        url="https://culinaryagents.com/entities/9200002",
+        locations=("372 Model Street, New York, NY",),
+        opening_soon=True,
+        group="Casaverde",
+    )
+    made = ca.job_board_venues([solano], [VERDIGRIS])
+    sister = _job("Verdigris", "Server", group="Casaverde")
+    _, evidence = run([sister], [solano], [VERDIGRIS, *made])
+    assert [set(e.venue_ids) for e in evidence] == [{"v:verdigris", "v:ca:9200002"}]
+
+
+def test_cli_unmatched_opening_soon_company_enters_the_ranking(monkeypatch, tmp_path) -> None:
+    real_score = cli.score
+    store = _auth_store(monkeypatch, tmp_path)
+    monkeypatch.setattr(cli, "OUT_DIR", tmp_path / "out")
+    cli.culinary_agents(session_fetch=FakeSession(), today=TODAY, sleep=lambda s: None)
+    venues = {v.venue_id: v for v in store.load("venues", Venue)}
+    made = sorted(v for v in venues if v.startswith("v:ca:"))
+    assert "v:ca:9200002" in made  # Bar Solano: no venue in the universe
+    assert "v:ca:9200001" not in made  # MARINELLA NYC matched v:marinella: no duplicate
+    assert not [
+        v for v in venues.values() if v.venue_id != "v:marinella" and "MARINELLA" in v.name.upper()
+    ]
+    top = {name for _, name in real_score(datetime(2026, 11, 16, tzinfo=UTC))["top"]}
+    assert "Bar Solano" in top
+    kinds = {(s.entity_id, s.signal_type) for s in store.load("signals", Signal)}
+    assert ("v:ca:9200002", "opening_soon") in kinds

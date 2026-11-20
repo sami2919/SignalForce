@@ -83,6 +83,7 @@ from scripts.hospitality.resolve.carry import (
     apply_websites,
     canonical_entity,
     canonical_group_id,
+    carried_job_board_venues,
     carried_press_venues,
     chain_moves,
     merge_lookups,
@@ -114,6 +115,7 @@ from scripts.hospitality.sources.culinary_agents import (
     article_urls,
     company_key,
     fetch_nyc,
+    job_board_venues,
     job_key,
     read_page,
     redact,
@@ -301,10 +303,11 @@ def resolve() -> dict[str, int]:
     built = build_venues(licenses, inspections, match)
     moves = venue_moves(old, built)
     press_venues = carried_press_venues(old, (v.venue_id for v in built))
+    board_venues = carried_job_board_venues(old, (v.venue_id for v in built))
     lookups = remap_lookups(merge_lookups(store.load("websites", WebsiteLookup), old, today), moves)
     store.replace("websites", lookups, key=lambda w: w.venue_id)  # type: ignore[attr-defined]
     venues, groups = _regroup(
-        store, cfg, apply_websites([*built, *press_venues], lookups), licenses, moves
+        store, cfg, apply_websites([*built, *press_venues, *board_venues], lookups), licenses, moves
     )
     store.replace(
         "links",
@@ -318,6 +321,7 @@ def resolve() -> dict[str, int]:
         "possibly_same_links": len(match.links),
         "websites_kept": sum(v.website is not None for v in venues),
         "press_venues_kept": len(press_venues),
+        "job_board_venues_kept": len(board_venues),
         "venues_moved": len(moves),
     }
 
@@ -1111,6 +1115,8 @@ def culinary_agents(
     groups = store.load("groups", Group)
     budget = CallBudget("culinary_agents", cfg.budgets.get("culinary_agents", 40))
     jobs, companies = fetch_nyc(cfg.culinary_agents, budget, fetch or PoliteFetcher(), today, sleep)
+    made = job_board_venues(companies, venues)  # unmatched opening-soon companies
+    venues = [*venues, *made]
     signals, evidence = to_signals(jobs, companies, venues, groups, today, cfg.culinary_agents)
     store.save("signals", signals, key=lambda s: s.signal_id)  # type: ignore[attr-defined]
     store.save("group_evidence", evidence, key=_evidence_key)  # type: ignore[arg-type]
@@ -1121,6 +1127,7 @@ def culinary_agents(
         "pages": budget.used,
         "jobs": len(jobs),
         "companies": len(companies),
+        "job_board_venues": len(made),
         "signals": len(signals),
         "evidence": len(evidence),
         "stopped": f"culinary_agents page budget spent ({budget.limit}); results may be partial"
@@ -1264,6 +1271,8 @@ def _culinary_agents_logged_in(
     )
     first_seen = {**{k: s.first_seen for k, s in seen.items()}}
     first_seen |= {s.key: s.first_seen for s in walk.seen}
+    made = job_board_venues(all_companies, venues)  # unmatched opening-soon companies
+    venues = [*venues, *made]
     signals, evidence = to_signals(
         all_jobs, all_companies, venues, groups, today, cfg.culinary_agents, first_seen
     )
@@ -1291,6 +1300,7 @@ def _culinary_agents_logged_in(
         "early_exit": ", ".join(walk.early_exit),
         "stopped": stopped,
         "stopped_page": stopped_page,
+        "job_board_venues": len(made),
         "signals": len(signals),
         "evidence": len(evidence),
         "scored_groups": scored["scored_groups"],

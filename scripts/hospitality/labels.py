@@ -171,8 +171,16 @@ def _label_domains(label: CustomerLabel) -> frozenset[str]:
     return frozenset(d for r in raw if r and (d := registrable_domain(r)))
 
 
+# Airport terminals (JFK 11430, LaGuardia 11371): a brand's concession there is run by the
+# terminal's food-service operator, so a name match is not the customer.
+AIRPORT_ZIP_CODES = frozenset({"11430", "11371"})
+
+
 def _venue_matches(label: CustomerLabel, venue: Venue) -> bool:
     """Domain first; the label's own name only when no domain contradicts it.
+
+    A brand label (a `Name*` prefix pattern) never matches an airport venue by name: only its
+    website domain can make an airport concession the customer's.
 
     A venue a human listed in the seed (`venue_names`) matches by name even when its website
     domain is not one the seed records: that list names the customer's other venues, whose sites
@@ -182,6 +190,9 @@ def _venue_matches(label: CustomerLabel, venue: Venue) -> bool:
     domains = _label_domains(label)
     if venue_domain and venue_domain in domains:
         return True
+    brand = any(p.endswith("*") for p in label.venue_names)
+    if brand and venue.zip_code in AIRPORT_ZIP_CODES:
+        return False
     if any(matches_seed_name(p, venue.name) for p in label.venue_names):
         return True
     if domains and venue_domain:

@@ -243,6 +243,9 @@ class HospitalityConfig(BaseModel):
     )
     # At most this many venues' opening terms enter a group's p_window (strongest first).
     max_opening_venues_per_group: int = 3
+    # At most this many people-family signals (hires, staffing changes) count per group, the
+    # strongest first: a big group posting many roles is not that many buying windows.
+    max_people_signals_per_group: int = 2
     # Case-insensitive regexes over normalized group / venue / licensee names (contract
     # and institutional food-service operators are not Magic's buyer). Required: a config that
     # omits a disqualifier list must fail to load, not silently disqualify nothing (M2).

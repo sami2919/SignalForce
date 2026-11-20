@@ -490,3 +490,30 @@ def test_pipeline_sequence_keeps_customers_out_and_state_intact(
     monkeypatch.setattr(cli, "judge", lambda d, evidence, *, account_text, pass_score: verdict)
     cli.draft_command(top=10)
     assert bravo_group not in drafted and drafted
+
+
+def test_resolve_keeps_job_board_venues_and_their_signals(store: DocStore) -> None:
+    cli.resolve()
+    board = make_venue(
+        "v:ca:9200002",
+        name="Bar Solano",
+        address="372 Model Street",
+        zip_code="10012",
+        website="https://barsolano.example",
+    )
+    store.save("venues", [board], key=lambda v: v.venue_id)  # type: ignore[attr-defined]
+    store.save(
+        "signals",
+        [make_signal("opening_soon", "v:ca:9200002")],
+        key=lambda x: x.signal_id,  # type: ignore[attr-defined]
+    )
+    out = cli.resolve()
+    venues = _venues(store)
+    assert "v:ca:9200002" in venues and out["job_board_venues_kept"] == 1
+    kept = venues["v:ca:9200002"]
+    assert kept.website == "https://barsolano.example" and kept.zip_code == "10012"
+    cli.score(datetime(2026, 11, 16, tzinfo=UTC))
+    from scripts.hospitality.models import ScoredAccount
+
+    scored = {a.group_id: a for a in store.load("scores", ScoredAccount)}
+    assert any(c.signal_type == "opening_soon" for c in scored[kept.group_id].contributions)

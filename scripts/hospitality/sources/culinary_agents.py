@@ -60,6 +60,7 @@ from scripts.hospitality.models import (
     SignalType,
     Venue,
 )
+from scripts.hospitality.resolve.carry import JOB_BOARD_VENUE_PREFIX
 from scripts.hospitality.resolve.normalize import (
     normalize_address,
     normalize_name,
@@ -1110,6 +1111,64 @@ def _candidates(
         narrowed = [v for v in found if v.website and registrable_domain(v.website) == domain]
         found = narrowed or found
     return found
+
+
+_ZIP = re.compile(r"\b(\d{5})(?:-\d{4})?\s*$")
+
+
+def is_job_board_venue(venue_id: str) -> bool:
+    """A venue created from a Culinary Agents company card (no public record yet)."""
+    return venue_id.startswith(JOB_BOARD_VENUE_PREFIX)
+
+
+def _street_number(address: str) -> str | None:
+    tokens = normalize_address(address.split(",")[0]).split()
+    return tokens[0] if tokens and tokens[0].isdigit() else None
+
+
+def job_board_venues(companies: Sequence[CACompany], venues: Sequence[Venue]) -> list[Venue]:
+    """New venues (`v:ca:<entity id>`) for opening-soon companies that match no known venue.
+
+    Built from the company card: name, address, ZIP and the profile's website when one was
+    fetched; each in its own group until job-board group evidence joins it to one. A company
+    that matches one or several venues gets none, and neither does one whose strict name and
+    street number (strict name alone when the card gives no street number) an existing venue
+    already has: a differently spelled address is the same site, never a second venue.
+    """
+    known = {v.venue_id for v in venues}
+    out: dict[str, Venue] = {}
+    for company in companies:
+        ident = entity_id(company.url)
+        vid = f"{JOB_BOARD_VENUE_PREFIX}{ident}"
+        if not company.opening_soon or ident is None or vid in known or vid in out:
+            continue
+        if _candidates(company.name, company.locations, company.website, venues):
+            continue  # a match (or an ambiguous one): never a new venue
+        address = company.locations[0] if company.locations else ""
+        number = _street_number(address)
+        if any(
+            _same_name(company.name, v.name)
+            and (number is None or _street_number(v.address) == number)
+            for v in venues
+        ):
+            continue
+        zip_match = _ZIP.search(address)
+        out[vid] = Venue(
+            venue_id=vid,
+            name=company.name,
+            address=address,
+            zip_code=zip_match.group(1) if zip_match else "",
+            lat=None,
+            lon=None,
+            camis=None,
+            license_ids=(),
+            license_class=None,
+            license_description=None,
+            first_inspection_date=None,
+            website=company.website,
+            group_id=f"g:{vid}",
+        )
+    return list(out.values())
 
 
 def _short(*parts: str) -> str:

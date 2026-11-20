@@ -227,7 +227,7 @@ def test_choose_angles_maps_signal_families() -> None:
         "platform_switch",
     ]
     assert choose_angles([make_signal("lookalike")]) == []
-    for kind in ("new_chef", "guest_role_hire", "events_role_hire"):
+    for kind in ("new_chef", "guest_role_hire", "events_role_hire", "staffing_change"):
         assert choose_angles([make_signal(kind)]) == ["people_change"], kind
     assert choose_angles([make_signal("fine_dining_service")]) == []  # fit evidence only
 

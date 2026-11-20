@@ -159,7 +159,8 @@ def _opening_dedupe(
 
     Opening evidence (pending / issued / not-yet-inspected) is one fact per venue: only the
     strongest counts. Then only the strongest `max_opening_venues_per_group` venues count.
-    Every other signal counts independently.
+    People-family signals (hires, staffing changes) are capped too: only the strongest
+    `max_people_signals_per_group` count per group. Every other signal counts independently.
     """
     evidence = set(cfg.opening_evidence_signals)
     counted = {sig.signal_id for sig, *_ in rows if sig.signal_type not in evidence}
@@ -185,6 +186,14 @@ def _opening_dedupe(
                 f"beyond venue cap: only the strongest {cfg.max_opening_venues_per_group} "
                 f"venues' opening terms count (venue {venue_id})"
             )
+    cap = cfg.max_people_signals_per_group
+    people = sorted(
+        ((sig, raw) for sig, prior, _w, raw in rows if prior.family == "people"),
+        key=lambda x: (-x[1], x[0].signal_id),
+    )
+    for sig, _raw in people[cap:]:
+        counted.discard(sig.signal_id)
+        notes[sig.signal_id] = f"capped: only the strongest {cap} people signals count per group"
     return counted, notes
 
 

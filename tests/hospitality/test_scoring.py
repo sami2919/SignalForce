@@ -381,3 +381,54 @@ def test_accolade_needs_the_exact_name_in_the_listed_borough(
     group = Group(group_id="g:1", name="SOME LLC", venue_ids=("v:1",), resolution="singleton")
     venues = [make_venue("v:1", name=venue_name, zip_code=zip_code, group_id="g:1")]
     assert fit_score(group, venues, [], cfg2) == pytest.approx(expected)
+
+
+# ---- people signals: at most max_people_signals_per_group count per group ----
+
+
+def _people_group(n: int, kinds: tuple[str, ...] | None = None):
+    from scripts.hospitality.scoring import score_group
+
+    cfg = load_config()
+    venues = [make_venue(f"v:{i}", group_id="g:people") for i in range(n)]
+    group = Group(
+        group_id="g:people",
+        name="People Co",
+        venue_ids=tuple(v.venue_id for v in venues),
+        resolution="shared_legal_name",
+    )
+    kinds = kinds or (
+        "new_chef",
+        "new_gm",
+        "guest_role_hire",
+        "events_role_hire",
+        "staffing_change",
+    )
+    signals = [
+        make_signal(kinds[i % len(kinds)], f"v:{i}", signal_id=f"hire:{i}", occurred_at=NOW)
+        for i in range(n)
+    ]
+    return score_group(
+        group, signals, {}, venues, [], cfg, NOW, is_customer=False, disqualified_reason=None
+    )
+
+
+def test_people_signals_are_capped_per_group() -> None:
+    ten, two = _people_group(10, ("new_chef",)), _people_group(2, ("new_chef",))
+    assert ten.p_window <= two.p_window + 1e-9  # ten hires score no higher than two
+    assert _people_group(10).p_window <= _people_group(2, ("new_chef",)).p_window + 1e-9
+    ten = _people_group(10)
+    counted = [c for c in ten.contributions if c.contribution > 0]
+    capped = [c for c in ten.contributions if "capped" in c.note]
+    assert len(counted) == 2 and len(capped) == 8
+    assert all(c.contribution == 0.0 for c in capped)
+    assert len(ten.contributions) == 10  # every hire stays in the trace
+
+
+def test_people_cap_keeps_the_strongest_and_comes_from_config() -> None:
+    cfg = load_config()
+    assert cfg.max_people_signals_per_group == 2
+    ten = _people_group(10)
+    kept = sorted((c.contribution for c in ten.contributions if c.contribution > 0), reverse=True)
+    best = sorted((c.precision * 1.0 for c in ten.contributions), reverse=True)[:2]
+    assert kept == pytest.approx(best)  # the two strongest priors (both 0.20) count

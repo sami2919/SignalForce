@@ -340,3 +340,52 @@ def test_case_hint_venues_are_seed_venues_of_their_customer() -> None:
     for customer, venue in cli.CASE_HINTS.items():
         lbl = by_name[customer]
         assert venue in (lbl.name, *lbl.venue_names), (customer, venue)
+
+
+def test_brand_labels_ignore_airport_concession_venues() -> None:
+    """An airport concession of a brand is run by the terminal operator, not the customer."""
+    venues = [
+        make_venue("v:1", name="Momofuku", zip_code="11430", group_id="g:jfk"),  # JFK T8
+        make_venue("v:2", name="Eataly", zip_code="11430", group_id="g:jfk"),
+        make_venue("v:3", name="MOMOFUKU NOODLE BAR", zip_code="10003", group_id="g:noodle"),
+        make_venue("v:4", name="MOMOFUKU SSAM BAR", zip_code="11371", group_id="g:lga"),  # LGA
+    ]
+    groups = [
+        Group(
+            group_id="g:jfk",
+            name="JFK T8 F&B LLC",
+            venue_ids=("v:1", "v:2"),
+            resolution="shared_legal_name",
+        ),
+        Group(
+            group_id="g:noodle",
+            name="MOMOFUKU NOODLE BAR",
+            venue_ids=("v:3",),
+            resolution="singleton",
+        ),
+        Group(
+            group_id="g:lga", name="LGA B CONCESSIONS", venue_ids=("v:4",), resolution="singleton"
+        ),
+    ]
+    momofuku = next(lb for lb in load_seed_labels(SEED) if lb.name == "Momofuku")
+    assert set(customer_groups([momofuku], venues, groups)) == {"g:noodle"}
+
+
+def test_airport_venue_still_matches_a_brand_label_by_website_domain() -> None:
+    venues = [
+        make_venue(
+            "v:1",
+            name="Momofuku",
+            zip_code="11430",
+            website="https://momofuku.com/jfk",
+            group_id="g:1",
+        )
+    ]
+    momofuku = next(lb for lb in load_seed_labels(SEED) if lb.name == "Momofuku")
+    assert set(customer_groups([momofuku], venues, groups_for(venues))) == {"g:1"}
+
+
+def test_airport_rule_applies_only_to_brand_labels() -> None:
+    venues = [make_venue("v:1", name="Estela", zip_code="11430", group_id="g:1")]
+    plain = label(name="Estela")
+    assert set(customer_groups([plain], venues, groups_for(venues))) == {"g:1"}
