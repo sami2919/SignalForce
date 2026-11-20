@@ -278,6 +278,7 @@ culinary_agents:
   daily_stop_after_known: 15     # consecutive already-seen organic items before a daily run stops
   segment_ids: ["13", "9", "2", "1"]   # captured defaults; confirm the labels on the first run
   profile_refresh_days: 30
+  max_articles: 10               # public /resources articles per `culinary-agents --articles` run
   locations: ["New York, NY"]   # 3 pages each; other strings (e.g. "Brooklyn, NY") are untested
   delay_seconds: 2.0
   max_company_pages: 10

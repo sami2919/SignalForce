@@ -48,12 +48,14 @@ from selectolax.lexbor import LexborHTMLParser, LexborNode
 
 from scripts.hospitality.budget import BudgetExceeded, CallBudget
 from scripts.hospitality.config import CulinaryAgentsConfig
+from scripts.hospitality.discover.press import press_to_records
 from scripts.hospitality.models import (
     CACompany,
     CAJob,
     CASeen,
     Group,
     GroupEvidence,
+    PressFacts,
     Signal,
     SignalType,
     Venue,
@@ -579,6 +581,11 @@ def _get(url: str, budget: CallBudget, fetch: Fetch, pace: Callable[[], None]) -
     return html
 
 
+# Public names for callers outside this module (the CLI's article reader).
+Pacer = _Pacer
+read_page = _get
+
+
 def _company_from_job(job: CAJob) -> CACompany:
     return CACompany(
         name=job.company,
@@ -872,6 +879,64 @@ def _profiles(
             touched[key] = record.model_copy(update={"profile_fetched_on": today})
         if page is not None and page.website:
             companies[key] = company.model_copy(update={"website": page.website})
+
+
+# ---- articles (public /resources) -------------------------------------------------------------
+
+RESOURCES_URL = f"{BASE}/resources"
+_ARTICLE_SKIP = frozenset({"category", "tag", "page", "author", "search"})
+
+
+def parse_article_index(html: str) -> list[str]:
+    """Article URLs on the public /resources index (no query or fragment), in page order.
+
+    An article is a `/resources/<section>/<slug>` link on the site; category, tag, paging and
+    author listings are not articles."""
+    out: list[str] = []
+    for a in LexborHTMLParser(html).css("a[href]"):
+        url = urljoin(BASE, a.attributes.get("href") or "")
+        parts = urlsplit(url)
+        segments = [seg for seg in parts.path.split("/") if seg]
+        if (parts.hostname or "") not in _HOSTS or len(segments) < 3:
+            continue
+        if segments[0] != "resources" or segments[1] in _ARTICLE_SKIP:
+            continue
+        clean = f"{BASE}{parts.path.rstrip('/')}"
+        if is_fetchable(clean) and clean not in out:
+            out.append(clean)
+    return out
+
+
+def article_text(html: str) -> str:
+    """The readable text of an article page: <article>, else <main>, else <body>."""
+    tree = LexborHTMLParser(html)
+    tree.strip_tags(["script", "style", "noscript"])
+    node = tree.css_first("article") or tree.css_first("main") or tree.body
+    return _text(node)
+
+
+def article_urls(
+    cfg: CulinaryAgentsConfig, budget: CallBudget, fetch: Fetch, pace: Callable[[], None]
+) -> list[str]:
+    """Article URLs from the public index, at most `cfg.max_articles` (one budgeted page)."""
+    html = _get(RESOURCES_URL, budget, fetch, pace)
+    return parse_article_index(html or "")[: cfg.max_articles]
+
+
+def article_signals(
+    url: str,
+    text: str,
+    extract: Callable[[str, str], PressFacts],
+    venues: Sequence[Venue],
+    groups: Sequence[Group],
+    today: date,
+) -> tuple[list[Signal], list[Venue], list[GroupEvidence]]:
+    """`press_opening` signals (article URL as evidence) from one article, via the press
+    extractor, which drops any name not in the article text. People are never read: their
+    names are dropped before matching, so no person signal or detail comes out."""
+    facts = extract(text, url).model_copy(update={"people": (), "hotel_partner": None})
+    signals, created, evidence = press_to_records(facts, url, today, venues, groups, frozenset())
+    return [s for s in signals if s.signal_type == "press_opening"], created, evidence
 
 
 # ---- matching and signals -------------------------------------------------------------------

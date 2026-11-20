@@ -105,11 +105,16 @@ from scripts.hospitality.sources.culinary_agents import (
     COOKIE_ENV,
     SESSION_EXPIRED,
     Fetch,
+    Pacer,
     PoliteFetcher,
     SessionFetch,
+    article_signals,
+    article_text,
+    article_urls,
     company_key,
     fetch_nyc,
     job_key,
+    read_page,
     to_signals,
     walk_nyc,
 )
@@ -1065,11 +1070,13 @@ def culinary_agents(
     session_fetch: SessionFetch | None = None,
     backfill: bool = False,
     max_pages: int | None = None,
+    articles: bool = False,
 ) -> dict[str, object]:
     """Culinary Agents hiring / opening-soon signals and group evidence; merge groups, rescore.
 
     Public mode reads page 1 of each search. Logged-in mode (`culinary_agents.authenticated`,
     or `--backfill` / `--max-pages`) walks the paginated XHR search with the operator's session.
+    `--articles` reads the public /resources articles as opening news (no login).
     """
     cfg = load_config()
     if not cfg.culinary_agents.enabled:  # fail fast, before touching the store or the network
@@ -1078,6 +1085,8 @@ def culinary_agents(
             "automated data collection: review https://culinaryagents.com/agreement, then set "
             "culinary_agents.enabled: true in the hospitality config to run it."
         )
+    if articles:
+        return _culinary_agents_articles(cfg, fetch or PoliteFetcher(), today, sleep)
     if cfg.culinary_agents.authenticated or backfill or max_pages is not None:
         cookie = os.environ.get(COOKIE_ENV, "").strip()
         if not cfg.culinary_agents.authenticated or not cookie:
@@ -1111,6 +1120,76 @@ def culinary_agents(
         "stopped": f"culinary_agents page budget spent ({budget.limit}); results may be partial"
         if spent
         else "",
+        "scored_groups": scored["scored_groups"],
+    }
+
+
+def _culinary_agents_articles(
+    cfg: HospitalityConfig, fetch: Fetch, today: date | None, sleep: Callable[[float], None]
+) -> dict[str, object]:
+    """Public /resources articles through the press extractor as `press_opening` signals.
+
+    Without ANTHROPIC_API_KEY only the index is read and the article URLs are listed.
+    """
+    today = today or date.today()
+    budget = CallBudget("culinary_agents", cfg.budgets.get("culinary_agents", 40))
+    pace = Pacer(cfg.culinary_agents.delay_seconds, sleep)
+    urls: list[str] = []
+    stopped = ""
+    try:
+        urls = article_urls(cfg.culinary_agents, budget, fetch, pace)
+    except BudgetExceeded as exc:
+        stopped = str(exc)
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        return {
+            "articles": len(urls),
+            "extracted": 0,
+            "urls": urls,
+            "note": "ANTHROPIC_API_KEY is not set: listing article URLs only",
+            "stopped": stopped,
+        }
+    store = DocStore()
+    venues = store.load("venues", Venue)
+    groups = store.load("groups", Group)
+    signals: dict[str, Signal] = {}
+    new_venues: dict[str, Venue] = {}
+    evidence: list[GroupEvidence] = []
+    extracted = refused = 0
+    try:
+        for url in urls:
+            html = read_page(url, budget, fetch, pace)
+            if not html:
+                continue
+            try:
+                sigs, created, ev = article_signals(
+                    url,
+                    article_text(html),
+                    extract_press,
+                    [*venues, *new_venues.values()],
+                    groups,
+                    today,
+                )
+            except LLMRefusal:
+                refused += 1
+                continue
+            extracted += 1
+            signals.update({s.signal_id: s for s in sigs})
+            new_venues.update({v.venue_id: v for v in created})
+            evidence.extend(ev)
+    except BudgetExceeded as exc:
+        stopped = str(exc)
+    finally:  # keep the paid extractions whatever stopped the loop
+        store.save("signals", list(signals.values()), key=lambda s: s.signal_id)  # type: ignore[attr-defined]
+        store.save("group_evidence", evidence, key=_evidence_key)  # type: ignore[arg-type]
+        _regroup(store, cfg, [*venues, *new_venues.values()], store.load("licenses", LicenseRecord))
+    scored = score()
+    return {
+        "articles": len(urls),
+        "extracted": extracted,
+        "refused": refused,
+        "signals": len(signals),
+        "new_venues": len(new_venues),
+        "stopped": stopped,
         "scored_groups": scored["scored_groups"],
     }
 
@@ -1522,6 +1601,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--backfill",
         action="store_true",
         help="Logged-in: walk every page once (budgets.culinary_agents_backfill)",
+    )
+    p_ca.add_argument(
+        "--articles",
+        action="store_true",
+        help="Public /resources articles as opening news (lists URLs without ANTHROPIC_API_KEY)",
     )
     p_ca.add_argument(
         "--max-pages", type=int, help="Logged-in: fetch at most this many pages in this run"

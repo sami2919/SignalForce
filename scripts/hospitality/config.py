@@ -41,6 +41,8 @@ class CulinaryAgentsConfig(BaseModel):
     segment_ids: tuple[str, ...] = ("13", "9", "2", "1")
     # A company profile fetched less than this many days ago is not fetched again.
     profile_refresh_days: int = 30
+    # Public /resources articles read per `culinary-agents --articles` run, at most.
+    max_articles: int = 10
     # Search locations; each costs 3 pages: jobs, opening-soon jobs, opening-soon companies.
     locations: tuple[str, ...] = ("New York, NY",)
     delay_seconds: float = 2.0

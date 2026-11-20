@@ -1331,3 +1331,92 @@ def test_cli_auth_stop_says_session_expired(monkeypatch, tmp_path, capsys) -> No
     )
     assert "session expired — refresh CULINARY_AGENTS_COOKIE" in out["stopped"]
     assert "SECRET" not in repr(out)
+
+
+# ---- section 8: Culinary Agents articles as opening news ----
+
+
+def test_parse_article_index_keeps_article_links_only() -> None:
+    urls = ca.parse_article_index(read("resources_index.html"))
+    assert urls == [
+        "https://culinaryagents.com/resources/industry-insights/whats-opening-this-winter-in-nyc",
+        "https://culinaryagents.com/resources/featured-articles/a-new-tavern-for-the-west-village",
+    ]
+
+
+def test_article_text_reads_the_article_body_without_scripts() -> None:
+    text = ca.article_text(read("article.html"))
+    assert "Verdigris, the new tavern" in text
+    assert "ignore me" not in text and "Footer links" not in text
+
+
+def _article_pages(urls: list[str]):
+    def fetch(url: str) -> str | None:
+        urls.append(url)
+        return read("resources_index.html") if url == ca.RESOURCES_URL else read("article.html")
+
+    return fetch
+
+
+def test_cli_articles_without_anthropic_key_lists_urls_only(monkeypatch, tmp_path) -> None:
+    from scripts.hospitality.discover import press
+
+    _auth_store(monkeypatch, tmp_path)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setattr(press, "structured", lambda *a, **k: pytest.fail("called Claude"))
+    urls: list[str] = []
+    out = cli.culinary_agents(fetch=_article_pages(urls), today=TODAY, articles=True)
+    assert urls == [ca.RESOURCES_URL]  # only the public index; no login, no article bodies
+    assert out["articles"] == 2 and out["extracted"] == 0
+    assert len(out["urls"]) == 2 and "ANTHROPIC_API_KEY" in out["note"]
+
+
+def test_cli_articles_route_to_press_extractor_and_drop_names_not_in_text(
+    monkeypatch, tmp_path
+) -> None:
+    from scripts.hospitality.discover import press
+    from scripts.hospitality.models import PressFacts, PressPerson, PressVenue
+
+    store = _auth_store(monkeypatch, tmp_path)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    facts = PressFacts(
+        venues=(
+            PressVenue(
+                name="Verdigris",
+                address_or_area="13 Example Street",
+                status="opening_soon",
+                expected_open="January",
+                group_name=None,
+            ),
+            PressVenue(
+                name="Phantom Bistro",  # not in the article text: a fabrication
+                address_or_area="1 Nowhere Lane",
+                status="opening_soon",
+                expected_open=None,
+                group_name=None,
+            ),
+        ),
+        people=(PressPerson(name="Ada Moreau", role="Executive Chef", prior_employers=()),),
+        hotel_partner=None,
+    )
+    calls: list[str] = []
+
+    def fake_structured(*a, **k):
+        calls.append(k["user"])
+        return facts
+
+    monkeypatch.setattr(press, "structured", fake_structured)
+    out = cli.culinary_agents(fetch=_article_pages([]), today=TODAY, articles=True)
+    assert len(calls) == 2 and out["extracted"] == 2
+    sigs = store.load("signals", Signal)
+    assert {s.signal_type for s in sigs} == {"press_opening"}
+    assert {s.entity_id for s in sigs} == {"v:verdigris"}
+    assert all(s.evidence_ref.startswith(f"{ca.RESOURCES_URL}/") for s in sigs)
+    assert not any("Phantom" in s.detail or "Ada Moreau" in s.detail for s in sigs)
+    assert not any(v.name == "Phantom Bistro" for v in store.load("venues", Venue))
+
+
+def test_cli_articles_need_only_the_public_source_enabled(monkeypatch) -> None:
+    monkeypatch.setattr(cli, "load_config", lambda: load_config())
+    with pytest.raises(SystemExit, match="agreement"):
+        cli.culinary_agents(fetch=_article_pages([]), today=TODAY, articles=True)
