@@ -85,4 +85,41 @@ customers:
     evidence_ref: https://hogsalt.com
     venue_names: [4 Charles Prime Rib, Au Cheval, Monkey Bar]
     venue_domains: [auchevaldiner.com, nycmonkeybar.com]
+  # Added 2026-11-20 from Loyalist's own pages (logos and testimonials read that day).
+  - name: STARR Restaurants
+    website_domain: null
+    first_public_date: null
+    evidence_ref: https://www.eatloyalist.com/
+  - name: Tao Group Hospitality
+    website_domain: taogroup.com
+    first_public_date: null
+    evidence_ref: https://www.eatloyalist.com/
+  - name: Thomas Keller Restaurant Group
+    website_domain: thomaskeller.com
+    first_public_date: null
+    evidence_ref: https://www.eatloyalist.com/
+  - name: Crown Shy
+    website_domain: null
+    first_public_date: null
+    evidence_ref: https://www.eatloyalist.com/customer-stories/
+  - name: "Rose's Luxury"
+    website_domain: null
+    first_public_date: null
+    evidence_ref: https://www.eatloyalist.com/customer-stories/
+  - name: Glendale Hospitality
+    website_domain: null
+    first_public_date: null
+    evidence_ref: https://www.eatloyalist.com/customer-stories/
+  - name: High Street Hospitality Group
+    website_domain: null
+    first_public_date: null
+    evidence_ref: https://www.eatloyalist.com/customer-stories/
+  - name: Mattos Hospitality
+    website_domain: null
+    first_public_date: null
+    evidence_ref: https://www.eatloyalist.com/customer-stories/
+  - name: Grassfed Culture Hospitality
+    website_domain: null
+    first_public_date: null
+    evidence_ref: https://www.eatloyalist.com/customer-stories/
 dismissed_embeds: []

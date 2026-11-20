@@ -19,6 +19,7 @@ from scripts.hospitality.models import (
     Group,
     Judgement,
     StackObservation,
+    Venue,
 )
 from scripts.hospitality.report import build_report
 from scripts.hospitality.store import DocStore
@@ -419,3 +420,83 @@ def test_stack_section_reports_website_coverage_by_method_and_miss_reason(
     )  # fmt: skip
     s6 = sections(build(store, tmp_path, events_yaml))[6]
     assert "Website lookups: 3 (n=3); found 2 (1 phone, 1 address); no site: 1 none_verified" in s6
+
+
+# --- registry group view (top of section 7) ---------------------------------------------
+
+
+def _registry_store(tmp_path: Path) -> DocStore:
+    from scripts.hospitality.models import RegistryRecord
+    from scripts.hospitality.sources.registry import RECORDS, normalize_company
+
+    store = full_store(tmp_path)
+    venues = {v.venue_id: v for v in store.load("venues", Venue)}
+    venues["v:b"] = venues["v:b"].model_copy(update={"license_ids": ("L2",)})
+    venues["v:c"] = venues["v:c"].model_copy(update={"license_ids": ("L3",)})
+    store.save("venues", list(venues.values()), key=lambda v: v.venue_id)
+    store.save(
+        "licenses",
+        [make_license("L1", legal_name="Zephyr LLC"), make_license("L2", legal_name="Quill LLC"),
+         make_license("L3", legal_name="Moth LLC")],
+        key=lambda r: r.record_id,
+    )  # fmt: skip
+
+    def rec(legal: str, person: str | None, found: bool = True) -> RegistryRecord:
+        return RegistryRecord(
+            name_key=normalize_company(legal), legal_name=legal, found=found,
+            dos_id=f"d-{legal}" if found else None, entity_name=legal.upper() if found else None,
+            process_name=person, process_address="1 Main Street" if found else None,
+            process_address_1="1 Main Street" if found else None,
+            process_zip="10001" if found else None,
+        )  # fmt: skip
+
+    store.save(
+        RECORDS,
+        [rec("Zephyr LLC", "Pat Owner"), rec("Quill LLC", "Pat Owner"), rec("Moth LLC", None,
+                                                                             found=False)],
+        key=lambda r: r.name_key,
+    )  # fmt: skip
+    return store
+
+
+def _view(text: str) -> str:
+    s7 = sections(text)[7]
+    return s7.split("#### 1.", 1)[0]
+
+
+def test_groups_view_ranks_by_strongest_member_and_links_every_registry_name(tmp_path) -> None:
+    view = _view(build(_registry_store(tmp_path), tmp_path))
+    assert "### Hospitality groups (ranked)" in view
+    assert "Pat Owner (operator)" in view
+    assert "Zephyr Hall" in view and "Quill Room" in view
+    assert view.count("https://data.ny.gov/resource/n9v6-gdp6.json?dos_id=") >= 2
+    assert "priority 0.30" in view  # the stronger member, g:a, sets the rank
+
+
+def test_groups_view_excludes_customer_clusters(tmp_path) -> None:
+    store = _registry_store(tmp_path)
+    venues = {v.venue_id: v for v in store.load("venues", Venue)}
+    venues["v:c"] = venues["v:c"].model_copy(update={"license_ids": ("L1",)})  # Moth = Zephyr co
+    store.save("venues", list(venues.values()), key=lambda v: v.venue_id)
+    view = _view(build(store, tmp_path))
+    assert "Moth Bistro" not in view
+
+
+def test_groups_view_lists_unresolved_companies_with_reason(tmp_path) -> None:
+    store = _registry_store(tmp_path)  # Moth Bistro (g:c) is a customer: give its LLC to g:b
+    venues = {v.venue_id: v for v in store.load("venues", Venue)}
+    venues["v:b"] = venues["v:b"].model_copy(update={"license_ids": ("L3",)})
+    store.save("venues", list(venues.values()), key=lambda v: v.venue_id)
+    view = _view(build(store, tmp_path))
+    assert "unresolved (not found)" in view and "Moth LLC" in view
+
+
+def test_groups_view_not_run_without_registry_data(tmp_path) -> None:
+    view = _view(build(full_store(tmp_path), tmp_path))
+    assert "Not run: registry" in view
+
+
+def test_top25_unchanged_with_groups_view(tmp_path) -> None:
+    plain = sections(build(full_store(tmp_path / "a"), tmp_path / "a"))[7]
+    with_view = sections(build(_registry_store(tmp_path / "b"), tmp_path / "b"))[7]
+    assert plain.split("#### 1.", 1)[1] == with_view.split("#### 1.", 1)[1]

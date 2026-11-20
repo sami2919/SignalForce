@@ -30,6 +30,7 @@ from scripts.hospitality.models import (
     Group,
     Judgement,
     LicenseRecord,
+    RegistryRecord,
     ScoredAccount,
     Signal,
     StackObservation,
@@ -37,7 +38,14 @@ from scripts.hospitality.models import (
     WebsiteLookup,
     WindowEstimate,
 )
+from scripts.hospitality.resolve.operators import (
+    cluster_operators,
+    is_agent,
+    operator_key,
+    stored_counts,
+)
 from scripts.hospitality.scoring import TIE_DECIMALS, rank_prospects, tie_blocks
+from scripts.hospitality.sources.registry import RECORDS, normalize_company, registry_link
 from scripts.hospitality.store import DocStore
 from scripts.hospitality.window.survival import quantile_time
 
@@ -461,6 +469,115 @@ def _trace(
     return [*lines, ""]
 
 
+GROUP_VIEW_TOP = 15
+GROUP_VIEW_POOL = 300
+NAMED_RESOLUTIONS = frozenset({"job_board", "shared_domain", "press", "manual"})
+_KIND_TEXT = {
+    "named_group": "named hospitality group",
+    "person": "same person behind the licence companies",
+    "office": "same office behind the licence companies",
+}
+
+
+def _behind(record: RegistryRecord | None, cfg: HospitalityConfig, counts: dict) -> str:
+    if record is None or not record.found:
+        return "operator unresolved (not found)"
+    if is_agent(record, cfg.registry, counts):
+        return "operator unresolved (agent or law firm)"
+    key = operator_key(record)
+    who = record.process_name if key and key[0] == "person" else record.process_address
+    return f"behind it: {_esc(who or '')} ([registry]({registry_link(record.dos_id or '')}))"
+
+
+def _groups_view(
+    store: DocStore,
+    cfg: HospitalityConfig,
+    accounts: Sequence[ScoredAccount],
+    signals: Sequence[Signal],
+    names: dict[str, str],
+    venues: Sequence[Venue],
+    groups: Sequence[Group],
+    licenses: Sequence[LicenseRecord],
+    customers: dict,
+) -> list[str]:
+    """Hospitality groups first: named groups and operator clusters from the NY registry,
+    ranked by their strongest member. Display-only; the venue-level top 25 follows unchanged."""
+    lines = ["### Hospitality groups (ranked)", ""]
+    records = store.load(RECORDS, RegistryRecord)
+    if not records:
+        return [*lines, *_not_run("registry", "Run `registry --top 300` (free NY company "
+                                  "registry, no key) to see who is behind each licence company.")]  # fmt: skip
+    by_key = {r.name_key: r for r in records}
+    pool = [a for a in rank_prospects(accounts)[:GROUP_VIEW_POOL] if a.group_id not in customers]
+    acct = {a.group_id: a for a in pool}
+    legal = {r.record_id: r.legal_name for r in licenses}
+    venues_of: dict[str, list[Venue]] = {}
+    companies: dict[str, list[str]] = {}
+    for v in venues:
+        if v.group_id in acct:
+            venues_of.setdefault(v.group_id, []).append(v)
+            for lid in v.license_ids:
+                if lid in legal and legal[lid] not in companies.setdefault(v.group_id, []):
+                    companies[v.group_id].append(legal[lid])
+    recs_by_group = {
+        g: [by_key[k] for k in (normalize_company(n) for n in ns) if k in by_key]
+        for g, ns in companies.items()
+    }
+    counts = stored_counts(records, store)
+    named = frozenset(
+        g.group_id for g in groups if g.resolution in NAMED_RESOLUTIONS and g.group_id in acct
+    )
+    clusters = cluster_operators(recs_by_group, names, named, cfg.registry, counts)
+    entries: list[tuple[str, str, tuple[str, ...]]] = [
+        (c.label, c.kind, tuple(g for g in c.group_ids if g in acct))
+        for c in clusters
+        if not any(g in customers for g in c.group_ids)
+    ]
+    covered = {g for _, _, gs in entries for g in gs}
+    entries += [(names.get(g, g), "named_group", (g,)) for g in sorted(named - covered)]
+    entries = [e for e in entries if e[2]]
+    entries.sort(key=lambda e: (-max(acct[g].priority for g in e[2]), e[0]))
+    evidence = {sg.signal_id: sg.evidence_ref for sg in signals}
+    for i, (label, kind, gids) in enumerate(entries[:GROUP_VIEW_TOP], 1):
+        best = max(acct[g].priority for g in gids)
+        lines += [f"**{i}. {_esc(label)}**: priority {best:.2f}; {_KIND_TEXT[kind]}", ""]
+        for g in gids:
+            for name in companies.get(g, []):
+                rec = by_key.get(normalize_company(name))
+                lines.append(f"- {_esc(name)}: {_behind(rec, cfg, counts)}")
+            for v in venues_of.get(g, []):
+                lines.append(f"- Venue: {_esc(v.name)}, {_esc(v.address)} {v.zip_code}".rstrip())
+        top = sorted(
+            (c for g in gids for c in acct[g].contributions if c.contribution > 0),
+            key=lambda c: -c.contribution,
+        )[:3]
+        for c in top:
+            lines.append(f"- Signal: {c.signal_type} ({evidence.get(c.signal_id, c.signal_id)})")
+        lines.append("")
+    unresolved: dict[str, list[str]] = {}
+    for g, ns in companies.items():
+        if g in covered:
+            continue
+        for n in ns:
+            reason = _behind(by_key.get(normalize_company(n)), cfg, counts)
+            if reason.startswith("operator unresolved"):
+                unresolved.setdefault(reason, []).append(n)
+    for reason, ns in sorted(unresolved.items()):
+        shown = ", ".join(_esc(n) for n in ns[:10])
+        more = f" and {len(ns) - 10} more" if len(ns) > 10 else ""
+        lines += [f"{reason.capitalize()}: {len(ns)} companies ({shown}{more}).", ""]
+    found = [r for r in records if r.found]
+    lines += [
+        (
+            f"Registry coverage: {len(records)} licence companies looked up, {len(found)} found, "
+            f"{sum(is_agent(r, cfg.registry, counts) for r in found)} name only an agent or law "
+            f"firm, {len(records) - len(found)} not found; {len(clusters)} operator clusters."
+        ),
+        "",
+    ]
+    return lines
+
+
 def _prospects(
     accounts: Sequence[ScoredAccount],
     signals: Sequence[Signal],
@@ -719,7 +836,12 @@ def build_report(
             names,
             store.load("websites", WebsiteLookup),
         ),
-        _prospects(accounts, signals, names, today),
+        [
+            *_groups_view(
+                store, cfg, accounts, signals, names, venues, groups, licenses, customers
+            ),
+            *_prospects(accounts, signals, names, today),
+        ],
         _contacts(store.load("contacts", Contact), accounts),
         _drafts(store.load("drafts", Draft), store.load("judgements", Judgement), customers, names),
         _events(store, events_path, {a.group_id: a for a in accounts}, venues, customers, cfg),
