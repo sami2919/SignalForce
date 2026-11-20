@@ -510,11 +510,12 @@ def _groups_view(
     by_key = {r.name_key: r for r in records}
     pool = [a for a in rank_prospects(accounts)[:GROUP_VIEW_POOL] if a.group_id not in customers]
     acct = {a.group_id: a for a in pool}
+    clustered = set(acct) | set(customers)  # customers cluster too, so their operators drop out
     legal = {r.record_id: r.legal_name for r in licenses}
     venues_of: dict[str, list[Venue]] = {}
     companies: dict[str, list[str]] = {}
     for v in venues:
-        if v.group_id in acct:
+        if v.group_id in clustered:
             venues_of.setdefault(v.group_id, []).append(v)
             for lid in v.license_ids:
                 have = companies.setdefault(v.group_id, [])
@@ -530,7 +531,9 @@ def _groups_view(
     named = frozenset(
         g.group_id for g in groups if g.resolution in NAMED_RESOLUTIONS and g.group_id in acct
     )
-    clusters = cluster_operators(recs_by_group, names, named, cfg.registry, counts)
+    clusters = cluster_operators(
+        recs_by_group, names, named, cfg.registry, counts, require_counts=True
+    )
     entries: list[tuple[str, str, tuple[str, ...]]] = [
         (c.label, c.kind, tuple(g for g in c.group_ids if g in acct))
         for c in clusters
@@ -559,7 +562,7 @@ def _groups_view(
         lines.append("")
     unresolved: dict[str, list[str]] = {}
     for g, ns in companies.items():
-        if g in covered:
+        if g in covered or g not in acct:
             continue
         for n in ns:
             reason = _behind(by_key.get(normalize_company(n)), cfg, counts)

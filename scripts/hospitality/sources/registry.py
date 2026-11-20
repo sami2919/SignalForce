@@ -18,6 +18,7 @@ DOMAIN = "data.ny.gov"
 DATASET = "n9v6-gdp6"
 RECORDS = "registry_records"
 COUNTS = "registry_address_counts"
+NAME_COUNTS = "registry_name_counts"
 
 _SUFFIXES = (
     (re.compile(r"\bL\s*\.?\s*L\s*\.?\s*C\b\.?"), "LLC"),
@@ -42,15 +43,23 @@ _SUFFIX_FORMS = {
 }
 
 
+_RAW_SUFFIX = re.compile(r",?\s*(L\.?\s*L\.?\s*C\.?|INC\.?|CORP\.?)\s*$")
+
+
 def name_variants(name: str) -> list[str]:
     """Exact spellings to ask the registry for: the name as given, its normalised form, and
-    the normalised base with each common spelling of its legal suffix, with and without a
-    comma. Bounded and exact: the results are still compared by `normalize_company`."""
+    each base (raw and normalised) with each common spelling of its legal suffix, with and
+    without a comma. Bounded and exact: the results are still compared by `normalize_company`."""
+    raw = re.sub(r"\s+", " ", name.upper().strip())
     key = normalize_company(name)
-    out = {name.upper().strip(), key}
-    base, _, suffix = key.rpartition(" ")
-    for form in _SUFFIX_FORMS.get(suffix, ()):
-        out |= {f"{base} {form}", f"{base}, {form}"}
+    out = {raw, key}
+    suffix = key.rpartition(" ")[2]
+    bases = {key.rpartition(" ")[0]}
+    if _RAW_SUFFIX.search(raw):
+        bases.add(_RAW_SUFFIX.sub("", raw).strip())
+    for base in bases:
+        for form in _SUFFIX_FORMS.get(suffix, ()):
+            out |= {f"{base} {form}", f"{base}, {form}"}
     return sorted(out)
 
 
@@ -124,6 +133,23 @@ def lookup_companies(
         cached[key] = rec
         out.append(rec)
     return out
+
+
+def name_count_key(name: str) -> str:
+    return f"name|{normalize_company(name)}"
+
+
+def count_companies_named(name: str, client, budget: CallBudget, store: DocStore) -> int:
+    """How many registry companies name this party to receive their papers (cached). A real
+    restaurateur has a handful; a law firm, accountant or management service has dozens."""
+    key = name_count_key(name)
+    for c in store.load(NAME_COUNTS, AddressCount):
+        if c.key == key:
+            return c.companies
+    budget.spend()
+    n = client.count(DATASET, where=f"upper(dos_process_name) = '{_quote(name.upper().strip())}'")
+    store.save(NAME_COUNTS, [AddressCount(key=key, companies=n)], key=lambda c: c.key)  # type: ignore[attr-defined]
+    return n
 
 
 def count_key(address: str, zip_code: str) -> str:

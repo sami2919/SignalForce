@@ -72,8 +72,11 @@ def test_registry_looks_up_licence_companies_of_top_prospects_only(store, monkey
 
 def test_registry_skips_customers(store, monkeypatch) -> None:
     monkeypatch.setattr(cli, "current_customers", lambda *a, **k: {"g:1": object()})
-    cli.registry(top=2, client=FakeClient())
-    assert looked_up(store) == {"Two LLC", "Three LLC"}
+    out = cli.registry(top=2, client=FakeClient())
+    # The customer's company is looked up too (so a cluster sharing its operator can be
+    # dropped), but the customer is never one of the prospect groups.
+    assert out["prospect_groups"] == 2
+    assert looked_up(store) == {"One LLC", "Two LLC", "Three LLC"}
 
 
 def test_registry_reports_stopped_on_budget_and_keeps_lookups(store) -> None:
@@ -100,3 +103,17 @@ def test_registry_reports_stopped_on_network_error_and_keeps_lookups(store) -> N
     out = cli.registry(top=3, client=Dropping())
     assert out["stopped"].startswith("network error")
     assert looked_up(store) == {"One LLC"}
+
+
+def test_registry_counts_companies_per_named_person(store) -> None:
+    row = {"dos_id": "1", "current_entity_name": "ONE LLC", "dos_process_name": "Pat Owner",
+           "dos_process_address_1": "1 Main Street", "dos_process_zip": "10001"}  # fmt: skip
+
+    class Found(FakeClient):
+        def rows(self, dataset_id: str, *, where: str | None = None, **_):
+            self.calls.append(where or "")
+            return iter([row] if "'ONE LLC'" in (where or "") else [])
+
+    client = Found()
+    cli.registry(top=1, client=client)
+    assert any("dos_process_name" in c for c in client.calls)

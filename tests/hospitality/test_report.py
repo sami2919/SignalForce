@@ -456,6 +456,11 @@ def _registry_store(tmp_path: Path) -> DocStore:
                                                                              found=False)],
         key=lambda r: r.name_key,
     )  # fmt: skip
+    from scripts.hospitality.models import AddressCount
+    from scripts.hospitality.sources.registry import COUNTS, count_key
+
+    store.save(COUNTS, [AddressCount(key=count_key("1 Main Street", "10001"), companies=3)],
+               key=lambda c: c.key)  # fmt: skip
     return store
 
 
@@ -480,6 +485,9 @@ def test_groups_view_excludes_customer_clusters(tmp_path) -> None:
     store.save("venues", list(venues.values()), key=lambda v: v.venue_id)
     view = _view(build(store, tmp_path))
     assert "Moth Bistro" not in view
+    # The customer (g:c) shares its operator, Pat Owner, with g:a and g:b: that cluster is the
+    # customer's group, so it must not be shown as a prospect.
+    assert "Pat Owner (operator)" not in view
 
 
 def test_groups_view_lists_unresolved_companies_with_reason(tmp_path) -> None:

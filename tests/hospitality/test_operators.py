@@ -130,3 +130,71 @@ def test_registry_placeholder_name_is_the_company_itself_not_a_person() -> None:
     clusters = cluster_operators({"g:a": [a], "g:b": [b]}, {"g:a": "A", "g:b": "B"},
                                  frozenset(), CFG, {})  # fmt: skip
     assert clusters == []
+
+
+# --- final-review fix pass --------------------------------------------------------------
+
+
+def test_c1_address_counts_add_up_across_spellings(tmp_path) -> None:
+    from scripts.hospitality.models import AddressCount
+    from scripts.hospitality.resolve.operators import stored_counts
+    from scripts.hospitality.sources.registry import COUNTS, count_key
+    from scripts.hospitality.store import DocStore
+
+    store = DocStore(f"sqlite:///{tmp_path}/m.db")
+    store.save(COUNTS, [AddressCount(key=count_key("515 West 20th Street", "10011"), companies=14),
+                        AddressCount(key=count_key("515 W 20TH ST", "10011"), companies=25)],
+               key=lambda c: c.key)  # fmt: skip
+    a = rec("A LLC", "Ozaneaux Ltd", "515 West 20th Street", "10011")
+    b = rec("B LLC", "Ozaneaux Ltd", "515 W 20TH ST", "10011")
+    counts = stored_counts([a, b], store)
+    assert is_agent(a, CFG, counts) and is_agent(b, CFG, counts)
+
+
+def test_c1_a_name_receiving_papers_for_many_companies_is_an_agent() -> None:
+    from scripts.hospitality.resolve.operators import name_count_key
+
+    r = rec("A LLC", "Ozaneaux Ltd", "515 West 20th Street", "10011")
+    assert is_agent(r, CFG, {name_count_key("Ozaneaux Ltd"): 39})
+    assert not is_agent(r, CFG, {name_count_key("Ozaneaux Ltd"): 3})
+
+
+def test_i1_generic_process_names_never_form_a_person() -> None:
+    for generic in ("C/O THE LLC", "LLC", "Attn: Managing Member", "THE CORPORATION", "N/A",
+                    "Owner"):  # fmt: skip
+        r = rec("A LLC", generic, "1 Main Street", "10001")
+        assert operator_key(r) is None or operator_key(r)[0] == "office", generic
+    a = rec("A LLC", "C/O THE LLC", "1 Main Street", "10001")
+    b = rec("B LLC", "C/O THE LLC", "9 Other Road", "11211")
+    assert cluster_operators({"g:a": [a], "g:b": [b]}, {}, frozenset(), CFG, {}) == []
+
+
+def test_i2_accountants_and_law_firms_without_marker_spelling_are_agents() -> None:
+    for name in ("Smith & Jones PC", "Acme Law Group", "Rivera Legal", "John Doe Esquire",
+                 "Lee CPA", "Kim CPAs", "Park Accounting", "Best Accountants", "Tax Pros Inc",
+                 "Doe & Associates"):  # fmt: skip
+        assert is_agent(rec("A LLC", name, "1 Main Street", "10001"), CFG, {}), name
+
+
+def test_i3_different_suites_are_different_offices() -> None:
+    assert office_key("1 Main Street Suite 400", "10001") != office_key(
+        "1 Main Street Suite 900", "10001"
+    )
+
+
+def test_i5_a_group_with_two_operator_keys_appears_once() -> None:
+    a1 = rec("A1 LLC", "Pat Owner", "1 Main Street", "10001")
+    a2 = rec("A2 LLC", "Sam Partner", "2 Main Street", "10001")
+    b = rec("B LLC", "Pat Owner", "1 Main Street", "10001")
+    c = rec("C LLC", "Sam Partner", "2 Main Street", "10001")
+    clusters = cluster_operators({"g:a": [a1, a2], "g:b": [b], "g:c": [c]},
+                                 {"g:a": "A", "g:b": "B", "g:c": "C"}, frozenset(), CFG, {})  # fmt: skip
+    assert len(clusters) == 1 and set(clusters[0].group_ids) == {"g:a", "g:b", "g:c"}
+
+
+def test_i6_a_record_without_a_known_count_is_not_clustered_when_counts_are_required() -> None:
+    a = rec("A LLC", "Pat Owner", "1 Main Street", "10001")
+    b = rec("B LLC", "Pat Owner", "1 Main Street", "10001")
+    out = cluster_operators({"g:a": [a], "g:b": [b]}, {}, frozenset(), CFG, {},
+                            require_counts=True)  # fmt: skip
+    assert out == []

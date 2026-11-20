@@ -132,3 +132,10 @@ def test_lookup_keeps_the_first_address_line_for_counting(store: DocStore) -> No
                              CallBudget("registry", 10), store)  # fmt: skip
     assert rec.process_address == "Attn: J. Doe 711 Third Ave"
     assert rec.process_address_1 == "Attn: J. Doe"
+
+
+def test_i4_name_with_punctuation_matches_a_suffix_spelling_variant(store: DocStore) -> None:
+    row = {**MADDY, "current_entity_name": "NICK & DOMS PIZZERIA, INC.", "dos_id": "333"}
+    client = FakeClient({"NICK & DOMS PIZZERIA, INC.": [row]})
+    [rec] = lookup_companies(["NICK & DOMS PIZZERIA INC"], client, CallBudget("r", 10), store)
+    assert rec.found and rec.dos_id == "333"

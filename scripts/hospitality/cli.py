@@ -99,6 +99,7 @@ from scripts.hospitality.resolve.match import match_licenses
 from scripts.hospitality.resolve.operators import (
     cluster_operators,
     is_agent,
+    operator_key,
     stored_counts,
 )
 from scripts.hospitality.resolve.venues import build_venues
@@ -141,6 +142,7 @@ from scripts.hospitality.sources.dohmh import (
 )
 from scripts.hospitality.sources.registry import (
     count_companies_at,
+    count_companies_named,
     lookup_companies,
     normalize_company,
 )
@@ -673,9 +675,11 @@ NAMED_GROUP_RESOLUTIONS = frozenset({"job_board", "shared_domain", "press", "man
 def _top_prospect_companies(
     store: DocStore, top: int
 ) -> tuple[list[ScoredAccount], dict[str, list[str]]]:
-    """The top cold prospects and, per group, the legal names of its venues' licences."""
+    """The top cold prospects and, per group, the legal names of its venues' licences. Customer
+    groups' companies are included too, so a cluster sharing an operator with a customer can be
+    recognised as the customer's and dropped."""
     accounts = rank_prospects(_gated_scores(store))[:top]
-    wanted = {a.group_id for a in accounts}
+    wanted = {a.group_id for a in accounts} | set(current_customers(store, SEED_PATH))
     legal = {r.record_id: r.legal_name for r in store.load("licenses", LicenseRecord)}
     by_group: dict[str, list[str]] = {}
     for v in store.load("venues", Venue):
@@ -709,6 +713,9 @@ def registry(top: int = 300, *, client=None, budget: int | None = None) -> dict[
             line = r.process_address_1 or r.process_address
             if r.found and line and r.process_zip and not is_agent(r, cfg.registry, {}):
                 count_companies_at(line, r.process_zip, client, calls, store)
+                key = operator_key(r)
+                if key and key[0] == "person" and r.process_name:
+                    count_companies_named(r.process_name, client, calls, store)
     except BudgetExceeded as exc:
         stopped = f"budget: {exc}"
     except APIError as exc:
@@ -725,7 +732,12 @@ def registry(top: int = 300, *, client=None, budget: int | None = None) -> dict[
     groups = store.load("groups", Group)
     named = frozenset(g.group_id for g in groups if g.resolution in NAMED_GROUP_RESOLUTIONS)
     clusters = cluster_operators(
-        by_group, {g.group_id: g.name for g in groups}, named, cfg.registry, counts
+        by_group,
+        {g.group_id: g.name for g in groups},
+        named,
+        cfg.registry,
+        counts,
+        require_counts=True,
     )
     found = [r for r in records if r.found]
     return {

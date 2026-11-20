@@ -153,8 +153,11 @@ class RegistryConfig(BaseModel):
         "corporation service", "ct corporation", "registered agent", "incorp", "legalinc",
         "northwest registered", "united states corporation agents", "national registered",
         "cogency", "llp", "l.l.p.", "esq", "law office", "law firm", "attorneys", "pllc", "p.c.",
+        "pc", "law group", "legal", "esquire", "cpa", "cpas", "accounting", "accountants", "tax",
+        "bookkeeping", "& associates",
     )  # fmt: skip
-    # An address receiving papers for more companies than this, registry-wide, is an agent.
+    # An address or a name receiving papers for more companies than this, registry-wide, is an
+    # agent or service firm (counts are summed across spellings of one office).
     max_companies_per_address: int = 25
 
 

@@ -177,6 +177,11 @@ def evidence_link(ref: str) -> str:
     return ref
 
 
+@dataclass(frozen=True)
+class _Stub:
+    group_id: str
+
+
 @dataclass
 class _Account:
     label: str
@@ -267,13 +272,15 @@ def build_brief(
                 for lid in v.license_ids
                 if lid in legal and (k := normalize_company(legal[lid])) in by_key
             ]
-            for a in pool
+            for a in [*pool, *(_Stub(g) for g in customers)]
         }
         named = frozenset(
             g for g in recs_by_group if group_by_id.get(g) and
             group_by_id[g].resolution in NAMED_RESOLUTIONS
         )  # fmt: skip
-        for c in cluster_operators(recs_by_group, names, named, cfg.registry, counts):
+        for c in cluster_operators(
+            recs_by_group, names, named, cfg.registry, counts, require_counts=True
+        ):
             gids = [g for g in c.group_ids if g in acct]
             if len(gids) < 2 or any(g in customers for g in c.group_ids):
                 continue
